@@ -12,10 +12,13 @@ SEPs deal with changes to the standards, protocols, and methods used in the ecos
 
 The root directory of this repository contains:
 
-* Accepted CAPs (`cpp-xxxx.md` where `xxxx` is a CAP number with leading zeros, ex. `cpp-0051.md`),
-* `contents` directory with `cap-xxxx` subdirectories that contain all media/script files for a given CAP document.
-
-Example repository structure in a future:
+* Templates for creating your own CAP or SEP
+* `contents` directory with `cap-xxxx` subdirectories that contain all media/script files for a given CAP or SEP document.
+* core directory which contains accepted CAPs (`cap-xxxx.md` where `xxxx` is a CAP number with leading zeros, ex. `cap-0051.md`)
+* ecosystem directory which contains accepted CAPs (`sep-xxxx.md` where `xxxx` is a SEP number with leading zeros, ex. `sep-0051.md`)
+* drafts directory for proposed SEPs or CAPs. These documents will be removed from here once approved.
+  
+Example repository structure:
 ```
 ├── README.md
 ├── contents
@@ -32,6 +35,9 @@ Example repository structure in a future:
 |   ├── sep-0002.md
 |   ├── sep-0003.md
 |   └── sep-0004.md
+├── drafts
+|   ├── draft-0001.md
+|   └── draft-0002.md
 ├── cap-template.md
 └── sep-template.md
 ```
@@ -39,6 +45,7 @@ Example repository structure in a future:
 ## Process
 
 1. Write your CAP or SEP using `cap-template.md` or `sep-template.md` (`DRAFT`).
+2. Place it in the /drafts directory.
 2. Create a PR in this repository.
 3. CAP or SEP number assigned (`ACCEPTED`) or CAP or SEP rejected (`REJECTED`).
 4. Discussion and changes.
