@@ -38,6 +38,8 @@ Name | Type | Description
 
 If the given `account` doesn't exist yet then the anchor will fund and thus create the account with at least enough lumens for the minimum reserve and the trust line. It is suggested that the anchor take some of the asset that is sent in to pay for these lumens. The anchor doesn't have the account's secret key so the trust line must still be created by the client before the anchor can send the remaining asset tokens to the give account. Once the client has established this trust line the client must call `DEPOSIT_SERVER/trusted` to notify the anchor it is ready to recieve the asset tokens in Stellar.
 
+If the anchor won't create new accounts for users then it should return an error if the given account doesn't exist yet.
+
 On success the endpoint should return `200 OK` HTTP status code and a JSON object with the following fields:
 
 Name | Type | Description
