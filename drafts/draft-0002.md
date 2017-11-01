@@ -31,11 +31,12 @@ Request parameters
 
 Name | Type | Description
 -----|------|------------
-`currency_code` | string | The currency code of the asset the user is wanting to deposit with the anchor. Ex BTC,ETH,USD,INR,etc
+`asset_code` | string | The code of the asset the user is wanting to deposit with the anchor. Ex BTC,ETH,USD,INR,etc
 `account` | string | The stellar account ID of the user that wants to deposit. This is where the asset token will be sent.
 `memo_type` | string | (optional) type of memo to attach to transaction, one of `text`, `id` or `hash`
 `memo` | string | (optional) value of memo to attach to transaction, for `hash` this should be base64-encoded.
-`create_new` | boolean | (optional) If true, then the anchor will fund and thus create the given account with at least enough lumens for the minimum reserve and the trust line. It is suggested that the anchor take some of the asset that is sent in to pay for these lumens. The anchor doesn't have the account's secret key so the trust line must still be created by the client before the anchor can send the remaining asset tokens to the give account. So once the client has established this trust line the client must call `DEPOSIT_SERVER/trusted` to notify the anchor it is ready to recieve the asset tokens in Stellar.
+
+If the given `account` doesn't exist yet then the anchor will fund and thus create the account with at least enough lumens for the minimum reserve and the trust line. It is suggested that the anchor take some of the asset that is sent in to pay for these lumens. The anchor doesn't have the account's secret key so the trust line must still be created by the client before the anchor can send the remaining asset tokens to the give account. Once the client has established this trust line the client must call `DEPOSIT_SERVER/trusted` to notify the anchor it is ready to recieve the asset tokens in Stellar.
 
 On success the endpoint should return `200 OK` HTTP status code and a JSON object with the following fields:
 
@@ -98,8 +99,8 @@ Name | Type | Description
 -----|------|------------
 `type` | string | forward
 `forward_type` | string | either {bank_account,crypto}
-`currency_code` | string | (for crypto) Specify the asset you are withdrawing
-`dest` | string | (for crypto) The account you want to withdraw to 
+`asset_code` | string | (for crypto) Specify the code of the asset you are withdrawing.
+`dest` | string | (for crypto) The account you want to withdraw to.
 `dest_extra` | string | (optional) If needed for other networks that might need a memo in addition to the `dest` address.
 
 
