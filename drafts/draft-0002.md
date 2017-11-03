@@ -36,7 +36,7 @@ Name | Type | Description
 `memo_type` | string | (optional) type of memo to attach to transaction, one of `text`, `id` or `hash`
 `memo` | string | (optional) value of memo to attach to transaction, for `hash` this should be base64-encoded.
 
-If the given `account` doesn't exist yet then the anchor will fund and thus create the account with at least enough lumens for the minimum reserve and the trust line. It is suggested that the anchor take some of the asset that is sent in to pay for these lumens. The anchor doesn't have the account's secret key so the trust line must still be created by the client before the anchor can send the remaining asset tokens to the give account. Once the client has established this trust line the client must call `DEPOSIT_SERVER/trusted` to notify the anchor it is ready to recieve the asset tokens in Stellar.
+If the given `account` doesn't exist yet then the anchor will fund and thus create the account with at least enough lumens for the minimum reserve and the trust line. It is suggested that the anchor take some of the asset that is sent in to pay for these lumens. The anchor doesn't have the account's secret key so the trust line must still be created by the client before the anchor can send the remaining asset tokens to the give account. The anchor should listen to see when the client has established this trust line. Once the trust line is there the anchor should send the asset tokens to the account in Stellar.
 
 If the anchor won't create new accounts for users then it should return an error if the given account doesn't exist yet.
 
@@ -65,25 +65,6 @@ For example:
 ```json
 {
    "error": "This anchor doesn't support the given currency code: ETH"
-}
-```
-<hr>
-Endpoint: `DEPOSIT_SERVER/trusted`<br>
-Purpose: Notify the anchor the given account has created the needed trust line. Only needed if `create_new` is true in the intial call to `DEPOSIT_SERVER/deposit`<br>
-Method: GET<br>
-Request parameters
-
-Name | Type | Description
------|------|------------
-`account` | string | The stellar account ID of the user that wants to deposit. This is where the asset token will be sent.
-
-On success the endpoint should return `200 OK` HTTP status code and send the asset token to the given account.
-
-Every other HTTP status code will be considered an error. The body should contain error details. 
-For example:
-```json
-{
-   "error": "Given account doesn't trust this anchor."
 }
 ```
 
