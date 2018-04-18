@@ -3,7 +3,7 @@
 ```
 SEP: <to be assigned>
 Title: URI Scheme to facilitate delegated signing
-Author: Nikhil Saraf (Lightyear.io)
+Author: Lightyear.io
 Status: Draft
 Created: 2018-03-26
 ```
@@ -30,10 +30,11 @@ The scheme name will be `stellar` and should always be followed by a colon and t
 
 ### Operation `tx`
 The `tx` operation represents a request to sign a specific XDR `Transaction`. The parameters for the `tx` op are as follows:
-1. `xdr` (required) -  A Stellar transaction in XDR format that is base64 encoded and then URL-encoded. If the existing source account uses the Master Account behind the network passphrase with an empty string (i.e. `keypair.Master("").Address()`) then the interpreting code will replace the source account and sequence number on this XDR `Transaction` with its own source account and sequence number before it signs it. If the source account is not the sentinel value and the sequence number is 0 then the interpreting code should replace only the sequence number before signing. See the reference implementation for implementation details.
+1. `xdr` (required) -  A Stellar transaction in XDR format that is base64 encoded and then URL-encoded. If the source account in the xdr is all zeros then the URI handler should replace the source account and sequence number with the user's source account and sequence number before it signs it. If the source account is set and the sequence number is 0 then the URI handler should replace only the sequence number before signing. 
 2. `submit` (optional) - If this value is omitted then the signed XDR should be submitted to the network. If the value is present then it should be interpreted as a URL-encoded callback. The URL-encoded callback will be prefixed with its own namespace to denote whether this is a `url` callback or some other form of callback. In the case where it is a url callback (denoted by `url:`) the URI handler should send the signed XDR to this url in a `POST` request with `Content-Type` set to `application/x-www-form-urlencoded` with the data fields `xdr` containing the signed XDR (URL-encoded). If there are any query params specified in the URL callback then those should be included in the URL when submitting. For now only `url` callback types are supported.
 3. `pubkey` (optional) - Specify which public key you want the URI handler to sign for. Useful with the `submit` parameter above for example with multisig coordination.
 4. `msg` (optional) -  There can be an optional `msg` query param to indicate any additional information that the website or application wants to show the user in her wallet. The value for this query param should be URL-encoded as well and should not be longer than 300 characters before the URL-encoding. Note that the `msg` field is _different_ from the `memo` field that is included in a transaction. The `msg` field will not be put on-chain, but the `memo` field will be put on-chain.
+5. `network_passphrase` (optional) - Only need to set if this transaction is for a network other than the public network.
 
 **Example 1 - Payment Operation with source account needing replacement**:
 
@@ -49,9 +50,11 @@ The `pay` operation represents a request to pay a specific address with a specif
 2. `amount` (required) - Amount that destination will receive
 3. `asset_code` (optional) - Asset code (XLM if not present) destination will receive
 4. `asset_issuer` (optional) - Account ID of asset issuer (XLM if not present) destination will receive
-5. `memo` (optional) - Can be a memo to be included in the payment / path payment. This should follow the normal guidelines for memos. This should also be URL-encoded.
-6. `submit` (optional) - If this value is omitted then the URI handler should create and submit the proper transaction to the network. If the value is present then it should be interpreted as a URL-encoded callback. The URL-encoded callback will be prefixed with its own namespace to denote whether this is a `url` callback or some other form of callback. In the case where it is a url callback (denoted by `url:`) the URI handler should send the signed XDR to this url in a `POST` request with `Content-Type` set to `application/x-www-form-urlencoded` with the data fields `xdr` containing the signed XDR (URL-encoded). If there are any query params specified in the URL callback then those should be included in the URL when submitting. For now only `url` callback types are supported.
-7. `msg` (optional) - There can be an optional `msg` query param to indicate any additional information that the website or application wants to show the user in her wallet. The value for this query param should be URL-encoded as well and should not be longer than 300 characters before the URL-encoding. Note that the `msg` field is _different_ from the `memo` field that is included in a transaction. The `msg` field will not be put on-chain, but the `memo` field will be put on-chain.
+5. `memo` (optional) - Can be a memo to be included in the payment / path payment. Memos of type `MEMO_HASH` and `MEMO_RETURN` should be base64 encoded and the URL encoded. Memos of type `MEMO_TEXT` should be URL-encoded.
+6. `memo_type` (optional) - One of `MEMO_TEXT`, `MEMO_ID`,`MEMO_HASH`, `MEMO_RETURN`. See [transaction guide](https://www.stellar.org/developers/guides/concepts/transactions.html#memo) for a description of these values. 
+7. `submit` (optional) - If this value is omitted then the URI handler should create and submit the proper transaction to the network. If the value is present then it should be interpreted as a URL-encoded callback. The URL-encoded callback will be prefixed with its own namespace to denote whether this is a `url` callback or some other form of callback. In the case where it is a url callback (denoted by `url:`) the URI handler should send the signed XDR to this url in a `POST` request with `Content-Type` set to `application/x-www-form-urlencoded` with the data fields `xdr` containing the signed XDR (URL-encoded). If there are any query params specified in the URL callback then those should be included in the URL when submitting. For now only `url` callback types are supported.
+8. `msg` (optional) - There can be an optional `msg` query param to indicate any additional information that the website or application wants to show the user in her wallet. The value for this query param should be URL-encoded as well and should not be longer than 300 characters before the URL-encoding. Note that the `msg` field is _different_ from the `memo` field that is included in a transaction. The `msg` field will not be put on-chain, but the `memo` field will be put on-chain.
+9. `network_passphrase` (optional) - Only need to set if this transaction is for a network other than the public network.
 
 **Example 1 - Request for a payment with lumens**:
 
