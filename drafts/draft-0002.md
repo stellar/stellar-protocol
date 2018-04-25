@@ -26,7 +26,7 @@ This leaves room for a common protocol that can be implemented by both applicati
 ## Specification
 A standardized URI Scheme can achieve the goals laid out above. The syntax of the scheme will contain all the information needed to make the necessary payment to the application’s account.
 
-The scheme name will be `stellar` and should always be followed by a colon and two forward slashes to look like this: `stellar://`. The syntax for the URI will look like this: `stellar://<operation>/?<param1>=<value1>&<param2>=<value2>`, where `operation`, and the options for the query params are defined below.
+The scheme name will be `web+stellar` and should always be followed by a colon and two forward slashes to look like this: `web+stellar://`. The syntax for the URI will look like this: `web+stellar://<operation>/?<param1>=<value1>&<param2>=<value2>`, where `operation`, and the options for the query params are defined below. We have included `web+` in the scheme name so it can be handled by web pages (see [here](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/registerProtocolHandler#Permitted_schemes) for more details on `web+`).
 
 ### Operation `tx`
 The `tx` operation represents a request to sign a specific XDR `Transaction`. The parameters for the `tx` op are as follows:
@@ -38,11 +38,11 @@ The `tx` operation represents a request to sign a specific XDR `Transaction`. Th
 
 **Example 1 - Payment Operation with source account needing replacement**:
 
-`stellar://tx/?xdr=AAAAAL6Qe0ushP7lzogR2y3vyb8LKiorvD1U2KIlfs1wRBliAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAABEz4bSpWmsmrXcIVAkY2hM3VdeCBJse56M18LaGzHQUAAAAAAAAAAACadvgAAAAAAAAAAA`
+`web+stellar://tx/?xdr=AAAAAL6Qe0ushP7lzogR2y3vyb8LKiorvD1U2KIlfs1wRBliAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAABEz4bSpWmsmrXcIVAkY2hM3VdeCBJse56M18LaGzHQUAAAAAAAAAAACadvgAAAAAAAAAAA`
 
 **Example 2 - Change Trust Operation with callback endpoint specified**:
 
-`stellar://tx/?xdr=AAAAAP%2Byw%2BZEuNg533pUmwlYxfrq6%2FBoMJqiJ8vuQhf6rHWmAAAAZAB8NHAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAA%2F7LD5kS42DnfelSbCVjF%2Burr8GgwmqIny%2B5CF%2FqsdaYAAAAAAAAAAACYloAAAAAAAAAAAA&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fa8f7asdfkjha&pubkey=GAU2ZSYYEYO5S5ZQSMMUENJ2TANY4FPXYGGIMU6GMGKTNVDG5QYFW6JS&msg=order%20number%2024`
+`web+stellar://tx/?xdr=AAAAAP%2Byw%2BZEuNg533pUmwlYxfrq6%2FBoMJqiJ8vuQhf6rHWmAAAAZAB8NHAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAA%2F7LD5kS42DnfelSbCVjF%2Burr8GgwmqIny%2B5CF%2FqsdaYAAAAAAAAAAACYloAAAAAAAAAAAA&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fa8f7asdfkjha&pubkey=GAU2ZSYYEYO5S5ZQSMMUENJ2TANY4FPXYGGIMU6GMGKTNVDG5QYFW6JS&msg=order%20number%2024`
 
 ### Operation `pay`
 The `pay` operation represents a request to pay a specific address with a specific asset, regardless of the source asset used by the payer. If the payer decides to use a different source asset then the wallet should leverage the [path payment operation](https://www.stellar.org/developers/guides/concepts/list-of-operations.html#path-payment) to achieve this. The parameters for the `pay` operation are as follows:
@@ -58,11 +58,11 @@ The `pay` operation represents a request to pay a specific address with a specif
 
 **Example 1 - Request for a payment with lumens**:
 
-`stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens`
+`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens`
 
 **Example 2 - Request for a payment with a specific asset**:
 
-`stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.123&asset_code=USD&asset_issuer=GCRCUE2C5TBNIPYHMEP7NK5RWTT2WBSZ75CMARH7GDOHDDCQH3XANFOB&memo=hasysda987fs&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fhasysda987fs%3Fasset%3DUSD`
+`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.123&asset_code=USD&asset_issuer=GCRCUE2C5TBNIPYHMEP7NK5RWTT2WBSZ75CMARH7GDOHDDCQH3XANFOB&memo=hasysda987fs&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fhasysda987fs%3Fasset%3DUSD`
 
 ### Transaction Submission
 The application that generated the request URI should check the Stellar Network directly to confirm receipt of the transaction unless it has specified a callback in the `callback` query param. Here are three suggestions for the workflow of how an application can achieve this:
@@ -86,6 +86,7 @@ Here are suggestion on how to register your wallet to handle the new URI Scheme 
 - **Mac**: [Make Your Own URL Protocol and Handler](https://yourmacguy.wordpress.com/2013/07/17/make-your-own-url-handler/)
 - **iOS**: [Implementing Custom URL Schemes](https://developer.apple.com/library/content/documentation/iPhone/Conceptual/iPhoneOSProgrammingGuide/Inter-AppCommunication/Inter-AppCommunication.html#//apple_ref/doc/uid/TP40007072-CH6-SW10) and [Simpler reference to implement custom URL Schemes on iOS](https://coderwall.com/p/mtjaeq/ios-custom-url-scheme)
 - **Android**: https://stackoverflow.com/a/4085365/1484710
+- **Web**: [Navigator.registerProtocolHandler()](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/registerProtocolHandler)
 
 ### Future operations
 By introducing a namespace to the URI in the form of the operation we are leaving the syntax for this URI Scheme open and flexible for future modification.
@@ -113,6 +114,10 @@ There are two parts to the reference implementation (below). The second one (URI
 [https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-stellar_uri_sample_commands-md](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-stellar_uri_sample_commands-md)
 
 Note: This reference implementation only serves to demonstrate how the generated XDR can be signed and submitted to the test network. The work of displaying the details of the transaction that the user will sign have not been implemented and has been left for wallet developers to implement. Furthermore, the pattern to start this script is not a secure pattern as it would expose the user’s secret key to your command line history and potentially to keyloggers as well. When looking over this reference implementation please keep in mind that it is designed to serve only as a Proof-Of-Concept for this SEP specification and is not meant to be used for anything other than that.
+
+**Sample web handler demonstrates how to parse the payment request `xdr` for the `tx` operation**:
+
+[https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-webhandler-html](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-webhandler-html)
 
 ## References
 1. [RFC2396 - Uniform Resource Identifiers (URI): Generic Syntax](https://www.ietf.org/rfc/rfc2396.txt)
