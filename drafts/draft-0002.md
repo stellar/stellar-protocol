@@ -34,7 +34,9 @@ The `tx` operation represents a request to sign a specific XDR `Transaction`. Th
 2. `callback` (optional) - If this value is omitted then the URI handler should sign the given XDR and submit it to the network. If the value is present then it should be interpreted as a URL-encoded callback. The URL-encoded callback will be prefixed with its own namespace to denote whether this is a `url` callback or some other form of callback. In the case where it is a url callback (denoted by `url:`) the URI handler should send the signed XDR to this url in a `POST` request with `Content-Type` set to `application/x-www-form-urlencoded` with the data fields `xdr` containing the signed XDR (URL-encoded). If there are any query params specified in the URL callback then those should be included in the URL when submitting. For now only `url` callback types are supported.
 3. `pubkey` (optional) - Specify which public key you want the URI handler to sign for. Useful with the `callback` parameter above for example with multisig coordination.
 4. `msg` (optional) -  There can be an optional `msg` query param to indicate any additional information that the website or application wants to show the user in her wallet. The value for this query param should be URL-encoded as well and should not be longer than 300 characters before the URL-encoding. Note that the `msg` field is _different_ from the `memo` field that is included in a transaction. The `msg` field will not be put on-chain, but the `memo` field will be put on-chain.
-5. `network_passphrase` (optional) - Only need to set if this transaction is for a network other than the public network.
+5. `network_passphrase` (optional) - Only need to set if this transaction is for a network other than the public network (URL-encoded).
+6. `origin_domain` (optional) - A [fully qualified domain name](https://en.wikipedia.org/wiki/Fully_qualified_domain_name) that specifies the originating domain of the URI request. Wallets **must** validate the URI request against the included `signature` before they display the `origin_domain` to the user. See the [Request Verification](#request_verification) section for more details.
+7. `signature` (optional) - A signature of the hash of the URI request (excluding the `signature` field and value itself). Wallets should use the `URI_REQUEST_SIGNING_KEY` specified in the domain's `stellar.toml` file to validate this signature. If the verification fails, wallets **must** alert the user. See the [Request Verification](#request_verification) section for more details.
 
 **Example 1 - Payment Operation with source account needing replacement**:
 
@@ -54,7 +56,9 @@ The `pay` operation represents a request to pay a specific address with a specif
 6. `memo_type` (optional) - One of `MEMO_TEXT`, `MEMO_ID`,`MEMO_HASH`, `MEMO_RETURN`. See [transaction guide](https://www.stellar.org/developers/guides/concepts/transactions.html#memo) for a description of these values. 
 7. `callback` (optional) - If this value is omitted then the URI handler should sign the given XDR and submit it to the network. If the value is present then it should be interpreted as a URL-encoded callback. The URL-encoded callback will be prefixed with its own namespace to denote whether this is a `url` callback or some other form of callback. In the case where it is a url callback (denoted by `url:`) the URI handler should send the signed XDR to this url in a `POST` request with `Content-Type` set to `application/x-www-form-urlencoded` with the data fields `xdr` containing the signed XDR (URL-encoded). If there are any query params specified in the URL callback then those should be included in the URL when submitting. For now only `url` callback types are supported.
 8. `msg` (optional) - There can be an optional `msg` query param to indicate any additional information that the website or application wants to show the user in her wallet. The value for this query param should be URL-encoded as well and should not be longer than 300 characters before the URL-encoding. Note that the `msg` field is _different_ from the `memo` field that is included in a transaction. The `msg` field will not be put on-chain, but the `memo` field will be put on-chain.
-9. `network_passphrase` (optional) - Only need to set if this transaction is for a network other than the public network.
+9. `network_passphrase` (optional) - Only need to set if this transaction is for a network other than the public network (URL-encoded).
+10. `origin_domain` (optional) - A [fully qualified domain name](https://en.wikipedia.org/wiki/Fully_qualified_domain_name) that specifies the originating domain of the URI request. Wallets **must** validate the URI request against the included `signature` before they display the `origin_domain` to the user. See the [Request Verification](#request_verification) section for more details.
+11. `signature` (optional) - A signature of the hash of the URI request (excluding the `signature` field and value itself). Wallets should use the `URI_REQUEST_SIGNING_KEY` specified in the domain's `stellar.toml` file to validate this signature. If the verification fails, wallets **must** alert the user. See the [Request Verification](#request_verification) section for more details.
 
 **Example 1 - Request for a payment with lumens**:
 
@@ -70,14 +74,48 @@ The application that generated the request URI should check the Stellar Network 
 2. The application can ask the user for her account ID from which she plans to make the payment. The application can then check for a new payment for the requested amount that is made by the user’s account ID. This is slightly more tedious for the user than (1) suggested above and therefore it is recommended that approach (1) be used if it is possible to generate dynamic payment request URIs.
 3. Specify the `callback` query param with a dynamically generated URL endpoint callback. The endpoint will listen for the signed transaction and submit it to the Stellar Network on behalf of the user. This would allow the listener endpoint to interact with the application as needed to record the payment by the user.
 
+### Request Verification
+Applications that want to increase trust with the end user should include the `origin_domain` param along with a `signature` param, as described in the operation sections above. This will allow wallets to validate the URI request against the provided `signature` and therefore display this `origin_domain` to the user.
+
+This is how applications should create the `signature` field:
+1. Ensure that your domain's stellar.toml file has the field `URI_REQUEST_SIGNING_KEY` with the public key that wallets should use to validate request signatures.
+2. Generate the URI request with the `origin_domain` param set to the application's domain.
+3. Convert the URI request into the `payload` that will be signed. The first 35 bytes of the `payload` are all `0`, the 36th byte is `4`. Then we concatenate the URI request with the prefix `stellar.sep.7 - URI Scheme` (no delimiter) and convert that to bytes to give use the final `payload` to be signed.
+4. Sign this payload with the application's private signing key corresponding to the `URI_REQUEST_SIGNING_KEY` public key. We will need to convert the signature to base64 and then URL-encode it so we can include it in the URI-Request. Take a look at the sample code [here](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go) for reference.
+4. Append the URL-encoded base64 signature to the URI Request as the value for the `signature` param.
+
+This is how a wallet should handle the `origin_domain` and `signature` fields:
+1. If the `origin_domain` field does not exist then **do not** display an `origin_domain` to the user; no need to proceed further.
+2. If the `signature` field is missing then **do not** allow the user to sign the transaction. This is not a valid URI request, display an appropriate message to the user; no need to proceed further.
+3. If the `origin_domain` is not a valid [fully qualified domain name](https://en.wikipedia.org/wiki/Fully_qualified_domain_name) then **do not** allow the user to sign the transaction. This is not a valid URI request, display an appropriate message to the user; no need to proceed further.
+4. Fetch the `stellar.toml` file from the domain: `https://<origin_domain>/.well-known/stellar.toml`. If the `stellar.toml` file does not exist then **do not** allow the user to sign the transaction. This is not a valid URI request, display an appropriate message to the user; no need to proceed further. It is recommended that wallets **do not** cache `stellar.toml` files and that they always fetch the latest `stellar.toml` files as part of processing signatures so that if signing keys of a domain are ever changed then the wallet can alert the user accordingly using the cached `URI_REQUEST_SIGNING_KEY` for comparison as described below.
+5. Extract out the `URI_REQUEST_SIGNING_KEY` field from the `stellar.toml`. If this key does not exist then **do not** allow the user to sign the transaction. This is not a valid URI request, display an appropriate message to the user; no need to proceed further. Wallets should cache the last used `URI_REQUEST_SIGNING_KEY` for a given domain and only use the cached value to compare it to the latest signing key retrieved, if the latest signing key differs from the cached value for that domain then the wallet **must** alert the user of this change so they are aware that the signing key has changed which poses a security risk to the user.
+6. Once you have the domain's `URI_REQUEST_SIGNING_KEY` you can use it to verify the URI request against the provided signature. In order to do this, you will need to convert the URI Request into the `payload` as described above. It is this payload that is verified using the `URI_REQUEST_SIGNING_KEY`. Take a look at the sample code [here](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go) for reference.
+7. If the signature verification fails then **do not** allow the user to sign the transaction. This is not a valid URI request, display an appropriate message to the user; no need to proceed further.
+8. If the signature verification succeeds then the wallet should display the `origin_domain` to the user so the user knows which domain created this URI request. The user is then free to choose whether she wants to proceed with signing a request that originated from that domain. This is the **only** point at which a wallet should display the `origin_domain` to the user since it has completely verified the URI Request against the included `signature`.
+
+**Example**:
+
+Assume this URI request needs signing (notice that the `origin_domain` is part of the request along with other query params, however the `signature` param is missing):
+`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens&origin_domain=someDomain.com`
+
+Let's use the [sample code](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go) to sign this URI Request with the private key `SBPOVRVKTTV7W3IOX2FJPSMPCJ5L2WU2YKTP3HCLYPXNI5MDIGREVNYC`.
+The base64 encoded signature is: `x+iZA4v8kkDj+iwoD1wEr+eFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ==`.
+When we URL-encode that, we get: `x%2BiZA4v8kkDj%2BiwoD1wEr%2BeFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ%3D%3D`. **This is the signature**.
+
+The complete URI request can be compiled by adding the signature to the original URI Request which gives:
+`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens&origin_domain=someDomain.com&signature=x%2BiZA4v8kkDj%2BiwoD1wEr%2BeFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ%3D%3D`
+
+In order to verify the signature `x%2BiZA4v8kkDj%2BiwoD1wEr%2BeFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ%3D%3D` against our URI request, we first separate out the `signature` field and value from the URI Request. Then we use what is remaining from the URI Request and verify it against the `signature` value. The signature needs to first be URL-unescaped and then decoded from base64 into its byte form before it can be used to verify the remaining portion of the URI request against the public key. If there is no error then we know that the signature is valid and the `origin_domain` is the originator of this URI request. Wallets should then display the `origin_domain` to the user if signature verification succeeds. If signature verification fails then wallets should disallow the user from signing the URI request and display an appropriate message to alert the user.
+
 ###  URI Handler Compliance
 URI Handlers need to implement the following features in order to be considered as fully compliant:
 1. Allow the user to register the application as the default handler for the `stellar` scheme name on their Operating System.
-2. Correctly handle the `tx` operation as specified above including:
-    * Displaying details of the transaction to be signed
+2. Correctly handle the `tx` and `pay` operations as specified above including:
+    * Displaying details of the transaction to be signed.
     * Alert the user if she is paying a Stellar address that her wallet/account has not transacted with previously. This can be achieved by maintaining a persistent store of public address that the user has interacted with previously.
-    * Display information about the referring application/website if it is available
-3. For multisig accounts the wallet is responsible for coordinating the collection of signatures and submitting to the network. This may need the wallet to have a backend service to support this coordination. This should follow the requirements specified above in (2) for displaying the details of the transaction and metadata appropriately as these requests will also be sent as `tx` requests.
+3. Display the `origin_domain` after verifying the `signature` if these are available. If these are not available then the wallet should highlight the fact that the URI request is not signed. An unsigned URI Request is equivalent to using `http` vs. signed URI Requests being equivalent to using `https` and should be treated as such by wallets from a UI perspective. Wallets should only display the `origin_domain` to the user once the URI Request has successfully been verified against the signature using the domain's `URI_REQUEST_SIGNING_KEY`. If signature verification fails then the wallet should not allow the user to sign the transaction and should display an appropriate message alerting the user of the forged URI request.
+4. For multisig accounts the wallet is responsible for coordinating the collection of signatures and submitting to the network/callback. This may need the wallet to have a backend service to support this coordination. This should follow the requirements specified above in (2) for displaying the details of the transaction and metadata appropriately to all signers. For URI Requests that include a `origin_domain` and `signature`, the multisig coordination service should forward the **original** signed URI Request so that each signer can see the `origin_domain` when they attempt to sign the URI Request in their own wallets. The multisig coordination service should handle collating the signatures from the respective signers before submitting a single transaction that is signed by all signers to the network or callback endpoint.
 
 ### Register to handle the URI Scheme
 Here are suggestion on how to register your wallet to handle the new URI Scheme based on your platform:
@@ -118,6 +156,9 @@ Note: This reference implementation only serves to demonstrate how the generated
 **Sample web handler demonstrates how to parse the payment request `xdr` for the `tx` operation**:
 
 [https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-webhandler-html](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-webhandler-html)
+
+**Sample code to create the `signature` field for the URI request and verify it**:
+[https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go)
 
 ## References
 1. [RFC2396 - Uniform Resource Identifiers (URI): Generic Syntax](https://www.ietf.org/rfc/rfc2396.txt)
