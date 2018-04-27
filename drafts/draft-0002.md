@@ -115,7 +115,7 @@ URI Handlers need to implement the following features in order to be considered 
     * Displaying details of the transaction to be signed.
     * Alert the user if she is paying a Stellar address that her wallet/account has not transacted with previously. This can be achieved by maintaining a persistent store of public address that the user has interacted with previously.
 3. Display the `origin_domain` after verifying the `signature` if these are available. If these are not available then the wallet should highlight the fact that the URI request is not signed. An unsigned URI Request is equivalent to using `http` vs. signed URI Requests being equivalent to using `https` and should be treated as such by wallets from a UI perspective. Wallets should only display the `origin_domain` to the user once the URI Request has successfully been verified against the signature using the domain's `URI_REQUEST_SIGNING_KEY`. If signature verification fails then the wallet should not allow the user to sign the transaction and should display an appropriate message alerting the user of the forged URI request.
-4. For multisig accounts the wallet is responsible for coordinating the collection of signatures and submitting to the network/callback. This may need the wallet to have a backend service to support this coordination. This should follow the requirements specified above in (2) for displaying the details of the transaction and metadata appropriately to all signers. For URI Requests that include a `origin_domain` and `signature`, the multisig coordination service should forward the **original** signed URI Request so that each signer can see the `origin_domain` when they attempt to sign the URI Request in their own wallets. The multisig coordination service should handle collating the signatures from the respective signers before submitting a single transaction that is signed by all signers to the network or callback endpoint.
+4. For multisig accounts the wallet is responsible for coordinating the collection of signatures and submitting to the network/callback. This may need the wallet to have a backend service to support this coordination. This should follow the requirements specified above in (2) for displaying the details of the transaction and metadata appropriately to all signers. For URI Requests that include a `origin_domain` and `signature`, the multisig coordination service should forward the **original** signed URI Request so that each signer can see the `origin_domain` when they attempt to sign the URI Request in their own wallets. The multisig coordination service should handle collating the signatures from the respective signers before submitting a single transaction that is signed by all signers to the network or callback endpoint. See the sample code [here](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-stellar_multisig_collate-go) for reference on how to collate signatures.
 
 ### Register to handle the URI Scheme
 Here are suggestion on how to register your wallet to handle the new URI Scheme based on your platform:
@@ -143,6 +143,9 @@ There is no common pattern of usage that are currently employed by the community
 There are two parts to the reference implementation (below). The second one (URI consumption) serves as an effective test case for the first one (URI generation).
 
 ## Reference Implementation
+
+The reference implementations only serve to demonstrate how the generated XDR can be signed and submitted to the test network along with some of the other code snippets included. The work of displaying the details of the transaction that the user will sign have not been implemented and has been left for wallet developers to implement. Furthermore, the pattern to start the signing script is not a secure pattern as it would expose the user’s secret key to the command line history and potentially to keyloggers as well and we strongly recommend that you do not use the same pattern in any of your own code. When looking over the reference implementation files please keep in mind that they are not tested and are designed only to serve as a Proof-Of-Concept for this SEP specification and are not meant to be used for anything other than that.
+
 **Reference Implementation to generate an XDR `Transaction` for a payment operation and sign it**:
 
 [https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec)
@@ -151,14 +154,15 @@ There are two parts to the reference implementation (below). The second one (URI
 
 [https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-stellar_uri_sample_commands-md](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-stellar_uri_sample_commands-md)
 
-Note: This reference implementation only serves to demonstrate how the generated XDR can be signed and submitted to the test network. The work of displaying the details of the transaction that the user will sign have not been implemented and has been left for wallet developers to implement. Furthermore, the pattern to start this script is not a secure pattern as it would expose the user’s secret key to your command line history and potentially to keyloggers as well. When looking over this reference implementation please keep in mind that it is designed to serve only as a Proof-Of-Concept for this SEP specification and is not meant to be used for anything other than that.
-
 **Sample web handler demonstrates how to parse the payment request `xdr` for the `tx` operation**:
 
 [https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-webhandler-html](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-webhandler-html)
 
 **Sample code to create the `signature` field for the URI request and verify it**:
 [https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go)
+
+**Sample code to collate signatures for a multi-signature transaction using base64-encoded signed transaction XDRs**:
+[https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-stellar_multisig_collate-go](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-stellar_multisig_collate-go)
 
 ## References
 1. [RFC2396 - Uniform Resource Identifiers (URI): Generic Syntax](https://www.ietf.org/rfc/rfc2396.txt)
