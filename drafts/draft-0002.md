@@ -26,7 +26,7 @@ This leaves room for a common protocol that can be implemented by both applicati
 ## Specification
 A standardized URI Scheme can achieve the goals laid out above. The syntax of the scheme will contain all the information needed to make the necessary payment to the application’s account.
 
-The scheme name will be `web+stellar` and should always be followed by a colon and two forward slashes to look like this: `web+stellar://`. The syntax for the URI will look like this: `web+stellar://<operation>/?<param1>=<value1>&<param2>=<value2>`, where `operation`, and the options for the query params are defined below. We have included `web+` in the scheme name so it can be handled by web pages (see [here](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/registerProtocolHandler#Permitted_schemes) for more details on `web+`).
+The scheme name will be `web+stellar` and should always be followed by a colon to look like this: `web+stellar:` (no forward-slashes). The syntax for the URI will look like this: `web+stellar:<operation>?<param1>=<value1>&<param2>=<value2>`, where `operation`, and the options for the query params are defined below. We have included `web+` in the scheme name so it can be handled by web pages (see [here](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/registerProtocolHandler#Permitted_schemes) for more details on `web+`).
 
 ### Operation `tx`
 The `tx` operation represents a request to sign a specific XDR `Transaction`. The parameters for the `tx` op are as follows:
@@ -40,11 +40,11 @@ The `tx` operation represents a request to sign a specific XDR `Transaction`. Th
 
 **Example 1 - Payment Operation with source account needing replacement**:
 
-`web+stellar://tx/?xdr=AAAAAL6Qe0ushP7lzogR2y3vyb8LKiorvD1U2KIlfs1wRBliAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAABEz4bSpWmsmrXcIVAkY2hM3VdeCBJse56M18LaGzHQUAAAAAAAAAAACadvgAAAAAAAAAAA`
+`web+stellar:tx?xdr=AAAAAL6Qe0ushP7lzogR2y3vyb8LKiorvD1U2KIlfs1wRBliAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAABEz4bSpWmsmrXcIVAkY2hM3VdeCBJse56M18LaGzHQUAAAAAAAAAAACadvgAAAAAAAAAAA`
 
 **Example 2 - Change Trust Operation with callback endpoint specified**:
 
-`web+stellar://tx/?xdr=AAAAAP%2Byw%2BZEuNg533pUmwlYxfrq6%2FBoMJqiJ8vuQhf6rHWmAAAAZAB8NHAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAA%2F7LD5kS42DnfelSbCVjF%2Burr8GgwmqIny%2B5CF%2FqsdaYAAAAAAAAAAACYloAAAAAAAAAAAA&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fa8f7asdfkjha&pubkey=GAU2ZSYYEYO5S5ZQSMMUENJ2TANY4FPXYGGIMU6GMGKTNVDG5QYFW6JS&msg=order%20number%2024`
+`web+stellar:tx?xdr=AAAAAP%2Byw%2BZEuNg533pUmwlYxfrq6%2FBoMJqiJ8vuQhf6rHWmAAAAZAB8NHAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAA%2F7LD5kS42DnfelSbCVjF%2Burr8GgwmqIny%2B5CF%2FqsdaYAAAAAAAAAAACYloAAAAAAAAAAAA&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fa8f7asdfkjha&pubkey=GAU2ZSYYEYO5S5ZQSMMUENJ2TANY4FPXYGGIMU6GMGKTNVDG5QYFW6JS&msg=order%20number%2024`
 
 ### Operation `pay`
 The `pay` operation represents a request to pay a specific address with a specific asset, regardless of the source asset used by the payer. If the payer decides to use a different source asset then the wallet should leverage the [path payment operation](https://www.stellar.org/developers/guides/concepts/list-of-operations.html#path-payment) to achieve this. The parameters for the `pay` operation are as follows:
@@ -62,11 +62,11 @@ The `pay` operation represents a request to pay a specific address with a specif
 
 **Example 1 - Request for a payment with lumens**:
 
-`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens`
+`web+stellar:pay?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens`
 
 **Example 2 - Request for a payment with a specific asset**:
 
-`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.123&asset_code=USD&asset_issuer=GCRCUE2C5TBNIPYHMEP7NK5RWTT2WBSZ75CMARH7GDOHDDCQH3XANFOB&memo=hasysda987fs&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fhasysda987fs%3Fasset%3DUSD`
+`web+stellar:pay?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.123&asset_code=USD&asset_issuer=GCRCUE2C5TBNIPYHMEP7NK5RWTT2WBSZ75CMARH7GDOHDDCQH3XANFOB&memo=hasysda987fs&callback=url%3Ahttps%3A%2F%2FsomeSigningService.com%2Fhasysda987fs%3Fasset%3DUSD`
 
 ### Transaction Submission
 The application that generated the request URI should check the Stellar Network directly to confirm receipt of the transaction unless it has specified a callback in the `callback` query param. Here are three suggestions for the workflow of how an application can achieve this:
@@ -97,14 +97,14 @@ This is how a wallet should handle the `origin_domain` and `signature` fields:
 **Example**:
 
 Assume this URI request needs signing (notice that the `origin_domain` is part of the request along with other query params, however the `signature` param is missing):
-`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens&origin_domain=someDomain.com`
+`web+stellar:pay?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens&origin_domain=someDomain.com`
 
 Let's use the [sample code](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go) to sign this URI Request with the private key `SBPOVRVKTTV7W3IOX2FJPSMPCJ5L2WU2YKTP3HCLYPXNI5MDIGREVNYC`.
 The base64 encoded signature is: `x+iZA4v8kkDj+iwoD1wEr+eFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ==`.
 When we URL-encode that, we get: `x%2BiZA4v8kkDj%2BiwoD1wEr%2BeFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ%3D%3D`. **This is the signature**.
 
 The complete URI request can be compiled by adding the signature to the original URI Request which gives:
-`web+stellar://pay/?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens&origin_domain=someDomain.com&signature=x%2BiZA4v8kkDj%2BiwoD1wEr%2BeFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ%3D%3D`
+`web+stellar:pay?destination=GCALNQQBXAPZ2WIRSDDBMSTAKCUH5SG6U76YBFLQLIXJTF7FE5AX7AOO&amount=120.1234567&memo=skdjfasf&msg=pay%20me%20with%20lumens&origin_domain=someDomain.com&signature=x%2BiZA4v8kkDj%2BiwoD1wEr%2BeFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ%3D%3D`
 
 In order to verify the signature `x%2BiZA4v8kkDj%2BiwoD1wEr%2BeFUcY2J8SgxCaYcNz4WEOuDJ4Sq0ps0rJpHfIKKzhrP4Gi1M58sTzlizpcVNX3DQ%3D%3D` against our URI request, we first separate out the `signature` field and value from the URI Request. Then we use what is remaining from the URI Request and verify it against the `signature` value. The signature needs to first be URL-unescaped and then decoded from base64 into its byte form before it can be used to verify the remaining portion of the URI request against the public key. If there is no error then we know that the signature is valid and the `origin_domain` is the originator of this URI request. Wallets should then display the `origin_domain` to the user if signature verification succeeds. If signature verification fails then wallets should disallow the user from signing the URI request and display an appropriate message to alert the user.
 
@@ -168,4 +168,6 @@ The reference implementations only serve to demonstrate how the generated XDR ca
 1. [RFC2396 - Uniform Resource Identifiers (URI): Generic Syntax](https://www.ietf.org/rfc/rfc2396.txt)
 2. [RFC2718 - Guidelines for new URL Schemes](https://www.ietf.org/rfc/rfc2718.txt)
 3. [Architecture of the World Wide Web, Volume One: URI Schemes](https://www.w3.org/TR/webarch/#URI-scheme)
+4. [BIP-21](https://github.com/bitcoin/bips/blob/master/bip-0021.mediawiki)
+5. [EIP-681](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-681.md)
 
