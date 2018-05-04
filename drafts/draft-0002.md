@@ -49,7 +49,7 @@ The `tx` operation represents a request to sign a specific XDR `Transaction`. Th
 ### Operation `pay`
 The `pay` operation represents a request to pay a specific address with a specific asset, regardless of the source asset used by the payer. If the payer decides to use a different source asset then the wallet should leverage the [path payment operation](https://www.stellar.org/developers/guides/concepts/list-of-operations.html#path-payment) to achieve this. The parameters for the `pay` operation are as follows:
 1. `destination` (required) - A valid account ID or payment address
-2. `amount` (required) - Amount that destination will receive
+2. `amount` (optional) - Amount that destination will receive. If not specified then the wallet should ask the user to enter the amount before signing. The use case for leaving this out is to support donations of arbitrary amounts.
 3. `asset_code` (optional) - Asset code (XLM if not present) destination will receive
 4. `asset_issuer` (optional) - Account ID of asset issuer (XLM if not present) destination will receive
 5. `memo` (optional) - Can be a memo to be included in the payment / path payment. Memos of type `MEMO_HASH` and `MEMO_RETURN` should be base64 encoded and the URL encoded. Memos of type `MEMO_TEXT` should be URL-encoded.
