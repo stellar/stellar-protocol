@@ -82,7 +82,7 @@ Applications that want to increase trust with the end user should include the `o
 2. Generate the URI request with the `origin_domain` param set to the application's domain.
 3. Convert the URI request into the `payload` that will be signed. The first 35 bytes of the `payload` are all `0`, the 36th byte is `4`. Then we concatenate the URI request with the prefix `stellar.sep.7 - URI Scheme` (no delimiter) and convert that to bytes to give use the final `payload` to be signed.
 4. Sign this payload with the application's private signing key corresponding to the `URI_REQUEST_SIGNING_KEY` public key. We will need to convert the signature to base64 and then URL-encode it so we can include it in the URI-Request. Take a look at the sample code [here](https://gist.github.com/nikhilsaraf/ff3ae46116b6ae6dbdcd1743ad9495ec#file-sign_data-go) for reference.
-4. Append the URL-encoded base64 signature to the URI Request as the value for the `signature` param.
+5. Append the URL-encoded base64 signature to the URI Request as the value for the `signature` param. This should be the last param to make it easier for wallets to extract out the `payload` for signature verification.
 
 **This is how a wallet should handle the `origin_domain` and `signature` fields**:
 1. If the `origin_domain` field does not exist then **do not** display an `origin_domain` to the user; no need to proceed further.
@@ -138,9 +138,9 @@ The choice to go with this URI Scheme and syntax allows us to achieve some of th
 
 ## User Experience
 
-When the user opens their preferred wallet that implements this SEP, the wallet will request to handle the `web+stellar` URI scheme. If there is already a registered default handler for this URI scheme then the wallet should **not** request to handle this URI scheme so as to not pose an annoyance to the user. Depending on the platform used by the wallet (web browser, application, mobile) this request will be surfaced to the user and can be highlighted by the wallet. The user can then proceed to confirm the application's request to be the default handler for this URI scheme. From this point on any URIs with the `web+stellar` scheme name that are clicked on will trigger the preferred wallet to be opened by the user's OS.
+When the user opens their preferred wallet that implements this SEP, the wallet will request to handle the `web+stellar` URI scheme. If there is already a registered default handler for this URI scheme then the wallet should **not** request to handle this URI scheme so as to not pose an annoyance to the user. Depending on the platform used by the wallet (web browser, application, mobile) this request will be surfaced to the user and can be highlighted by the wallet. The user can then confirm the application's request, making it the default handler for this URI scheme. From this point on any URIs with the `web+stellar` scheme name that are clicked will trigger the preferred wallet to be opened by the user's OS.
 
-When a URI request is clicked, the wallet should parse the URI request and present the user with the details as specified in this SEP when requesting a signature. **Under no circumstance should the wallet automatically sign requests without the user's express consent**.
+When a URI request is clicked, the wallet should parse the URI request and present the user with the details as specified in this SEP when requesting a signature. **Under no circumstance should the wallet automatically sign requests without the user's express consent**. Any alternative forms of transmitting payment requests should follow this URI Scheme so it is compatible with the existing wallets.
 
 ## Backwards Compatibility
 There is no common pattern of usage that are currently employed by the community so there is no issue with backwards compatibility.
