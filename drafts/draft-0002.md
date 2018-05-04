@@ -136,6 +136,12 @@ The choice to go with this URI Scheme and syntax allows us to achieve some of th
 3. **Secure** - The syntax for the URI scheme does not expose any secret keys. To be fully compliant with the specification, wallets are required to display the transaction that the user will sign and also save well-known destination addresses to alert the user if she encounters a new recipient. These protections will give the user increased visibility into the transaction they are signing and greater confidence when using wallets that comply with these specifications.
 4. **Future-Proof** - Since the syntax allows for including a Stellar transaction directly it will work for operations that are added to the Stellar Network in the future. This will ensure that existing wallets will continue to function as expected as these new operations are added. Since the syntax includes a namespace we can further expand it to include information that we did not think of at the time when this specification was defined.
 
+## User Experience
+
+When the user opens their preferred wallet that implements this SEP, the wallet will request to handle the `web+stellar` URI scheme. If there is already a registered default handler for this URI scheme then the wallet should **not** request to handle this URI scheme so as to not pose an annoyance to the user. Depending on the platform used by the wallet (web browser, application, mobile) this request will be surfaced to the user and can be highlighted by the wallet. The user can then proceed to confirm the application's request to be the default handler for this URI scheme. From this point on any URIs with the `web+stellar` scheme name that are clicked on will trigger the preferred wallet to be opened by the user's OS.
+
+When a URI request is clicked, the wallet should parse the URI request and present the user with the details as specified in this SEP when requesting a signature. **Under no circumstance should the wallet automatically sign requests without the user's express consent**.
+
 ## Backwards Compatibility
 There is no common pattern of usage that are currently employed by the community so there is no issue with backwards compatibility.
 
