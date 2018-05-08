@@ -1,11 +1,12 @@
 ## Preamble
 
 ```
-SEP: <to be assigned>
+SEP: 0007
 Title: URI Scheme to facilitate delegated signing
 Author: Lightyear.io
-Status: Draft
-Created: 2018-03-26
+Status: Approved
+Created: 2018-05-07
+Version: 1.0.0
 ```
 
 ## Simple Summary
