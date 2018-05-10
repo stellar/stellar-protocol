@@ -6,3 +6,4 @@ Table of Contents:
 - [sep-0004](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0004.md) Tx Status Endpoint
 - [sep-0005](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0005.md) Key Derivation Methods for Stellar Accounts
 - [sep-0006](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0006.md) Anchor/Client interoperability
+- [sep-0007](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0007.md) URI Scheme to facilitate delegated signing
