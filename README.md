@@ -4,7 +4,7 @@ Stellar Protocol
 This repository contains **Core Advancement Proposals** (CAPs) and **Stellar Ecosystem Proposals** (SEPs). 
 Similarly to [BIPs](https://github.com/bitcoin/bips) and [EIPs](https://github.com/ethereum/EIPs), CAPs and SEPs are the proposals of standards to improve Stellar protocol and related client APIs.
 
-CAPs deal changes to the core protocol of the Stellar network. 
+CAPs deal with changes to the core protocol of the Stellar network.
 
 SEPs deal with changes to the standards, protocols, and methods used in the ecosystem built on top of the Stellar network. 
 
@@ -44,9 +44,15 @@ Example repository structure:
 
 ## Process
 
-1. Write your CAP or SEP using `cap-template.md` or `sep-template.md` (`DRAFT`).
+### CAP proposals
+
+See [the core section](core/readme.md)
+
+### SEP proposals
+
+1. Write your SEP using `sep-template.md` (`DRAFT`).
 2. Place it in the /drafts directory.
 2. Create a PR in this repository.
-3. CAP or SEP number assigned (`ACCEPTED`) or CAP or SEP rejected (`REJECTED`).
+3. SEP number assigned (`ACCEPTED`) or SEP rejected (`REJECTED`).
 4. Discussion and changes.
-5. CAP or SEP merged (`FINAL`) or CAP or SEP rejected (`REJECTED`).
+5. SEP merged (`FINAL`) or SEP rejected (`REJECTED`).
