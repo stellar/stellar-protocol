@@ -31,5 +31,5 @@ Once a CAP is implemented, a PR should be submitted to update its status to 'Fin
 Number             | Title                                    | Owner                 |   Status
 ------------------ | ---------------------------------------- | --------------------- | -------------
 [0001](cap-0001.md)| Bump Sequence                            | Nicolas Barry         |   Final
-[0002](cap-0002.md)| Transaction level signature verification | Nicolas Barry         |   Draft
+[0002](cap-0002.md)| Transaction level signature verification | Nicolas Barry         |   Final
 [0003](cap-0003.md)| Asset-backed offers                      | Jonathan Jove         |   Draft
