@@ -7,3 +7,5 @@ Table of Contents:
 - [sep-0005](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0005.md) Key Derivation Methods for Stellar Accounts
 - [sep-0006](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0006.md) Anchor/Client interoperability
 - [sep-0007](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0007.md) URI Scheme to facilitate delegated signing
+- [sep-0009](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0009.md) Standard KYC / AML fields
+- [sep-0010](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0010.md) Stellar Web Authentication
