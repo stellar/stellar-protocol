@@ -9,6 +9,7 @@ Author: <list of authors' names and optionally, email addresses>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
 Discussion: <link to where discussion for this CAP is taking place>
+Protocol version: <version of the protocol this CAP got implemented when final, otherwise TBD>
 ```
 
 ## Simple Summary
