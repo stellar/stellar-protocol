@@ -32,4 +32,4 @@ Number             | Title                                    | Owner           
 ------------------ | ---------------------------------------- | --------------------- | -------------
 [0001](cap-0001.md)| Bump Sequence                            | Nicolas Barry         |   Final
 [0002](cap-0002.md)| Transaction level signature verification | Nicolas Barry         |   Final
-[0003](cap-0003.md)| Asset-backed offers                      | Jonathan Jove         |   Draft
+[0003](cap-0003.md)| Asset-backed offers                      | Jonathan Jove         |   Final
