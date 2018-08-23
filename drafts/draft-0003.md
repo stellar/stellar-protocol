@@ -162,11 +162,11 @@ In the future, this requirement can be replaced by introducing protocol level [C
 ### Should my asset be a regulated asset ? 
 
 Ideally, No. Implementing Regulated Assets should be a last resort. It comes with a substantial operational overhead, added complexity, and burden for the users. Issuers should only go down this route if it absolutely required. 
-Alternatively, some other available options are to utilize SEP006 in order to perform KYC on deposit and withdraw, and/or use AUTHORIZATION_REQUIRED which allows issuers to whitelist specific accounts to hold their issued assets. 
+Alternatively, some other available options are to utilize [SEP006](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0006.md) in order to perform KYC on deposit and withdraw, and/or use [AUTHORIZATION_REQUIRED](https://www.stellar.org/developers/guides/issuing-assets.html#requiring-or-revoking-authorization)` which allows issuers to whitelist specific accounts to hold their issued assets. 
 
 ### Why are the validation and approval servers separated?
 
-Validation and Approval have different inputs and outputs. Validation requires an unsigned transaction that can be augmented while approval needs a signed transaction in order to mark a transaction as pending to have an accurate view of the state of the world.
+Validation and Approval have different inputs and outputs. Validation requires an unsigned transaction that can be augmented, while the approval service needs a signed transaction in order to mark a transaction as pending, which gives it an accurate view of the state of the world.
 It’s possible to merge these two functionalities into the same service, but will then require multiple trips to the same service, which might be confusing.
 
 ### Why doesn’t the approval service submit transactions to the network?
