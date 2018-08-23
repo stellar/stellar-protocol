@@ -11,7 +11,7 @@ Version 1.0.0
 
 ## Simple Summary
 
-Regulated Assets provide ecosystem support for assets that require an issuer’s approval (or a third party’s approval) on a per-transaction basis. It standardizes the identification of such assets as well as defines the protocol for performing compliance checks and requesting issuer approval. 
+Regulated Assets provide ecosystem support for assets that require an issuer’s approval (or a delegated third party’s approval, such as a licensed securities exchange) on a per-transaction basis. It standardizes the identification of such assets as well as defines the protocol for performing compliance checks and requesting issuer approval. 
 
 **Target Audience**: Asset Issuers and Wallet developers
 
@@ -25,7 +25,9 @@ Implementing a Regulated Asset consists of these parts:
 - **Stellar.toml**: Issuers will advertise the existence of an Approval Service and the approval criteria via their stellar.toml file.
 - **Validation Server**: HTTP endpoint for transaction compliance checks. 
 - **Approval Server**: HTTP protocol for transaction signing. 
-- **Account Setup**: Wallets will have to work with accounts that are controlled or at least partially controlled (via multisig) by asset issuers, rather than the wallet end user. (this step might not be required in the [future](https://github.com/stellar/stellar-protocol/issues/146))
+- **Account Setup**: Wallets will have to work with accounts that are controlled or at least partially controlled (via multisig) by asset issuers, rather than the wallet end user. 
+
+**Note**: this step may not be required once the proposed [protocol change](https://github.com/stellar/stellar-protocol/issues/146) allowing for protocol-level per-transaction approval is implemented. 
 
 ## Regulated Assets Flow
 
