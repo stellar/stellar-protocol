@@ -25,8 +25,7 @@ Implementing a Regulated Asset consists of these parts:
 - **Stellar.toml**: Issuers will advertise the existence of an Approval Service and the approval criteria via their stellar.toml file.
 - **Validation Server**: HTTP endpoint for transaction compliance checks. 
 - **Approval Server**: HTTP protocol for transaction signing. 
-- **Account Setup**: Wallets will have to work with accounts that are controlled or at least partially controlled (via multisig) by asset issuers, rather than the wallet end user. 
-
+- **Account Setup**: Wallets will have to work with accounts that are controlled or at least partially controlled (via multisig) by asset issuers, rather than the wallet end user.<br/> 
 **Note**: this step may not be required once the proposed [protocol change](https://github.com/stellar/stellar-protocol/issues/146) allowing for protocol-level per-transaction approval is implemented. 
 
 ## Regulated Assets Flow
