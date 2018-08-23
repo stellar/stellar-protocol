@@ -28,7 +28,10 @@ Implementing a Regulated Asset consists of these parts:
 - **Account Setup**: Wallets will have to work with accounts that are controlled or at least partially controlled (via multisig) by asset issuers, rather than the wallet end user. (this step might not be required in the [future](https://github.com/stellar/stellar-protocol/issues/146))
 
 ## Regulated Assets Flow
-The following illustrates a transaction submission flow for regulated assets.
+
+The following illustrates a simple transaction submission flow for regulated assets.
+
+![sep8](sep8.png)
 
 ## Stellar.toml
 Issuers will advertise the existence of an Approval Service through their stellar.toml file. This is done in the [[CURRENCIES]] section as different assets can have different requirements.
