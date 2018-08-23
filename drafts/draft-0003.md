@@ -164,7 +164,7 @@ In the future, this requirement can be replaced by introducing protocol level [C
 
 ### Should my asset be a regulated asset ? 
 
-Ideally, No. Implementing Regulated Assets should be a last resort. It comes with a substantial operational overhead, added complexity, and burden for the users. Issuers should only go down this route if it absolutely required. 
+Ideally, No. Implementing Regulated Assets should only be used when absolutely necessary, such as for regulatory reasons. It comes with a substantial operational overhead, added complexity, and burden for users. Issuers should only go down this route if it absolutely required. 
 Alternatively, some other available options are to utilize [SEP006](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0006.md) in order to perform KYC on deposit and withdraw, and/or use [AUTHORIZATION_REQUIRED](https://www.stellar.org/developers/guides/issuing-assets.html#requiring-or-revoking-authorization)` which allows issuers to whitelist specific accounts to hold their issued assets. 
 
 ### Why are the validation and approval servers separated?
