@@ -23,7 +23,6 @@ Stellar aims to be an ideal platform for issuing securities. As such, it must pr
 
 Implementing a Regulated Asset consists of these parts:
 - **Stellar.toml**: Issuers will advertise the existence of an Approval Service and the approval criteria via their stellar.toml file.
-- **Validation Server**: HTTP endpoint for transaction compliance checks. 
 - **Approval Server**: HTTP protocol for transaction signing. 
 - **Account Setup**: Wallets will have to work with accounts that are controlled or at least partially controlled (via multisig) by asset issuers, rather than the wallet end user.<br/> 
 **Note**: this step may not be required once the proposed [protocol change](https://github.com/stellar/stellar-protocol/issues/146) allowing for protocol-level per-transaction approval is implemented. 
@@ -32,17 +31,16 @@ Implementing a Regulated Asset consists of these parts:
 
 The following illustrates a simple transaction submission flow for regulated assets.
 
-![sep8](sep8.png)
+*TODO: add once flow is finalized* 
 
 ## Stellar.toml
 Issuers will advertise the existence of an Approval Service through their stellar.toml file. This is done in the [[CURRENCIES]] section as different assets can have different requirements.
 
 ### Fields:
 
-- `regulated` is a boolean indicating whether or not this is a regulated asset.
-- `validaton_server` is the url of a validations service that performs compliance checks on transactions and if necessary, modifies them to enforce compliance.
+- `regulated` is a boolean indicating whether or not this is a regulated asset. If missing, `false` is assumed.
 - `approval_server` is the url of an approval service that signs validated transactions.
-- `approval_criteria` is a human readable string that explains the issuer's requirements for validating and signing transactions.
+- `approval_criteria` is a human readable string that explains the issuer's requirements for approving transactions.
 
 ### Example
 
@@ -51,108 +49,81 @@ Issuers will advertise the existence of an Approval Service through their stella
 code="GOAT"
 issuer="GD5T6IPRNCKFOHQWT264YPKOZAWUMMZOLZBJ6BNQMUGPWGRLBK3U7ZNP"
 regulated=true
-validation_server="https://goat.io/tx_validate"
-approval_server="https://goat.io/tx_auth"
+approval_server="https://goat.io/tx_approve"
 approval_criteria= “The goat approval server will ensure that transactions are compliant with NFO regulation”
 ```
 
-## Validation Server
-The transaction validation server receives unsigned transactions and checks for compliance. It can choose to accept the transaction, modify it to fit compliance, or reject it. 
+## Approval Server
+The transaction validation server receives a signed transaction, checks for compliance and signs if possible.
+
+### Possible results
+- Success: Transaction was found compliant and signed by service.
+- Revised: Transaction was modified to be compliant and signed by service. It should be resigned by the client.
+- Pending: The issuer will asynchronously validate the transaction and respond later.
+- Rejected: Transaction was rejected.
 
 ### Request 
 
-*HTTP POST request is encoded as `application/json`.*
-
-
-Parameters:
-
-Name | Data Type | Description
------|-----------|------------
-tx|string|Unsigned Transaction XDR, Base64 encoded. This transaction will be tested for compliance.
+Transaction approval requests are executed by submitting an `HTTP POST` to `approval_server` with `Content-Type=application/x-www-form-urlencoded` and a single `tx` parameter. `tx` value is a base64 encoded Transaction Envelope XDR signed by the user. This is the transaction that will be tested for compliance and signed if possible.
 
 ### Responses
 
-*HTTP responses are encoded as application/json*
+HTTP responses have an `application/json` encoded body. All responses will contain, at least, a top level `status` parameter that indicates the type of the result.
 
-#### Success (*status code 200*)
 
-A successful response means that the transaction is compliant or the validation service was able to modify it to meet compliance.
+#### Success Response
 
-Parameters:
-
-Name | Data Type | Description
------|-----------|------------
-tx|string|Unsigned Transaction XDR, Base64 encoded. This transaction is compliant.
-message|string|A human readable string containing information about the changes made to the transaction in order to make it compliant (optional).
-
-#### Pending (*status code 202*)
-
-A pending response means that the issuer needs to asynchronously validate the transaction. The user should resubmit the transaction after a given timeout. 
+A Successful response will have a `200` HTTP status code and `success` as the `status` value. This response means that the transaction was found compliant and signed.
 
 Parameters:
 
 Name | Data Type | Description
 -----|-----------|------------
-timeout|integer|Number of milliseconds to wait before submitting the same transaction
-message|string|A human readable string containing information about the reason 
+status|string|"success"
+tx|string|Transaction Envelope XDR, Base64 encoded. This transaction will have both the original signature(s) from the request, as well as an additional issuer signature.
+message|string|A human readable string containing information to pass on to the user (optional).
 
-#### Rejected (*status code 400*)
+#### Revised Response
 
-A rejection response means that the transaction is not compliant and could not be made compliant.
+A Revised response will have a `200` http status code and `revised` as the `status` value. It means that the transaction was revised to be made compliant. The user should examine and resign the transaction. 
 
 Parameters:
 
 Name | Data Type | Description
 -----|-----------|------------
+status|string|"revised"
+tx|string|Transaction Envelope XDR, Base64 encoded. This transaction is a revised complaint version of the original request transation, signed by the issuer.
+message|string|A human readable string explaining the modifications made to the transaction to make it compliant.
+
+#### Pending Response
+
+A Pending response will have a `200` http status code and `pending` as the `status` value. It means that the issuer needs to asynchronously validate the transaction. The user should resubmit the transaction after a given timeout. 
+
+Parameters:
+
+Name | Data Type | Description
+-----|-----------|------------
+status|string|"pending"
+timeout|integer|Number of milliseconds to wait before submitting the same transaction again.
+message|string|A human readable string containing information to pass on to the user (optional).
+
+#### Rejected Response
+
+A Pending response will have a `400` http status code and `rejected` as the `status` value. It means that the transaction is not compliant and could not be revised to be made compliant.
+
+Parameters:
+
+Name | Data Type | Description
+-----|-----------|------------
+status|string|"rejecred"
 error|string|A human readable string explaining why the transaction is not compliant and could not be made compliant.
 
 ### Best practices
 
-- ALWAYS explain the changes that were made to a transaction through the message parameter.
+- If a transaction was revised, ALWAYS explain the changes that were made to a transaction through the `message` parameter.
 - Core operations shouldn't be modified as that can be confusing and misleading. For example, if the user wishes to put an offer for 1000 GOATS but due to velocity limits they can only put an offer for 500 GOATS, it is better to error with a message than to change the amount.
 - Adding an upper timebound to a transaction can help the issuer ensure that their view of the world does not get out of sync.
 - Issuers can enforce additional fees by adding additional operations. For example, any transaction involving goats, will also send 0.1 GOAT to Boris’ account. 
-
-## Approval Server
-
-The transaction approval server receives a transaction, verifies compliance and either signs or rejects it. 
-
-### Request 
-
-*HTTP POST request is encoded as application/json.*
-
-Parameters :
-
-Name | Data Type | Description
------|-----------|------------
-tx|string|Transaction XDR, Base64 encoded. Signed by account holder/s
-
-### Responses
-HTTP responses are encoded as application/json
-
-#### Success (*status code 200*)
-A successful response means that:
-The transaction is compliant
-The existing signatures are verified
-
-Parameters :
-
-Name | Data Type | Description
------|-----------|------------
-tx|string|Transaction XDR, Base64 encoded. Signed by account holder/s and issuer.
-
-#### Rejected (*status code 400*)
-
-A rejection response means that the transaction is not compliant. The user should take the unsigned transaction back to the transaction validation server.
-
-Parameters :
-
-Name | Data Type | Description
------|-----------|------------
-error|string|A human readable string explaining why the transaction is not compliant and could not be made compliant.
-
-### Best Practices
-
 - Once a transaction has been signed, the issuer should mark it as pending and take it into account, as long as it hasn’t been timed out, so that they can have a accurate view of the world. 
 
 ## Account Setup
@@ -166,12 +137,7 @@ In the future, this requirement can be replaced by introducing protocol level [C
 ### Should my asset be a regulated asset ? 
 
 Ideally, No. Implementing Regulated Assets should only be used when absolutely necessary, such as for regulatory reasons. It comes with a substantial operational overhead, added complexity, and burden for users. Issuers should only go down this route if it absolutely required.
-Alternatively, some other available options are to utilize [SEP006](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0006.md) in order to perform KYC on deposit and withdraw, and/or use [AUTHORIZATION_REQUIRED](https://www.stellar.org/developers/guides/issuing-assets.html#requiring-or-revoking-authorization)` which allows issuers to whitelist specific accounts to hold their issued assets. 
-
-### Why are the validation and approval servers separated?
-
-Validation and Approval have different inputs and outputs. Validation requires an unsigned transaction that can be augmented, while the approval service needs a signed transaction in order to mark a transaction as pending, which gives it an accurate view of the state of the world.
-It’s possible to merge these two functionalities into the same service, but will then require multiple trips to the same service, which might be confusing.
+Alternatively, some other available options are to utilize [SEP006](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0006.md) in order to perform KYC on deposit and withdraw, and/or use [AUTHORIZATION_REQUIRED](https://www.stellar.org/developers/guides/issuing-assets.html#requiring-or-revoking-authorization) which allows issuers to whitelist specific accounts to hold their issued assets. 
 
 ### Why doesn’t the approval service submit transactions to the network?
 
