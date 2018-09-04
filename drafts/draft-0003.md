@@ -37,7 +37,7 @@ The following illustrates a simple transaction submission flow for regulated ass
 ## Stellar.toml
 Issuers will advertise the existence of an Approval Service through their stellar.toml file. This is done in the [[CURRENCIES]] section as different assets can have different requirements.
 
-## Fields:
+### Fields:
 
 - `regulated` is a boolean indicating whether or not this is a regulated asset.
 - `validaton_server` is the url of a validations service that performs compliance checks on transactions and if necessary, modifies them to enforce compliance.
