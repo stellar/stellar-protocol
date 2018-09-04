@@ -115,7 +115,7 @@ Parameters:
 
 Name | Data Type | Description
 -----|-----------|------------
-status|string|"rejecred"
+status|string|"rejected"
 error|string|A human readable string explaining why the transaction is not compliant and could not be made compliant.
 
 ### Best practices
