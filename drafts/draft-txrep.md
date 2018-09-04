@@ -228,7 +228,7 @@ much every language has functions to read files line-by-line and break
 strings at a specific character (to separate field and value at `:`).
 Printing field and value is even more trivial.  This means
 security-sensitive applications can avoid depending on external
-libraries for more complicated formats such as JSON or XLM.
+libraries for more complicated formats such as JSON or XML.
 
 Two special cases (for keys and assets) make the output easier for
 humans to process by providing compatibility with other tools.
