@@ -85,7 +85,7 @@ message|string|A human readable string containing information to pass on to the 
 
 #### Revised Response
 
-A Revised response will have a `200` http status code and `revised` as the `status` value. It means that the transaction was revised to be made compliant. The user should examine and resign the transaction. 
+A Revised response will have a `200` HTTP status code and `revised` as the `status` value. It means that the transaction was revised to be made compliant. The user should examine and resign the transaction. 
 
 Parameters:
 
@@ -97,7 +97,7 @@ message|string|A human readable string explaining the modifications made to the 
 
 #### Pending Response
 
-A Pending response will have a `200` http status code and `pending` as the `status` value. It means that the issuer needs to asynchronously validate the transaction. The user should resubmit the transaction after a given timeout. 
+A Pending response will have a `200` HTTP status code and `pending` as the `status` value. It means that the issuer needs to asynchronously validate the transaction. The user should resubmit the transaction after a given timeout. 
 
 Parameters:
 
@@ -109,7 +109,7 @@ message|string|A human readable string containing information to pass on to the 
 
 #### Rejected Response
 
-A Pending response will have a `400` http status code and `rejected` as the `status` value. It means that the transaction is not compliant and could not be revised to be made compliant.
+A Pending response will have a `400` HTTP status code and `rejected` as the `status` value. It means that the transaction is not compliant and could not be revised to be made compliant.
 
 Parameters:
 
