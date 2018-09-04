@@ -54,7 +54,7 @@ approval_criteria= “The goat approval server will ensure that transactions are
 ```
 
 ## Approval Server
-The transaction validation server receives a signed transaction, checks for compliance and signs if possible.
+The transaction approval server receives a signed transaction, checks for compliance and signs if possible.
 
 ### Possible results
 - Success: Transaction was found compliant and signed by service.
