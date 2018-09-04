@@ -1,8 +1,9 @@
 
-MDFILES := README.md $(wildcard core/*.md ecosystem/*.md drafts/*.md)
+DRAFTS := $(wildcard drafts/*.md)
+MDFILES := $(DRAFTS) README.md $(wildcard core/*.md ecosystem/*.md)
 HTMLFILES := $(MDFILES:.md=.html)
 
-all: $(HTMLFILES)
+all: $(HTMLFILES) $(DRAFTS:.md=.gfm)
 clean:
 	rm -f $(HTMLFILES) *~ */*~
 .PHONY: all clean
@@ -16,3 +17,7 @@ clean:
 	pandoc -s -f gfm -t html -V "pagetitle:$$pagetitle" -o $@ \
 		-V "title:$$title" \
 		-H "$$PWD/github-pandoc.css" $^
+
+# Github doesn't re-wrap lines, so you have to upload with long lines.
+%.gfm: %.md
+	pandoc --wrap=none -f gfm -t gfm -o $@ $<
