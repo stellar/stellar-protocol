@@ -228,13 +228,12 @@ and
 
 ### Normalized txrep
 
-Fields in a strkey file are specified in an order-independent way.  If
-a field appears twice, the second value overwrites the first.  This
-allows one to update a transaction by appending lines to a file.
-However, in some cases it is useful to transform transactions into
-normalized form, for instance so two transactions can be more easily
-compared, or so users inspecting a transaction see a more predictable
-format.
+Fields in txrep are specified in an order-independent way.  If a field
+appears twice, the second value overwrites the first.  This allows one
+to update a transaction by appending lines to a file.  However, in
+some cases it is useful to transform transactions into normalized
+form, for instance so two transactions can be more easily compared, or
+so users inspecting a transaction see a more predictable format.
 
 _Normalized txrep_ format is a _txrep_ format with the following
 additional restrictions:
@@ -268,7 +267,7 @@ libraries for more complicated formats such as JSON or XML.
 Two special cases (for keys and assets) make the output easier for
 humans to process by providing compatibility with other tools.
 
-Pseudoselectors use '#' instead of `.` to avoid conflicting with
+Pseudoselectors use `#` instead of `.` to avoid conflicting with
 fields of the same name (specifically a pointer to a struct containing
 a field called `present` would be ambiguous).
 
