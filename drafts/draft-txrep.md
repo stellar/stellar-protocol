@@ -301,7 +301,7 @@ tx.operations[0].body.paymentOp.asset.alphaNum4.issuer: GAZFEVBSEGJJ63WPVVIWXLZL
 tx.operations[0].body.paymentOp.amount: 400004000 (40.0004e7)
 tx.ext.v: 0
 signatures#len: 1
-signatures[0].hint: 4aa07ed0 (bad signature/unknown key/-net=default is wrong)
+signatures[0].hint: 4aa07ed0 (GAVRMS4QIOCC4QMOSKILOOOHCSO4FEKOXZPNLKFFN6W7SD2KUB7NBPLN)
 signatures[0].signature: defb4f1fad1c279327b55af184fdcddf73f4f7a8cb40e7e534a71d73a05124ba369db7a6d31b47cafd118592246a8575e6c249ab94ec3768dedb6292221ce50c
 ~~~~
 
