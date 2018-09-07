@@ -287,8 +287,8 @@ tx.sourceAccount: GAVRMS4QIOCC4QMOSKILOOOHCSO4FEKOXZPNLKFFN6W7SD2KUB7NBPLN
 tx.fee: 100
 tx.seqNum: 46489056724385793
 tx.timeBounds#present: true
-tx.timeBounds.MinTime: 1535756672 (Fri Aug 31 16:04:32 PDT 2018)
-tx.timeBounds.MaxTime: 1567292672 (Sat Aug 31 16:04:32 PDT 2019)
+tx.timeBounds.minTime: 1535756672 (Fri Aug 31 16:04:32 PDT 2018)
+tx.timeBounds.maxTime: 1567292672 (Sat Aug 31 16:04:32 PDT 2019)
 tx.memo.type: MEMO_TEXT
 tx.memo.text: "Enjoy this transaction"
 tx.operations#len: 1
