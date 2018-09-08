@@ -52,7 +52,7 @@ of a field.  We describe the line format using a simple BNF-like
 notation in which brackets ([...]) indicate optional contents, pipe
 (|) indicates alternatives, and an asterisk (*) indicates zero or more
 repetitions of the previous symbol.  Literal text (namely `:`, `.`,
-`[`, `]`, `.present`, and `.len`, and `_`) indicate the occurence of
+`[`, `]`, `#present`, and `#len`, and `_`) indicate the occurence of
 those specific characters in the txrep source.  Lines then have the
 following format:
 
