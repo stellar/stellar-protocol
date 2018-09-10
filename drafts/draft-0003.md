@@ -60,6 +60,7 @@ The transaction approval server receives a signed transaction, checks for compli
 - Success: Transaction was found compliant and signed by service.
 - Revised: Transaction was modified to be compliant and signed by service. It should be resigned by the client.
 - Pending: The issuer will asynchronously validate the transaction and respond later.
+- Action Required: The user must complete an action in order to have the transaction approved.
 - Rejected: Transaction was rejected.
 
 ### Request 
@@ -79,7 +80,7 @@ Parameters:
 
 Name | Data Type | Description
 -----|-----------|------------
-status|string|"success"
+status|string|`"success"`
 tx|string|Transaction Envelope XDR, Base64 encoded. This transaction will have both the original signature(s) from the request, as well as an additional issuer signature.
 message|string|A human readable string containing information to pass on to the user (optional).
 
@@ -91,7 +92,7 @@ Parameters:
 
 Name | Data Type | Description
 -----|-----------|------------
-status|string|"revised"
+status|string|`"revised"`
 tx|string|Transaction Envelope XDR, Base64 encoded. This transaction is a revised complaint version of the original request transation, signed by the issuer.
 message|string|A human readable string explaining the modifications made to the transaction to make it compliant.
 
@@ -103,9 +104,21 @@ Parameters:
 
 Name | Data Type | Description
 -----|-----------|------------
-status|string|"pending"
+status|string|`"pending"`
 timeout|integer|Number of milliseconds to wait before submitting the same transaction again.
 message|string|A human readable string containing information to pass on to the user (optional).
+
+#### Action Required Response
+
+An Action Required response will have a `200` HTTP status code and `action_required` as the `status` value. It means that the user must complete an action before this transaction can be approved. The approval service will provide a URL that facilitates the action. Upon completion, the user will resubmit the transaction. 
+
+Parameters:
+
+Name | Data Type | Description
+-----|-----------|------------
+status|string|`"action_required"`
+message|string|A human readable string containing information regarding the action required.
+action_url|string|A URL that allows the user to complete the actions required to have the transaction approved. 
 
 #### Rejected Response
 
@@ -115,7 +128,7 @@ Parameters:
 
 Name | Data Type | Description
 -----|-----------|------------
-status|string|"rejected"
+status|string|`"rejected"`
 error|string|A human readable string explaining why the transaction is not compliant and could not be made compliant.
 
 ### Best practices
