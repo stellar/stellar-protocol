@@ -293,16 +293,16 @@ Because each line of txrep is entirely self-contained, one can excerpt
 any subset of a transaction with no ambiguity.  Because txrep takes
 the last value of a field, one can overwrite any previously set
 transaction field.  This is convenient for scripts that may wish to
-tweak values in a transaction template.
+tweak values by appending lines to a transaction template.
 
 
 Two special cases (for keys and assets) make the output easier for
 humans to process by providing compatibility with other tools.
 
 The `._present` pseudoselector was selected to avoid conflicting with
-fields in the same data structure, since no field can contain the
-character `?`.  There is no similar ambiguity possible for `.len`,
-whose only siblings are bracketed array indices.
+fields in the same data structure, since the XDR specification
+disallows fields that start with `_`.  There is no similar ambiguity
+possible for `.len`, whose only siblings are bracketed array indices.
 
 ## Test Cases
 
