@@ -3,8 +3,8 @@
 ```
 SEP: 0008
 Title: Regulated Assets
-Author: Lightyear.io
-Status: Draft
+Author: Interstellar.com
+Status: Accepted
 Created: 2018-08-22
 Version 1.0.0
 ```
