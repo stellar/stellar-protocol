@@ -32,7 +32,7 @@ Implementing a Regulated Asset consists of these parts:
 1. User creates and signs a transaction.
 2. Wallet resolves asset information and detects that it's a regulated asset.
 3. Wallet sends the transaction to the approval server.
-4. Approval server determines whether the transaction is compliant based on the current state of the ledger, known pending transactions, and their set of regulatory constraints.
+4. Approval server determines whether the transaction is compliant based on the current state of the ledger, known pending transactions, and its compliance ruleset.
 5. Wallet handles approval response:
     1. *Success?* Transaction has been approved and signed by issuer. Submit to horizon.
     2. *Revised?* Transaction has been revised to be made compliant, and signed by the issuer. Wallet will show the changes to the user and ask them to sign the new transaction. Submit to horizon once signed.
