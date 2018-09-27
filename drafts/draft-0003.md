@@ -27,11 +27,17 @@ Implementing a Regulated Asset consists of these parts:
 - **Account Setup**: Wallets will have to work with accounts that are controlled or at least partially controlled (via multisig) by asset issuers, rather than the wallet end user.<br/> 
 **Note**: this step may not be required once the proposed [protocol change](https://github.com/stellar/stellar-protocol/issues/146) allowing for protocol-level per-transaction approval is implemented. 
 
-## Regulated Assets Flow
+## Regulated Assets Approval Flow
 
-The following illustrates a simple transaction submission flow for regulated assets.
-
-*TODO: add once flow is finalized* 
+1. User creates and signs a transaction.
+2. Wallet resolves asset information and detects that it's a regulated asset.
+3. Wallet sends the transaction to the approval server.
+4. Approval server determines whether the transaction is compliant based on the current state of the ledger, known pending transactions, and their set of regulatory constraints.
+5. Wallet handles approval response:
+    1. *Success?* Transaction has been approved and signed by issuer. Submit to horizon.
+    2. *Revised?* Transaction has been revised to be made compliant, and signed by the issuer. Wallet will show the changes to the user and ask them to sign the new transaction. Submit to horizon once signed.
+    3. *Pending?* The issuer will need to asynchronously approve this transaction. Wallet should send the same transaction to the approval service after a specified timeout (Return to 3).
+    4. *Rejected?* Wallet should display given error message to the user.
 
 ## Stellar.toml
 Issuers will advertise the existence of an Approval Service through their stellar.toml file. This is done in the [[CURRENCIES]] section as different assets can have different requirements.
