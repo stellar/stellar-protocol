@@ -28,8 +28,9 @@ Once a CAP is implemented, a PR should be submitted to update its status to 'Fin
 
 # Summary list of all CAP proposals
 
-Number             | Title                                    | Owner                 |   Status
------------------- | ---------------------------------------- | --------------------- | -------------
-[0001](cap-0001.md)| Bump Sequence                            | Nicolas Barry         |   Final
-[0002](cap-0002.md)| Transaction level signature verification | Nicolas Barry         |   Final
-[0003](cap-0003.md)| Asset-backed offers                      | Jonathan Jove         |   Final
+Number             | Title                                           | Owner                 |   Status
+------------------ | ----------------------------------------------- | --------------------- | -------------
+[0001](cap-0001.md)| Bump Sequence                                   | Nicolas Barry         |   Final
+[0002](cap-0002.md)| Transaction level signature verification        | Nicolas Barry         |   Final
+[0003](cap-0003.md)| Asset-backed offers                             | Jonathan Jove         |   Final
+[0005](cap-0005.md)| Throttling and transaction pricing improvements | Nicolas Barry  |   Draft
