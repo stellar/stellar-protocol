@@ -33,4 +33,5 @@ Number             | Title                                           | Owner    
 [0001](cap-0001.md)| Bump Sequence                                   | Nicolas Barry         |   Final
 [0002](cap-0002.md)| Transaction level signature verification        | Nicolas Barry         |   Final
 [0003](cap-0003.md)| Asset-backed offers                             | Jonathan Jove         |   Final
+[0004](cap-0004.md)| Improved Rounding for Cross Offer               | Jonathan Jove         |   Final
 [0005](cap-0005.md)| Throttling and transaction pricing improvements | Nicolas Barry  |   Draft
