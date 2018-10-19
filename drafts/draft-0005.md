@@ -3,7 +3,7 @@
 ```
 SEP: <to be assigned>
 Title: Bootstrapping Multisig Coordination
-Author: Paul Selden <paul.selden@stellarguard.me>
+Author: Paul Selden <paul.selden@stellarguard.me>, Nikhil Saraf <nikhil@interstellar.com>
 Status: Draft
 Created: 2018-10-18
 ```
