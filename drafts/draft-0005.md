@@ -111,6 +111,8 @@ The server implementation is currently live on [https://test.stellarguard.me](ht
 
 A library that implements this protocol has been published here: [https://github.com/stellarguard/multisig-utils](https://github.com/stellarguard/multisig-utils)
 
+A demo using that library that submits to the StellarGuard multisig endpoint: [https://stellarguard.github.io/multisig-utils/demo/](https://stellarguard.github.io/multisig-utils/demo/)
+
 ## Outstanding Questions
 
 - Should we require the transaction to be signed at least once in order for it to be submitted? StellarGuard requires that it is signed by an account that is associated with a StellarGuard user and uses the signature to prove ownership to prevent transaction notification spam.
