@@ -21,19 +21,19 @@ edge cases.
 
 ## Motivation
 
-As a generic mechanism to store key/value pairs on the ledger, data entries
-accept a very wide range of use cases. If each actor use it following its own
-syntax, it will lead to a confusing experience.
+As a generic mechanism to store key/value pairs on the ledger, data entries 
+accept a very wide range of use cases. If each actor use it following its own 
+syntax, it will lead to a confusing experience and ultimatelly to naming 
+conflicts.
 
 Introducing namespaces allow to hierarchize and organize data, in such a way 
 that sorting the key/value entries will result in a readable output even when 
-using them for various purpose on the same account.
+using them for various purpose on the same account. It also helps to prevent
+name clash.
 
-It also permit to parse the whole tree at once, and provides guidelines for a 
-generic API that would allow direct access to data entries, by converting data 
-tree into JSON for example. This could make sense for some sensitive data that 
-needs to be securely stored, such as public keys, DNS entries or maybe some 
-data related to Stellar that are currently stored in TOML files.
+The present SEP ensure that all other SEP that will use data entries will do so 
+in a consistent way. It provides guidelines ontop of which generic tool to 
+handle data entries can be created.
 
 ## Specification
 
@@ -41,7 +41,7 @@ Namespace hierarchy is encoded in the key using one or more terms separated by
 dots. Terms are made of lowcase letters, undescore and numbers and musn't start
 with a number.
 
-**Example**
+**Examples**
 
 ```
 conf.two_factor
@@ -64,7 +64,7 @@ namespace, a warning must be thrown by the parser and the identifier value must
 be ignored.
 
 
-** Example: same data tree in JSON**
+**Example: same data tree in JSON**
 
 ```js
 {
@@ -135,4 +135,8 @@ the shortcutting of a whole branch.
 
 This SEP doesn't introduce incompatibilities: the keys that are not formatted
 following the defined syntax rules are simply not considered as part of the
-data tree. They are still accessible as account data entries.
+data tree, and they are still accessible as account data entries.
+
+This SEP leverage the fact that it permits the introduction of convenient 
+standard utilities to manage the data entries tree, which will provide incentive
+to comply with the proposed semantic.
