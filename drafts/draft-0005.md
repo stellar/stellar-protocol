@@ -118,15 +118,13 @@ Response fields:
 - **status** - Required. An string indicating the status of the multisig request which can have one of the following values:
   - `pending` - The request requires more signatures
   - `success` - The transaction has been fully signed
-- **xdr** - Required. The current state of the transaction xdr, including any signatures.
 
 Example:
 
 ```json
 {
   "id": "c585ceee-b1b9-4009-aa37-b8544346a036",
-  "status": "pending",
-  "xdr": "AAAAAHFd0+HQV5u/Y/fM3+VelUr1IWwSFL8CUDIAUudUdD4MAAAAZAADyI8AAAADAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAcV3T4dBXm79j98zf5V6VSvUhbBIUvwJQMgBS51R0PgwAAAAAAAAAAACYloAAAAAAAAAAAVR0PgwAAABAEw8ODG0iixkbAHg1aJATAnZS2531PhGauuSvFDad2WxHKzIenUNbc7K5mGiSpe5jvqe19OQCbNFuBjqN11jfBw=="
+  "status": "pending"
   }
 ```
 
