@@ -141,3 +141,25 @@ data tree, and they are still accessible as account data entries.
 This SEP leverage the fact that it permits the introduction of convenient
 standard utilities to manage the data entries tree, which will provide
 incentive to comply with the proposed semantic.
+
+## Reference utilities
+
+JavaScript implementation of standard utilities to deal with account
+namespace:
+
+* **Repository:** https://github.com/MisterTicot/stellar-draft-0005
+* **Minimal implementation:**
+  [flat.js](https://github.com/MisterTicot/stellar-draft-0005/blob/master/flat.js)
+  parse account data entries as a list of keys. It takes 45 lines of code so
+  it's nice for being compact.
+* **Recommended implementation:**
+  [tree.js](https://github.com/MisterTicot/stellar-draft-0005/blob/master/tree.js),
+  parse account data entries as a tree. It takes 70 lines of code. It is not
+  as compact and efficient, but it is dev-friendly.
+
+Both implementations expose the following methods:
+
+* `accountData.read(account, [convert])` parse valid namespace entries from
+  **account** and convert them to the desired format.
+* `accountData.write(account, accountData)` generate a transaction that change
+  **account** data entries to reflect **accountData**.
