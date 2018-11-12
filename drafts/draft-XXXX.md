@@ -26,7 +26,7 @@ This proposal outlines two suggested additions to the Stellar-protocol. The firs
 
 "Using the Stellar network, you can build mobile wallets, banking tools, smart devices that pay for themselves, and just about anything else you can dream up involving payments! Even though Stellar is a complex distributed system, working with it doesn’t need to be complicated." -[SDF](https://www.stellar.org/developers/guides/get-started/)
 
-Both IPFS and Stellar are platforms that open the doors for decentralized applications. Combining a fast payment layer with decentralized data layer would allow the Stellar ecosystem to venture into more complex decentralized applications. Namely machine to machine markets, coordinating multi-signature transactions, and "smarter" smart contracts.
+Both IPFS and Stellar are platforms that open the doors for decentralized applications. Combining a fast payment layer with a decentralized data layer would allow the Stellar ecosystem to venture into more complex decentralized applications. Namely machine to machine markets, coordinating multi-signature transactions, and "smarter" smart contracts.
 
 ## Specification
 The technical specification should describe the syntax and semantics of any new feature.
