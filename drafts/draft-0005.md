@@ -13,7 +13,7 @@ Adding IPFS support to Stellar increase functionality of the ecosystem with a sm
 
 Suggested additions:
 1) Add a multi-hash field in the transaction memo.
-2) Add an account operation for requesting communication accounts.
+2) Add an account operation for requesting communication between accounts.
 
 ## Abstract
 Currently Stellar does not support attaching large amounts of data to a transaction (in a decentralized manner), nor does it support decentralized peer-to-peer messaging at the account level. IPFS specializes in data storage and peer-to-peer networking. Formally supporting IPFS on Stellar would bolster Stellar's functionality with a minimal overhead compared to writing a stellar-specific data storage and messaging layer. 
@@ -29,16 +29,48 @@ This proposal outlines two suggested additions to the Stellar-protocol. The firs
 Both IPFS and Stellar are platforms that open the doors for decentralized applications. Combining a fast payment layer with a decentralized data layer would allow the Stellar ecosystem to venture into more complex decentralized applications. Namely machine to machine markets, coordinating multi-signature transactions, and "smarter" smart contracts.
 
 ## Specification
-The technical specification should describe the syntax and semantics of any new feature.
+### 1) multi-hash in the transaction memo.
+
+An additional field in the transaction memo type explicitly for coupling IPFS hashes (data references) to transactions. The field should be capable of storing 64 bytes.
+
+`MEMO_TEXT` : A string encoded using either ASCII or UTF-8, up to 28-bytes long.
+
+`MEMO_ID` : A 64 bit unsigned integer.
+
+`MEMO_HASH` : A 32 byte hash.
+
+`MEMO_RETURN` : A 32 byte hash intended to be interpreted as the hash of the transaction the sender is refunding.
+```diff
++++ `MEMO_IPFS` : A 64 byte hash intended to be interpreted as an IPFS multihash.
+```
+-------
+### 2) `INIT_COMM` operation. 
+
+`INIT_COMM` is proposed means of establish a direct link between two accounts. The INIT_COMM should act as an misc account effect. Services that wish to support direct communication would listen to a stream of their accounts effects and act on any `INIT_COMM` effects. **To hide the communication address from the rest of the network, the address could be automatically signed with the public key of the recepient.** IPFS supports peer-to-peer messaging via a multi-address routing. A multi-address supports multiple transportation protocols and IP4/IP6. This operation is not limited to IPFS alone. A standard address and protocol could be used like `tcp://0.0.0.0:3000`. This maximizes flexibility while immediately enabling peer-to-peer communication.
 
 ## Rationale
-The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.
+### 1)
+Why 64 bytes for the `MEMO_IPFS`? IPFS developer discussion [here][1].
+
+**Why we need to add IPFS support**: Stellar currently allows data to be referenced on ledger with transaction memos but the data is not cryptographically verifiable (unless using a custom method). Meanwhile, IPFS data references are innately verifiable due to the underlying merkle tree. 
+
+Stellar Dev Discussion: https://github.com/stellar/stellar-protocol/issues/32
+
+-----
+### 2)
+Although a generic messaging layer baked into stellar would be nice, it then limits the communication methods. On-chain communication carries a hefty overhead and may not scale-well. Discussion on messaging can be found [here][2].
+
+An independent communication operation does not lock the recepients into a specific protocol and can support extremely high-performance messaging like UDP rather than tcp.
+
 
 ## Backwards Compatibility
 Addition rather than subtraction. This proposal should be fully backwards compatible.
 
 ## Test Cases
-Johansten?
+<TODO>
 
 ## Implementation
-<TBD>
+<TODO>
+  
+[1]: https://github.com/ipld/cid/issues/21
+[2]: https://github.com/stellar/stellar-protocol/issues/143
