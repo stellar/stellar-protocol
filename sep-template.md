@@ -28,17 +28,16 @@ Adaptiing Stellar to the full IPFS multihash requires changes to the storage bud
 ## Specification
 Add a memo type MEMO_IPFS_QM.
 
-### #Memo
-
-new Memo(type, value)
+#### Memo
+**new Memo(type, value)**
 Memo represents memos attached to transactions.
 
 #### Parameters:
-Name	Type	Description
-type	string	
-MemoNone, MemoID, MemoText, MemoHash or MemoReturn
-value	*	
-string for MemoID, MemoText, buffer of hex string for MemoHash or MemoReturn
+Name	| Type  |	Description
+----- | ----- | -----------
+type	|string | MemoNone, MemoID, MemoText, MemoHash, MemoIPFSQm or MemoReturn
+value |	*     | string for MemoID, MemoText, buffer of hex string for MemoHash, MemoIPFSQm or MemoReturn
+
 #### Members
 
 type
