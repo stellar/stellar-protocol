@@ -47,9 +47,9 @@ Contains memo value:
   * *string* for MemoID, MemoText,
   * *Buffer* for MemoHash, MemoIPFS_Qm, MemoReturn
 
-#### New Methods
+#### New Method
 
-(static) ipfs_qm(hash) → {Memo}
+(static) ipfs_qm(IPFS_hash) → {Memo}
 
 Creates and returns a MemoIPFS_Qm memo.
 
