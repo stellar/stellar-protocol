@@ -31,13 +31,13 @@ Add a memo type MEMO_IPFS_QM.
 #### Memo
 **new Memo(type, value)**
 
-Memo represents memos attached to transactions.
+**Memo** represents memos attached to transactions.
 
 #### Parameters:
 Name	| Type  |	Description
 ----- | ----- | -----------
-type	|string | MemoNone, MemoID, MemoText, MemoHash, MemoIPFSQm or MemoReturn
-value |	*     | string for MemoID, MemoText, buffer of hex string for MemoHash, MemoIPFSQm or MemoReturn
+type	|string | MemoNone, MemoID, MemoText, MemoHash, Memo_IPFS_Qm or MemoReturn
+value |	*     | string for MemoID, MemoText, buffer of hex string for MemoHash, Memo_IPFS_Qm or MemoReturn
 
 #### Members
 
