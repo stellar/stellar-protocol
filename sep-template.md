@@ -20,23 +20,30 @@ Ingestion of a current IPFS hash to include decode from base 58 and stripping IP
 
 The resulting 32 byte sha256 hash is stored as any current memoHash.
 
-Stellar already supports storage of current sha256 IPFS hashes in memos.  Moving format conversion into stellar's hash ingestion process restores provision of trust to the blockchain's consensus protocol.  This change extends the domain of trust to any documentation related to a transaction.  A small semantic change results in a large estension of reach.
-
-This SEP is a two step proposal and seeks advice whether to forget it, develop it as one SEP or split it in two.
-*A short (~200 word) description of the technical issue being addressed.
-
 ## Motivation
-IPFS provides simple, distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on stellar, by decoding an IPFS hash from base58 and stripping two bytes of multihash metadata from the front of a 32 byte sha256 hash.  This invests trust in the third party performing the transformation, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo takes advantage of network consensus to explicitly associate collateral documents with the transaction.
+IPFS provides distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on stellar, by decoding an IPFS hash from base58 and stripping two bytes of multihash metadata from the front of a 32 byte sha256 hash.  This invests trust in the third party performing the transformation, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo takes advantage of network consensus to explicitly associate collateral documents with a transaction.
 
-Significant attention should be paid to the limited scope ot this proposal.  Adaptiing stellar to the full IPFS multihash requires changes to the storage budget for memos, with additional cost of programming. Adding a memo option specific to today's IPFS hash minimizes cost and schedule.  The incremental change furthermore delivers data to drive future decisions whether to accommodate more types of multihashes.
-
-
-*Should clearly explain why the existing protocol specification is inadequate to address the problem that the SEP solves. SEP submissions without sufficient motivation may be rejected outright.
+Adaptiing Stellar to the full IPFS multihash requires changes to the storage budget for memos, with additional cost of programming. Adding a memo option of today's IPFS hash minimizes cost and schedule.  The incremental change promises data to drive future decisions regarding Stellar and IPFS.
 
 ## Specification
-This enhancement can be delivered in two stages.  Semantic enhancement can link IPFS and Stellar while IPFS continues to use sha256.  Future expansion of hash storage in stellar 
-
 Add a memo type MEMO_IPFS_QM.
+
+Because I am an end user, I will explain it in terms of that code.
+
+Members
+
+type
+Contains memo type: MemoNone, MemoID, MemoText, MemoHash or MemoReturn
+
+Source:
+node_modules/stellar-base/src/memo.js, line 68
+value
+Contains memo value:
+
+null for MemoNone,
+string for MemoID, MemoText,
+Buffer for MemoHash, MemoReturn
+
 
 
 The technical specification should describe the syntax and semantics of any new feature.
