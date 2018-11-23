@@ -24,8 +24,6 @@ The resulting 32 byte sha256 hash is stored as any current memoHash buffer.
 IPFS provides distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on stellar, by decoding an IPFS hash from base58 and stripping two bytes of multihash metadata from the front of a 32 byte sha256 hash.  This invests trust in the third party performing the transformation, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo explicitly associates collateral documents with a transaction.
 
 ## Specification
-Add a memo type MEMOIPFS_QM.
-
 #### Memo
 **new Memo(type, value)**
 
@@ -40,20 +38,20 @@ value |	*     | *string* for MemoID, MemoText, *buffer* or *hex string* for Memo
 #### Members
 
 * type
-Contains memo type: **MemoNone, MemoID, MemoText, MemoHash or MemoReturn**
+Contains memo type: **MemoNone, MemoID, MemoText, MemoHash, MemoIPFS_Qm or MemoReturn**
 
 
 * value
 Contains memo value:
   * *null* for MemoNone,
   * *string* for MemoID, MemoText,
-  * *Buffer* for MemoHash, Memo_IPFS_Qm, MemoReturn
+  * *Buffer* for MemoHash, MemoIPFS_Qm, MemoReturn
 
 #### New Methods
 
 (static) ipfs_qm(hash) → {Memo}
 
-Creates and returns a MemoHash memo.
+Creates and returns a MemoIPFS_Qm memo.
 
 ##### Parameters:
 Name | Type | Description
@@ -64,7 +62,7 @@ hash |	*array* or *string*	 | 32 byte hash or hex encoded string
 Type:  *Memo*
 
 ## Rationale
-Adaptiing Stellar to the full IPFS multihash requires changes to the storage budget for memos, with additional cost of programming. Adding a memo option of today's IPFS hash minimizes cost and schedule.  The incremental change promises data to drive future decisions regarding Stellar and IPFS.  If true multihash capability is implemented in another SEP, MemoIPFS_Qm will be deprecated.
+Adaptiing Stellar to the full IPFS multihash requires changes to the storage budget for memos, with additional cost of programming. Adding a memo option of today's IPFS hash minimizes cost and schedule.  The incremental change promises data to drive future decisions regarding Stellar and IPFS.  If true multihash capability is implemented in another SEP, MemoIPFS_Qm can be deprecated.
 
 ## Backwards Compatibility
 This SEP does not introduce backward incompatibility.
