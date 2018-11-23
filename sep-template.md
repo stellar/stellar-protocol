@@ -4,7 +4,7 @@ Copied from [eip-X](https://github.com/ethereum/EIPs/blob/master/eip-X.md).
 
 ```
 SEP: <to be assigned>
-Title: <Addition of current IPFS Hash to Memo>
+Title: <Add of IPFS Hash to Memo>
 Author: <Brian Ebert, brian@motia.com>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
@@ -18,7 +18,7 @@ Add a memoType Memo_IPFS_Qm to Memo.
 
 Ingestion of a current IPFS hash to include decode from base 58 and stripping IPFS multihash metadata 0x1220.
 
-The resulting 32 byte sha256 hash is stored as any current memoHash.
+The resulting 32 byte sha256 hash is stored as any current memoHash buffer.
 
 ## Motivation
 IPFS provides distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on stellar, by decoding an IPFS hash from base58 and stripping two bytes of multihash metadata from the front of a 32 byte sha256 hash.  This invests trust in the third party performing the transformation, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo takes advantage of network consensus to explicitly associate collateral documents with a transaction.
