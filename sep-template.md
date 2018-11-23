@@ -41,15 +41,15 @@ value |	*     | *string* for MemoID, MemoText, *buffer* or *hex string* for Memo
 
 #### Members
 
-##### type
+* type
 Contains memo type: **MemoNone, MemoID, MemoText, MemoHash or MemoReturn**
 
 
-##### value
+* value
 Contains memo value:
-* *null* for MemoNone,
-* *string* for MemoID, MemoText,
-* *Buffer* for MemoHash, Memo_IPFS_Qm, MemoReturn
+  * *null* for MemoNone,
+  * *string* for MemoID, MemoText,
+  * *Buffer* for MemoHash, Memo_IPFS_Qm, MemoReturn
 
 #### Methods
 
