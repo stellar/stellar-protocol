@@ -4,29 +4,27 @@ Copied from [eip-X](https://github.com/ethereum/EIPs/blob/master/eip-X.md).
 
 ```
 SEP: <to be assigned>
-Title: <Add of IPFS Hash to Memo>
-Author: <Brian Ebert, brian@motia.com>
+Title: Add IPFS Hash to Memo
+Author: Brian Ebert, brian@motia.com
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
 ```
 
 ## Simple Summary
-Addition of current IPFS Hash to Memo.
+Addition of *current* IPFS Hash to Memo.
 
 ## Abstract
-Add a memoType Memo_IPFS_Qm to Memo.
+Add a memoType MemoIPFS_Qm to Memo.
 
 Ingestion of a current IPFS hash to include decode from base 58 and stripping IPFS multihash metadata 0x1220.
 
 The resulting 32 byte sha256 hash is stored as any current memoHash buffer.
 
 ## Motivation
-IPFS provides distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on stellar, by decoding an IPFS hash from base58 and stripping two bytes of multihash metadata from the front of a 32 byte sha256 hash.  This invests trust in the third party performing the transformation, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo takes advantage of network consensus to explicitly associate collateral documents with a transaction.
-
-Adaptiing Stellar to the full IPFS multihash requires changes to the storage budget for memos, with additional cost of programming. Adding a memo option of today's IPFS hash minimizes cost and schedule.  The incremental change promises data to drive future decisions regarding Stellar and IPFS.
+IPFS provides distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on stellar, by decoding an IPFS hash from base58 and stripping two bytes of multihash metadata from the front of a 32 byte sha256 hash.  This invests trust in the third party performing the transformation, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo explicitly associates collateral documents with a transaction.
 
 ## Specification
-Add a memo type MEMO_IPFS_QM.
+Add a memo type MEMOIPFS_QM.
 
 #### Memo
 **new Memo(type, value)**
@@ -36,8 +34,8 @@ Add a memo type MEMO_IPFS_QM.
 #### Parameters:
 Name	| Type  |	Description
 ----- | ----- | -----------
-type	|*string* | MemoNone, MemoID, MemoText, MemoHash, Memo_IPFS_Qm or MemoReturn
-value |	*     | *string* for MemoID, MemoText, *buffer* or *hex string* for MemoHash, Memo_IPFS_Qm or MemoReturn
+type	|*string* | MemoNone, MemoID, MemoText, MemoHash, MemoIPFS_Qm or MemoReturn
+value |	*     | *string* for MemoID, MemoText, *buffer* or *hex string* for MemoHash, MemoIPFS_Qm or MemoReturn
 
 #### Members
 
@@ -54,6 +52,7 @@ Contains memo value:
 #### New Methods
 
 (static) ipfs_qm(hash) → {Memo}
+
 Creates and returns a MemoHash memo.
 
 ##### Parameters:
@@ -65,13 +64,13 @@ hash |	*array* or *string*	 | 32 byte hash or hex encoded string
 Type:  *Memo*
 
 ## Rationale
-The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.
+Adaptiing Stellar to the full IPFS multihash requires changes to the storage budget for memos, with additional cost of programming. Adding a memo option of today's IPFS hash minimizes cost and schedule.  The incremental change promises data to drive future decisions regarding Stellar and IPFS.  If true multihash capability is implemented in another SEP, MemoIPFS_Qm will be deprecated.
 
 ## Backwards Compatibility
-All SEPs that introduce backwards incompatibilities must include a section describing these incompatibilities and their severity. The SEP must explain how the author proposes to deal with these incompatibilities. SEP submissions without a sufficient backwards compatibility treatise may be rejected outright.
+This SEP does not introduce backward incompatibility.
 
 ## Test Cases
-Test cases for an implementation are mandatory for SEPs that are affecting consensus changes. Other SEPs can choose to include links to test cases if applicable.
+This SEP does not affect consensus.
 
 ## Implementation
-The implementations must be completed before any SEPs is given status "Final", but it need not be completed before the SEP is accepted. While there is merit to the approach of reaching consensus on the specification and rationale before writing code, the principle of "rough consensus and running code" is still useful when it comes to resolving many discussions of API details.
+Too be proposed after determining SEP viability
