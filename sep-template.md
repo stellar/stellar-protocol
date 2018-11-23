@@ -24,7 +24,7 @@ The resulting 32 byte sha256 hash is stored as any current MemoHash buffer.
 IPFS provides distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on Stellar, by decoding an IPFS hash from base58 and stripping two bytes of multihash metadata from the front of a 32 byte sha256 hash.  This invests trust in the third party performing the transformation, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo explicitly associates collateral documents with a transaction.
 
 ## Specification
-#### Memo
+### Memo
 **new Memo(type, value)**
 
 **Memo** represents memos attached to transactions.
