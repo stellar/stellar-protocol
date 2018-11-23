@@ -49,7 +49,7 @@ Contains memo value:
 
 #### New Method
 
-(static) ipfs_qm(IPFS_hash) → {Memo}
+(static) ipfs_Qm(IPFS_hash) → {Memo}
 
 Creates and returns a MemoIPFS_Qm memo.
 
