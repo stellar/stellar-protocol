@@ -42,7 +42,7 @@ value |	*     | *string* for MemoID, MemoText, *buffer* or *hex string* for Memo
 #### Members
 
 ##### type
-Contains memo type: *MemoNone, MemoID, MemoText, MemoHash or MemoReturn*
+Contains memo type: **MemoNone, MemoID, MemoText, MemoHash or MemoReturn**
 
 
 ##### value
