@@ -28,11 +28,100 @@ Adaptiing Stellar to the full IPFS multihash requires changes to the storage bud
 ## Specification
 Add a memo type MEMO_IPFS_QM.
 
+###Memo
+
+new Memo(type, value)
+Memo represents memos attached to transactions.
+
+###Parameters:
+Name	Type	Description
+type	string	
+MemoNone, MemoID, MemoText, MemoHash or MemoReturn
+value	*	
+string for MemoID, MemoText, buffer of hex string for MemoHash or MemoReturn
+###Members
+
+type
+Contains memo type: MemoNone, MemoID, MemoText, MemoHash or MemoReturn
 
 
+value
+Contains memo value:
 
+null for MemoNone,
+string for MemoID, MemoText,
+Buffer for MemoHash, MemoReturn
 
-*The technical specification should describe the syntax and semantics of any new feature.
+###Methods
+
+(static) fromXDRObject(object) → {Memo}
+Returns Memo from XDR memo object.
+
+Source:
+node_modules/stellar-base/src/memo.js, line 227
+Parameters:
+Name	Type	Description
+object	xdr.Memo	
+Returns:
+Type:  Memo
+(static) hash(hash) → {Memo}
+Creates and returns a MemoHash memo.
+
+Source:
+node_modules/stellar-base/src/memo.js, line 190
+Parameters:
+Name	Type	Description
+hash	array | string	
+32 byte hash or hex encoded string
+Returns:
+Type:  Memo
+(static) id(id) → {Memo}
+Creates and returns a MemoID memo.
+
+Source:
+node_modules/stellar-base/src/memo.js, line 181
+Parameters:
+Name	Type	Description
+id	string	
+64-bit number represented as a string
+Returns:
+Type:  Memo
+(static) none() → {Memo}
+Returns an empty memo (MemoNone).
+
+Source:
+node_modules/stellar-base/src/memo.js, line 163
+Returns:
+Type:  Memo
+(static) return(hash) → {Memo}
+Creates and returns a MemoReturn memo.
+
+Source:
+node_modules/stellar-base/src/memo.js, line 199
+Parameters:
+Name	Type	Description
+hash	array | string	
+32 byte hash or hex encoded string
+Returns:
+Type:  Memo
+(static) text(text) → {Memo}
+Creates and returns a MemoText memo.
+
+Source:
+node_modules/stellar-base/src/memo.js, line 172
+Parameters:
+Name	Type	Description
+text	string	
+memo text
+Returns:
+Type:  Memo
+toXDRObject() → {xdr.Memo}
+Returns XDR memo object.
+
+Source:
+node_modules/stellar-base/src/memo.js, line 207
+Returns:
+Type:  xdr.Memo
 
 ## Rationale
 The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.
