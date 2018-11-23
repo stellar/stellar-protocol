@@ -28,25 +28,11 @@ Adaptiing Stellar to the full IPFS multihash requires changes to the storage bud
 ## Specification
 Add a memo type MEMO_IPFS_QM.
 
-Because I am an end user, I will explain it in terms of that code.
-
-Members
-
-type
-Contains memo type: MemoNone, MemoID, MemoText, MemoHash or MemoReturn
-
-Source:
-node_modules/stellar-base/src/memo.js, line 68
-value
-Contains memo value:
-
-null for MemoNone,
-string for MemoID, MemoText,
-Buffer for MemoHash, MemoReturn
 
 
 
-The technical specification should describe the syntax and semantics of any new feature.
+
+*The technical specification should describe the syntax and semantics of any new feature.
 
 ## Rationale
 The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages. The rationale may also provide evidence of consensus within the community, and should discuss important objections or concerns raised during discussion.
