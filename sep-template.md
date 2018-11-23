@@ -30,6 +30,7 @@ Add a memo type MEMO_IPFS_QM.
 
 #### Memo
 **new Memo(type, value)**
+
 Memo represents memos attached to transactions.
 
 #### Parameters:
