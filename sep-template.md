@@ -36,20 +36,20 @@ Add a memo type MEMO_IPFS_QM.
 #### Parameters:
 Name	| Type  |	Description
 ----- | ----- | -----------
-type	|string | MemoNone, MemoID, MemoText, MemoHash, Memo_IPFS_Qm or MemoReturn
-value |	*     | string for MemoID, MemoText, buffer of hex string for MemoHash, Memo_IPFS_Qm or MemoReturn
+type	|*string* | MemoNone, MemoID, MemoText, MemoHash, Memo_IPFS_Qm or MemoReturn
+value |	*     | *string* for MemoID, MemoText, *buffer* or *hex string* for MemoHash, Memo_IPFS_Qm or MemoReturn
 
 #### Members
 
 ##### type
-Contains memo type: **MemoNone, MemoID, MemoText, MemoHash or MemoReturn**
+Contains memo type: *MemoNone, MemoID, MemoText, MemoHash or MemoReturn*
 
 
 ##### value
 Contains memo value:
-* null for MemoNone,
-* string for MemoID, MemoText,
-* Buffer for MemoHash, Memo_IPFS_Qm, MemoReturn
+* *null* for MemoNone,
+* *string* for MemoID, MemoText,
+* *Buffer* for MemoHash, Memo_IPFS_Qm, MemoReturn
 
 #### Methods
 
