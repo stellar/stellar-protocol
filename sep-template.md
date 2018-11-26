@@ -7,7 +7,7 @@ SEP: <to be assigned>
 Title: Add IPFS Hash to Memo
 Author: Brian Ebert, brian@motia.com
 Status: Draft
-Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
+Created:2018-11-26
 ```
 
 ## Simple Summary
@@ -23,7 +23,7 @@ The resulting 32 byte sha256 hash is stored as you would any current MemoHash bu
 To retrieve the IPFS hash, decode memos of type MemoIPFS_Qm from base64, add the multihash metadata and encode in base58.
 
 ## Motivation
-IPFS provides distributed storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on Stellar, by performing the above data transformations externally.  This invests trust in the third party performing the transformations, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo explicitly associates collateral documents with a transaction.
+IPFS provides distridatebuted storage of authenticated data.  This natural repository for documents pertient to a transaction is already used on Stellar, by performing the above data transformations externally.  This invests trust in the third party performing the transformations, as well as depending upon a third party to point to IPFS as repository of the preimage. A labeled memo explicitly associates collateral documents with a transaction.
 
 ## Specification
 ### Memo
