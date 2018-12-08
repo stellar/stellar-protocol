@@ -12,3 +12,4 @@ Table of Contents:
 - [sep-0010](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0010.md) Stellar Web Authentication
 - [sep-0011](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0011.md) Txrep: human-readable low-level representation of Stellar transactions
 - [sep-0012](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0012.md) Anchor/Client customer info transfer
+- [sep-0013](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0013.md) Bootstrapping Multisig Transaction Submission
