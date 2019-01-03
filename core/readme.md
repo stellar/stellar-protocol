@@ -12,8 +12,16 @@ Number             | Title                                           | Owner    
 [0002](cap-0002.md)| Transaction level signature verification        | Nicolas Barry         |   Final
 [0003](cap-0003.md)| Asset-backed offers                             | Jonathan Jove         |   Final
 [0004](cap-0004.md)| Improved Rounding for Cross Offer               | Jonathan Jove         |   Final
-[0005](cap-0005.md)| Throttling and transaction pricing improvements | Nicolas Barry         |   Draft
-[0006](cap-0006.md)| Add ManageBuyOffer Operation                    | Jonathan Jove         |   Draft
+[0005](cap-0005.md)| Throttling and transaction pricing improvements | Nicolas Barry         |   Pending
+[0006](cap-0006.md)| Add ManageBuyOffer Operation                    | Jonathan Jove         |   Pending
+[0007](cap-0007.md)| Deterministic Account Creation                  | Jeremy Rubin         |   Draft
+[0008](cap-0008.md)| Self Identified Pre-Auth Transaction            | Jeremy Rubin         |   Draft
+[0009](cap-0009.md)| Linear/Exterior Immutable Accounts              | Jeremy Rubin         |   Draft
+[0010](cap-0010.md)| Fee Bump Account                                | Jeremy Rubin         |   Draft
+[0011](cap-0011.md)| Relative Account Freeze                         | Jeremy Rubin        |   Draft
+[0013](cap-0013.md)| Change Trustlines to Balances                   | Dan Robinson         |   Draft
+[0014](cap-0014.md)| Adversarial Transaction Set Ordering            | Jeremy Rubin        |   Draft
+[0015](cap-0015.md)| Bump Fee Transactions                           | OrbitLens           |   Draft
 
 
 # Contributing CAPs
