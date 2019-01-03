@@ -15,7 +15,7 @@ The root directory of this repository contains:
 * Templates for creating your own CAP or SEP
 * `contents` directory with `cap-xxxx` subdirectories that contain all media/script files for a given CAP or SEP document.
 * core directory which contains accepted CAPs (`cap-xxxx.md` where `xxxx` is a CAP number with leading zeros, ex. `cap-0051.md`)
-* ecosystem directory which contains accepted CAPs (`sep-xxxx.md` where `xxxx` is a SEP number with leading zeros, ex. `sep-0051.md`)
+* ecosystem directory which contains accepted SEPs (`sep-xxxx.md` where `xxxx` is a SEP number with leading zeros, ex. `sep-0051.md`)
 * drafts directory for proposed SEPs or CAPs. These documents will be removed from here once approved.
   
 Example repository structure:
