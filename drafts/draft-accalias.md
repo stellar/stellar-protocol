@@ -111,7 +111,8 @@ enum AccountOrSigner {
     // These specifiers can only designate accounts
     ACCT_DETERMINISTIC = 3,    // The other kind of primary ID
     ACCT_TESTAMENT = 4,        // alias: opid of tx that created account
-    ACCT_COND = 5              // alias: an account and validity criteria
+    ACCT_COND = 5,             // alias: an account and validity criteria
+    ACCT_OPTIONAL = 6          // Op becomes NOP if account does not exist
 };
 
 union AccountPrimaryID switch (AccountOrSigner type) {
@@ -145,14 +146,14 @@ struct OperationIdPayload {
 union AccountSpec switch (AccountOrSigner type) {
   case KEY_ED25519:
     uint256 ed25519;
-  case ACCOUNT_CREATOR_SEQ:
+  case ACCT_DETERMINISTIC:
     Hash det;
-  case ACCOUNT_TESTAMENT:
+  case ACCT_TESTAMENT:
     Hash opid;
 };
 ~~~
 
-Any place we can use an `AccountId` (as opposed to an
+Any place we can use an `AccountID` (as opposed to an
 `AccountPrimaryID`), we can also specify conditions on the account.
 Hence, and `AccountId` is a superset of an `AccountSpec` that also
 allows for conditions.  We initially define two types of conditions:
@@ -178,12 +179,14 @@ struct ConditionalAccount {
 union AccountId switch (AccountOrSigner type) {
   case KEY_ED25519:
     uint256 ed25519;
-  case ACCOUNT_CREATOR_SEQ:
+  case ACCT_DETERMINISTIC:
     Hash det;
-  case ACCOUNT_TESTAMENT:
+  case ACCT_TESTAMENT:
     Hash opid;
-  case COND_ACCOUNT:
+  case ACCT_COND:
     ConditionalAccount cond;
+  case ACCT_OPTIONAL:
+    AccountSpec optional;
 };
 ~~~
 
@@ -192,8 +195,13 @@ condition, and $C$'s sequence number is one less than `seqMin`, then
 any extra fees in $C$ can contribute to executing $P$ if $P$ does not
 have a sufficient `fee`.
 
+Note that if an account is specified as `ACCT_OPTIONAL`, then any
+operation mentioning the account becomes a no-op rather than failing
+the transaction should the account not exist.
+
 XXX - the fee stuff might be too expensive to implement, so should be
-carefully considered.
+carefully considered.  It also requires both operations to end up in
+the same ledger.
 
 ### Changes to `AccountEntry`
 
