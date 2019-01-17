@@ -59,7 +59,9 @@ an account whose sequence number is deterministically initialized to
 0x100000000 (2^{32}).  A deterministically-created account has the
 current transaction automatically added as a pre-auth transaction,
 allowing the current transaction to add signers and otherwise
-manipulate options on the account.
+manipulate options on the account.  The public key specified in the
+account creation operation also gets added to the newly created
+account with signer weight 1.
 
 ~~~ {.c}
 enum OperationType
@@ -86,11 +88,26 @@ struct Operation
 
     } body;
 };
+
+struct CreateAccountOp {
+    PublicKey destination; // note: used to be AccountID, same XDR binary
+    int64 startingBalance; // amount they end up with
+};
+
+// This is debatable, but may be useful for ingesting accounts created
+// for a particular key.
+union CreateDetAccountResult switch (CreateAccountResultCode code) {
+case CREATE_ACCOUNT_SUCCESS:
+    struct {
+        PublicKey signer; // "destination" in CreateAccountOp
+        AccountID account;
+    } success;
+default:
+    void;
+};
 ~~~
 
-XXX - maybe use a different `CreateDetAccountOp` argument that also
-allows additional signers to be specified, so people do not forget to
-do this?
+XXX - maybe use a different `CreateDetAccountOp` argument?
 
 ### Modifications to `AccountID`
 
@@ -192,6 +209,8 @@ struct AccountCondition switch (AccountConditionType type) {
 };
 
 typedef AccountConditionType CheckAccountOp<2>;
+
+// Returns void, since it can never fail
 ~~~
 
 Note that `CHECK_ACCOUNT` affects the validity of a transaction, but
