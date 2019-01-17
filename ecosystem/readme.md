@@ -1,16 +1,18 @@
-# SEP Proposals
+# Stellar Ecosystem Proposals (SEPs)
 
 ## SEP Status Terms
 * **Archived** - A SEP that did not head towards a disposition due to a lack of consensus _and_
-    support. Generally open to revival with additional edits.
+  support. Generally open to revival with additional edits.
 * **Draft** - A SEP that is currently open for consideration and actively being discussed.
 * **Pending: [Acceptance/Rejection]** - A SEP that has entered a Final Comment Period (FCP) with an
-    intended disposition. After one week has passed, during which any new concerns should be
-    addressed, the SEP will head towards its intended disposition [**Accepted/Rejected**] or go
-    back into a Draft state.
+  intended disposition. After one week has passed, during which any new concerns should be
+  addressed, the SEP will head towards its intended disposition [**Accepted/Rejected**] or go
+  back into a Draft state.
 * **Accepted** - A SEP that is intended for immediate adoption by the entire ecosystem.
 * **Rejected** - A SEP that has concerns for the ecosystem to implement it in its current state.
-    Generally open to revival with additional edits.
+  Generally open to revival with additional edits.
+
+## Proposals
 
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |

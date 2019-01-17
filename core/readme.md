@@ -1,35 +1,40 @@
-# CAP status terms
-* **Draft** - a CAP that is open for consideration.
-* **Pending** - a CAP in it's final week of review. This is your last chance to comment and raise concerns.
-* **Accepted** - a CAP that is planned for immediate adoption, i.e. expected to be included in a next version of the protocol.
-* **Final** - a CAP that has been implemented (ie, changes fully merged into `stellar-core/master`).
+# Core Advancement Proposals (CAPs)
 
-# Summary list of all CAP proposals
+## CAP Status Terms
+* **Archived** - A CAP that did not head towards a disposition due to a lack of consensus _and_
+  support. Generally open to revival with additional edits.
+* **Draft** - A CAP that is currently open for consideration and actively being discussed.
+* **Pending: [Acceptance/Rejection]** - A CAP that has entered a Final Comment Period (FCP) with an
+  intended disposition. After one week has passed, during which any new concerns should be
+  addressed, the SEP will head towards its intended disposition [**Accepted/Rejected**] or go
+  back into a Draft state.
+* **Accepted** - A CAP that has been formally accepted and is ready for implementation. It is
+  expected to be included in a future version of the protocol.
+* **Finalized** - A CAP that has been implemented in Stellar Core in the version specified.
 
-Number             | Title                                           | Owner                 |   Status
------------------- | ----------------------------------------------- | --------------------- | -------------
-[0001](cap-0001.md)| Bump Sequence                                   | Nicolas Barry         |   Final
-[0002](cap-0002.md)| Transaction level signature verification        | Nicolas Barry         |   Final
-[0003](cap-0003.md)| Asset-backed offers                             | Jonathan Jove         |   Final
-[0004](cap-0004.md)| Improved Rounding for Cross Offer               | Jonathan Jove         |   Final
-[0005](cap-0005.md)| Throttling and transaction pricing improvements | Nicolas Barry         |   Accepted
-[0006](cap-0006.md)| Add ManageBuyOffer Operation                    | Jonathan Jove         |   Pending
-[0007](cap-0007.md)| Deterministic Account Creation                  | Jeremy Rubin          |   Draft
-[0008](cap-0008.md)| Self Identified Pre-Auth Transaction            | Jeremy Rubin          |   Draft
-[0009](cap-0009.md)| Linear/Exterior Immutable Accounts              | Jeremy Rubin          |   Draft
-[0010](cap-0010.md)| Fee Bump Account                                | Jeremy Rubin          |   Draft
-[0011](cap-0011.md)| Relative Account Freeze                         | Jeremy Rubin          |   Draft
-[0013](cap-0013.md)| Change Trustlines to Balances                   | Dan Robinson          |   Draft
-[0014](cap-0014.md)| Adversarial Transaction Set Ordering            | Jeremy Rubin          |   Draft
-[0015](cap-0015.md)| Bump Fee Transactions                           | OrbitLens             |   Draft
-[0016](cap-0016.md)| Cosigned assets: NopOp and COAUTHORIZED_FLAG    | David Mazières        |   Draft
-[0017](cap-0017.md)| Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove      |   Draft
-[0018](cap-0018.md)| Fine-Grained Control of Authorization           | Jonathan Jove         |   Pending
+## Proposals
 
-# Contributing CAPs
+| Number | Title | Author | Status |
+| --- | --- | --- | --- |
+| [CAP-0001](cap-0001.md) | Bump Sequence | Nicolas Barry | Finalized |
+| [CAP-0002](cap-0002.md) | Transaction level signature verification | Nicolas Barry | Finalized |
+| [CAP-0003](cap-0003.md) | Asset-backed offers | Jonathan Jove | Finalized |
+| [CAP-0004](cap-0004.md) | Improved Rounding for Cross Offer | Jonathan Jove | Finalized |
+| [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Pending |
+| [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Pending |
+| [CAP-0007](cap-0007.md) | Deterministic Account Creation | Jeremy Rubin | Draft |
+| [CAP-0008](cap-0008.md) | Self Identified Pre-Auth Transaction | Jeremy Rubin | Draft |
+| [CAP-0009](cap-0009.md) | Linear/Exterior Immutable Accounts | Jeremy Rubin | Draft |
+| [CAP-0010](cap-0010.md) | Fee Bump Account | Jeremy Rubin | Draft |
+| [CAP-0011](cap-0011.md) | Relative Account Freeze | Jeremy Rubin | Draft |
+| [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Draft |
+| [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
+| [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | Draft |
+| [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Draft |
+| [CAP-0017](cap-0017.md)| Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Draft |
+| [CAP-0018](cap-0018.md)| Fine-Grained Control of Authorization | Jonathan Jove | Pending |
 
-
-
+# Contribution Process
 
 ## How the protocol changes
 
@@ -85,4 +90,3 @@ These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Ot
 
 **CAP Buddies**: (Jon, Graydon, Jeremy, Johnny, Orbitlens)<BR>
 Buddies are responsible for moving a CAP along the process. They should make sure the draft is either `Accepted` or `Rejected` in a timely manner.
-
