@@ -127,14 +127,23 @@ struct CreatorSeqPayload {
     SequenceNumber seqNum;     // Sequence number of tx creating account
     unsigned opIndex;          // Index of operation that created account
 };
+
+struct Transaction {
+    AccountPrimaryID sourceAccount;
+    ...
+};
+
+// Everyplace else that currently sues an AccountID other than
+// Transaction::sourceAccount still takes an AccountID, which is
+// extended as discussed below.
 ~~~
 
 Each account created after this change also has a "testament" alias
 that attests to the execution of the specific transaction that created
 the account.  We use the notion of an operation ID or opid, which is a
-hash of the txid of a transaction and an index into the transactions
+hash of the txid of a transaction and an index into the transaction's
 `operations` array.  An account can now be specified either by it's
-primary ID or the opid of the operation that created the account,
+primary ID or by the opid of the operation that created the account,
 which is a testament to the creating transaction's proper execution:
 
 ~~~ {.c}
@@ -153,7 +162,7 @@ union AccountSpec switch (AccountOrSigner type) {
 };
 ~~~
 
-Any place we can use an `AccountID` (as opposed to an
+Any place where we can use an `AccountID` (as opposed to an
 `AccountPrimaryID`), we can also specify conditions on the account.
 Hence, and `AccountId` is a superset of an `AccountSpec` that also
 allows for conditions.  We initially define two types of conditions:
@@ -206,8 +215,7 @@ the same ledger.
 ### Changes to `AccountEntry`
 
 We extent the `AccountEntry` structure to record the testament alias
-and creation the creation time, by adding a new case to the extension
-union:
+and creation time, by adding a new case to the extension union:
 
 ~~~ {.c}
 struct AccountEntry {
