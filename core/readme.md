@@ -22,7 +22,7 @@ Number             | Title                                           | Owner    
 [0013](cap-0013.md)| Change Trustlines to Balances                   | Dan Robinson         |   Draft
 [0014](cap-0014.md)| Adversarial Transaction Set Ordering            | Jeremy Rubin        |   Draft
 [0015](cap-0015.md)| Bump Fee Transactions                           | OrbitLens           |   Draft
-
+[0016](cap-0016.md)| Cosigned assets: NopOp and COAUTHORIZED_FLAG    | David Mazières      |   Draft
 
 # Contributing CAPs
 
