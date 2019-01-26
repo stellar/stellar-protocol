@@ -14,8 +14,8 @@ Protocol version: TBD
 
 ## Simple Summary
 
-Allow an accounts to be created with deterministic sequence numbers
-and proofs of the creating transaction.
+Allow an account to be created with deterministic sequence numbers and
+proofs of the creating transaction.
 
 ## Abstract
 
@@ -61,7 +61,7 @@ current transaction automatically added as a pre-auth transaction,
 allowing the current transaction to add signers and otherwise
 manipulate options on the account.  The public key specified in the
 account creation operation also gets added to the newly created
-account with signer weight 1.
+account with signer weight 255.
 
 ~~~ {.c}
 enum OperationType
@@ -72,14 +72,20 @@ enum OperationType
     CHECK_ACCOUNT = 13
 };
 
+struct CreateDetAccountOp
+{
+    Signer signer;         // first signer to add (with weight 1)
+    uint32 weight;         // weight of first signer
+    int64 startingBalance; // initial amount to deposit in account
+};
+
 struct Operation
 {
     AccountID* sourceAccount;
 
     union switch (OperationType type) {
-    case CREATE_ACCOUNT:
     case CREATE_DET_ACCOUNT:
-        CreateAccountOp createAccountOp;
+        CreateDetAccountOp createDetAccountOp;
 
     case CHECK_ACCOUNT:
         CheckAccountOp checkAccount;
@@ -106,8 +112,6 @@ default:
     void;
 };
 ~~~
-
-XXX - maybe use a different `CreateDetAccountOp` argument?
 
 ### Modifications to `AccountID`
 
@@ -137,16 +141,18 @@ union AccountID switch (AccountOrSigner type) {
 };
 
 struct CreatorSeqPayload {
-    AccountPrimaryID account;  // Account that created an account
+    int version;               // Must be zero
+    AccountID account;         // Account that created an account
     SequenceNumber seqNum;     // Sequence number of tx creating account
+    Memo memo;                 // Memo of tx creating account
     unsigned opIndex;          // Index of operation that created account
 };
 ~~~
 
 ### Changes to `AccountEntry`
 
-Each account created with `CREATE_DET_ACCOUNT` contains two extra
-pieces of information:
+Each newly created account now contains two extra pieces of
+information:
 
 * The transaction ID of the transaction that created the account (a
   hash of `TransactionSignaturePayload` for that transaction), and
@@ -239,9 +245,71 @@ with having unions that don't allow every value in an enum.  By
 contrast, it will get confusing if we use multiple enums and try to
 keep all of their values in sync.
 
-## Test Cases
+## Example
 
-None yet.
+Consider a payment channel funded by an initial transaction TI, and
+intended to be closed by the last in a series of transactions T_1,
+T_2, ..., T_n.  The channel will also involve a special declaration
+transaction TD that can be executed by any participant who wants to
+close the channel unilaterally.  The T_i transactions can only be
+executed some time (e.g., 24 hours) after TD has been executed.
+Finally, for each T_i and user u, the participants sign a revocation
+transaction RT_{u,i} that allows user u to invalidate all T_j with j <
+i.
+
+The participants first create TI, but do not sign it.  Then they
+create, sign, and exchange TD, T_1, and RT_{u,1} for all u.  Finally,
+the users sign and submit TI to place funds in escrow and make TD
+valid to submit.
+
+From this point forward, at each step i, the participants create and
+sign T_i, and after obtaining a signed T_i, sign R_{u,i} for each user
+u.
+
+To close the channel unilaterally when T_i is the latest transaction,
+user u submits TD and R_{u,i}.  Should any user u' believe T_j is
+valid for j>i, that user submits RT_{u',j} so as to invalidate T_i.
+Finally, 24 hours after TD has executed, any user can submit T_i (or
+T_j if j > i).
+
+In constructing transactions for the channel, we will use the
+following accounts:
+
+* D -- a declaration account, deterministically created from F, whose
+  existence declares that some user has intent to close the channel.
+
+* E -- an escrow account deterministically created by TI, with n-of-n
+  multisig for all parties.
+
+* F -- a fee account, also created by TI, also with n-of-n multisig
+  for all parties, containing only as many XLM as channel owners are
+  willing to pay to execute a transaction.
+
+The transactions are then constructed as follows:
+
+* TI deterministically creates and funds E and F.
+
+* TD has source account F, sequence number 2^{32}+1, and a very high
+  fee (so that in the event of rising fees, any user can add funds to
+  E to make TD go through).  It has the following operations:
+    - Deterministically create account D
+    - Move enough XLM from E to F for another transaction
+
+* T_i has source account F and sequence number 2^{32}+3+i, a very high
+  fee, and the following operations:
+    - CHECK_ACCOUNT: ensure D has existed at least 24 hours
+    - MERGE_ACCOUNT: D into E
+    - MERGE_ACCOUNT: F into E
+    - Whatever is needed to disburse funds after termination at step i
+    - Note that if T_i is actually a series of k transactions, then
+      the sequence should start at 2^{32}+3+ki and only the last
+      transaction should merge the accounts.
+
+* R_{u,i} has a source account that belongs to u, a high fee (so u can
+  increase the balance of that account as necessary to pay arbitrarily
+  high fees), and the following operations:
+    - CHECK_ACCOUNT: make sure D exists
+    - BUMP_SEQUENCE E to 2^{32}+3+i (or 2^{32}+3+ki if k > 1)
 
 ## Implementation
 
