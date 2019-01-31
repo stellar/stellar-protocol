@@ -1,18 +1,21 @@
 # Core Advancement Proposals (CAPs)
 
 ## CAP Status Terms
-* **Archived** - A CAP that did not head towards a disposition due to a lack of consensus _and_
+* **Archived** — A CAP that did not head towards a disposition due to a lack of consensus _and_
   support. Generally open to revival with additional edits.
-* **Draft** - A CAP that is currently open for consideration and actively being discussed.
-* **Pending: [Acceptance/Rejection]** - A CAP that has entered a Final Comment Period (FCP) with an
+* **Draft** — A CAP that is currently open for consideration and actively being discussed.
+* **Pending** — A CAP that is ready for final deliberation by the CAP Core Team. After a maximum of
+  three meetings, a vote will take place that will set the CAP's intended FCP disposition
+  (**FCP: Acceptance/Rejection**) or go back into a **Draft** state.
+* **FCP: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period (FCP) with an
   intended disposition. After one week has passed, during which any new concerns should be
-  addressed, the SEP will head towards its intended disposition [**Accepted/Rejected**] or go
+  addressed, the CAP will head towards its intended disposition [**Acceptance/Rejection**] or go
   back into a Draft state.
-* **Accepted** - A CAP that has been formally accepted and is ready for implementation. It is
+* **Accepted** — A CAP that has been formally accepted and is ready for implementation. It is
   expected to be included in a future version of the protocol.
-* **Finalized** - A CAP that has been implemented in Stellar Core in the version specified.
+* **Finalized** — A CAP that has been implemented in Stellar Core in the version specified.
 
-## Proposals
+## Active Proposals
 
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |
@@ -36,57 +39,145 @@
 
 # Contribution Process
 
-## How the protocol changes
+The Stellar Protocol, like most software in the world, continues to evolve over time to meet the
+needs of our network's participants and to drive technology forward into new territory. Given the
+importance of the reliability and safety of the network, we ask that all of those who have ideas
+towards pushing Stellar's protocol development forward adhere to the following:
 
-Software is never done. As the Stellar Protocol evolves we want to ensure that changes serve the values of the Stellar network. So as you are proposing protocol changes it is important to keep those in mind...
+- Consider your idea and how it serves the fundamental goals of the Stellar Network and aligns with
+  values of the Stellar Protocol (which are listed below). If you cannot show how your proposal
+  aligns with those goals and values, it's unlikely to ever be implemented.
+- Gather feedback from discussion on the dev mailing list and other forums, and utilize it to begin
+  a draft proposal, otherwise known as a CAP (Core Advancement Proposal).
+- Follow the proposal process listed below. If you're having difficulty moving the proposal
+  forward, talk to the buddy that's assigned the CAP; they'll often have guidance on how to move
+  things forward, as well as feedback regarding feasibility and how the proposal does or does not
+  align with the Stellar protocol's goals and values.
 
-### Stellar Protocol Values
-* The Stellar network should be secure and reliable, and should bias towards safety, simplicity, reliability and performance over new development.
-* Simplicity towards the protocol - we should not over complicate the protocol itself, and the more outside of the core protocol, the better.
-    * Embrace principle of modifying only the outermost layers possible, keeping innermost layers stable. Order of layers: historical / ledger XDR is innermost, then observable transaction semantics, then consensus XDR, then DB state, overlay XDR, unobservable tx semantics (eg. perf or bug fixes), Horizon semantics, public APIs, client libs.
-    * Also embrace higher bar for acceptance as changes affect inner layers: implementation prototype, version migration logic, performance evaluation and testing needs go up the more intrusive a change. Don’t accept change proposals that are both intrusive and underdeveloped.
-* Clarity of intent - new operations and functionality should be opinionated, and straightforward to use.
-* User safety over additional functionality - minimize attack surface at the lowest levels.
-* The Stellar network should run at scale and at low cost to all users.
-    * In support of this, the Stellar network should support off-chain transactions, e.g. Starlight.
-* The Stellar network should facilitate simplicity and interoperability with other protocols and networks.
-    * In support of this, the Stellar network should facilitate side-chain transactions to enable sub-networks.
-* The Stellar network should support decentralization wherever possible, but not at the expense of the majority of its values.
-* It should be easy to develop projects using the Stellar Network
-* The Stellar network should make it easy for developers of Stellar projects to create highly usable products
-* The Stellar network should enable cross-border payments, i.e. payments via exchange of assets, throughout the globe, enabling users to make payments between assets in a manner that is fast, cheap, and highly usable.
-    * In support of this, the Stellar network should support an orderbook that values simplicity over functionality, and one that primarily serves to enable cross-border payments.
-    * In support of this, the Stellar network should facilitate liquidity as a means to enabling cross-border payments.
-    * In support of this, the Stellar network should enable asset issuance, but as a means of enabling cross-border payments.
-* The Stellar network should enable users to easily exchange their non-Stellar based assets to Stellar-based assets, and vice versa.
+## Stellar Network Goals
+* **The Stellar Network should be secure and reliable, and should bias towards safety, simplicity,
+  reliability, and performance over new functionality.**
+* **The Stellar Network should run at scale and at low cost to all participants of the network.**
+  * In support of this, the Stellar Network should support off-chain transactions, e.g. Starlight.
+  * An explicit non-goal is limiting the hardware requirements of stellar-core to a personal
+    computer.
+* **The Stellar Network should facilitate simplicity and interoperability with other protocols and
+  networks.**
+  * In support of this, the Stellar Network should facilitate side-chain transactions to enable
+    sub-networks.
+* **The Stellar Network should enable cross-border payments, i.e. payments via exchange of assets,
+  throughout the globe, enabling users to make payments between assets in a manner that is fast,
+  cheap, and highly usable.**
+    * In support of this, the Stellar Network should support an orderbook that values simplicity
+      over functionality, and one that primarily serves to enable cross-border payments.
+    * In support of this, the Stellar Network should facilitate liquidity as a means to enabling
+    * cross-border payments.
+    * In support of this, the Stellar Network should enable asset issuance, but as a means of
+    * enabling cross-border payments.
+* **The Stellar Network should support decentralization wherever possible, but not at the expense
+  of the majority of its values.**
+  * There should be no privileged actors — we should support egalitarianism and everyone
+    participating on the same playing field.
+* **The Stellar Network should enable users to easily exchange their non-Stellar based assets to
+  Stellar-based assets, and vice versa.**
+* **The Stellar Network should make it easy for developers of Stellar projects to create highly
+  usable products.**
 
-
+## Stellar Protocol Development Values
+* **The Stellar Protocol should serve the goals of the Stellar Network.**
+* **The Stellar Protocol should bias towards simplicity.**
+  * When possible, solutions should be considered outside of core protocol changes such as via
+    [SEPs (Stellar Ecosystem Proposals)](../ecosystem/readme.md) to minimize complexity in the
+    Stellar protocol.
+  * When possible, proposals should minimize the impact of changes to the smallest surface area and
+    shallowest depth (i.e. sticking to the higher levels of the software) of the protocol
+    architecture possible to make changes predictable and easier to test and reason about. Changes
+    should be surgical, and minimal invasive. As a result, changes that affect lower levels of the
+    implementation have a higher bar for acceptance.
+  * In order from the highest level to the lowest level systems, the systems are:
+    * Historical / Ledger XDR
+    * Observable Transaction Semantics
+    * Consensus XDR
+    * DB State
+    * Overlay XDR
+    * Unobservable tx semantics (eg. performance or bug fixes)
+    * Horizon semantics
+    * Public APIs, Client Libraries/SDKs.
+* **The Stellar Protocol should be clear, concise, and opinionated.**
+  * New operations and functionality should be opinionated, and straightforward to use.
+  * There should ideally be only one obvious way to accomplish a given task.
+* **The Stellar Protocol should bias towards broad use cases, and bias against niche
+    functionality.**
+* **The Stellar Protocol should bias towards user safety.**
 
 ## CAP Process
-These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Otbml6WIQPo)
-1. Idea is proposed on the core [mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev)
-2. Discussion on mailing list
-3. Someone gathers and collates all the various proposals
-4. Someone is picked to write a CAP for a given proposal. They then:
-    * Fork the repository by clicking "Fork" in the top right.
-    * Write the CAP in their fork of the repository. There is a [template CAP here](../cap-template.md). The first PR should be a first draft of the CAP. It must follow the template.
-    * Add a link to the CAP proposal in this document, linking to the appropriate `/core/cap-XXXX.md`
-    * If your CAP requires images or other supporting files, they should be included in a subdirectory of the `contents` folder for that CAP as follows: `contents/cap-X` (for CAP **X**). Links should be relative, for example a link to an image from CAP-X would be `../contents/cap-X/image.png`.
-    * Drafts are numbered by the author but subject to change when made final
-    * CAP is written and set as `Draft`
-    * Submit a Pull Request to Stellar's [protocol repository](https://github.com/stellar/stellar-protocol).
-5. Buddy is assigned (Jon, Graydon, Jeremy, Johnny, Orbitlens) and will merge your PR if you properly followed the steps above.
-6. Discussion of the draft CAP will now take place on the mailing list. There should be some iteration between discussion and further PRs refining the CAP.
-7. If the CAP is not receiving enough support the Buddy will mark as rejected and move it to the archive. Otherwise the CAP is moved to `Pending`. 
-8. There is now one week for people to make final comments.
-9. After that the CAP is discussed at the next protocol meeting.
-10. Needs unanimous approval from (Nicolas, Jed, David) to become `Accepted` otherwise the CAP is `Rejected` or turned back to `Draft` with some comments.
-11. Implementer is decided and that person starts implementing.
-12. Once a CAP is implemented, a PR should be submitted to update its status to `Final`.
+These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Otbml6WIQPo) on how
+to create a Core Advancement Proposal (CAP).
 
+### Pre-CAP (Initial Discussion)
+Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev).
 
+* Make sure to gather feedback and alternative ideas — it's useful before putting together a
+  formal draft!
+* Consider contacting experts in a particular area for feedback while you're hashing out the
+  details.
 
-**CAP Key Members**: Nicolas, Jed, David
+### Creating a CAP Draft
+Draft a formal proposal using the [CAP Template](../cap-template.md), and submit a PR to this
+repository. You should make sure to adhere to the following:
 
-**CAP Buddies**: (Jon, Graydon, Jeremy, Johnny, Orbitlens)<BR>
-Buddies are responsible for moving a CAP along the process. They should make sure the draft is either `Accepted` or `Rejected` in a timely manner.
+* Use two unique words separated by a hyphen for your CAP number from the
+  [BIP-0039 wordlist][wordlist]. For example, "amazing-crystal". Don't assign a number to the CAP
+  — this will be established once the CAP has reached the state of *Accepted*.
+* Use TBD for the protocol version. Don't assign a protocol version to the CAP — this will be
+  established once the CAP has reached the state of *Finalized* and has been formally implemented.
+* Add a link to the CAP proposal to the proposals table in this document.
+* If your CAP requires images or other supporting files, they should be included in a subdirectory
+  of the `contents` folder for that CAP, such as `contents/cap-amazing-crystal` (for CAP
+  **amazing-crystal**). Links should be relative, for example a link to an image from CAP-X would
+  be `../contents/cap-X/image.png`. *Once accepted, the folders will be renamed.*
+
+Finally, submit a PR of your draft via your fork of this repository.
+
+### Reaching CAP Consensus and Final Disposition
+
+From there, the following process will happen:
+* A CAP buddy is assigned and will merge your PR if you properly followed the steps above. They'll
+  also provide initial feedback, and help pull in any subject matter experts that will help in
+  pushing the CAP towards a final disposition.
+* You should continue the discussion of the draft CAP on the mailing list with an attempt at
+  reaching consensus. We welcome any additional PRs that iterate on the draft.
+* Your buddy will continue to help provide guidance on the CAP throughout the discussion — and will
+  ultimately be responsible for deciding the CAP's next state:
+  * If the CAP is not receiving enough support, your buddy will mark the CAP as `Pending: Rejection`.
+  * If the CAP has received support and general consensus, it is moved to `Pending: Acceptance`
+* The CAP will be scheduled to be discussed at the next protocol meeting. As the author of the
+  proposal, you'll be invited to share your CAP and participate in discussion during the meeting.
+* A vote will take place among the CAP Core Team.
+    * A unanimous approval from the CAP Core Team will put the CAP in a `FCP: Accepted` status.
+    * Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
+      majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
+      raises concerns).
+  * It can take upwards of 3 meetings before a disposition is reached.
+* After a week of a Final Comment Period where any major concerns that have not been addressed can
+  be brought up, the CAP will head to its final disposition.
+  * Concerns will be addresses on a case by case basis, and only major concerns that were not
+    addressed earlier will move the CAP back to a `Draft` state.
+  * If Accepted, the CAP will be assigned a number and the buddy will be responsible for renaming
+    the CAP's number and any content folders.
+
+### CAP Implementation
+
+SDF will prioritize accepted CAPs among its priorities for a given year. However, if you want to
+ensure your CAP is implemented in a timely manner, it is likely best for you to attempt to
+implement it yourself.
+
+Once a CAP is implemented, a PR should be submitted to update its status to `Final`.
+
+## CAP Team Members
+
+**CAP Core Team**: Nicolas (SDF), Jed (SDF), David (SDF)
+
+**CAP Buddies**: Jon (SDF), Graydon (SDF), Jeremy, Johnny (SDF), Orbitlens
+
+[wordlist]: https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt
