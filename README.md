@@ -23,22 +23,29 @@ The root directory of this repository contains:
 
 Example repository structure:
 ```
+├── CONTRIBUTING.md
 ├── README.md
+├── cap-template.md
 ├── contents
-│   ├── cap-0001
-│   │   └── image.png
-│   └── sep-0002
-│       └── script.go
+│   └── cap-0003
+│       └── get_offer_stats.sql
 ├── core
 │   ├── cap-0001.md
-|   ├── cap-0002.md
-|   └── cap-0003.md
+│   ├── cap-0002.md
+│   ├── cap-0003.md
+│   ├── drafts
+│   │   └── cap_dm_deterministic-accounts-and-creatortxid.md
+│   └── readme.md
 ├── ecosystem
+│   ├── drafts
+│   │   ├── sep_interstellar_regulated-assets.md
+│   │   ├── sep_no_deposit-server-proposal.md
+│   │   ├── sep_orbitlens_dynamic-asset-metadata.md
+│   │   └── sep_stellar_attachment-convention.md
+│   ├── readme.md
 │   ├── sep-0001.md
-|   ├── sep-0002.md
-|   ├── sep-0003.md
-|   └── sep-0004.md
-├── cap-template.md
+│   ├── sep-0002.md
+│   ├── sep-0003.md
 └── sep-template.md
 ```
 
