@@ -1,9 +1,9 @@
 ## Preamble
 
 ```
-SEP: <to be assigned>
-Title: <SEP title>
-Author: <list of authors' names and optionally, email addresses separated by commas>
+SEP: To Be Assigned
+Title: <SEP title - keep it short and sweet>
+Author: <list of authors' names and optionally, email addresses, separated by commas>
 Track: <Informational or Standard>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>

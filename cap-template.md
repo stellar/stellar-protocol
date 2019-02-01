@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-CAP: <Drafts should use two unique words from the BIP-0039 wordlist such as "diamond-develop"; CAPS will receive a number once accepted>
+CAP: To Be Assigned
 Title: <CAP title — keep it short and sweet>
 Author: <List of authors' names and optionally, email addresses, separated by commas>
 Status: Draft

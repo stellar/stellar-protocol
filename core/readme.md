@@ -126,16 +126,23 @@ Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/
 Draft a formal proposal using the [CAP Template](../cap-template.md), and submit a PR to this
 repository. You should make sure to adhere to the following:
 
-* Use two unique words separated by a hyphen for your CAP number from the
-  [BIP-0039 wordlist][wordlist]. For example, "amazing-crystal". Don't assign a number to the CAP
-  — this will be established once the CAP has reached the state of *Accepted*.
-* Use TBD for the protocol version. Don't assign a protocol version to the CAP — this will be
+* Make sure to place the draft in the `core/drafts` folder.
+* Use the following format for the filename of your draft
+  `cap_{email_username}_{hyphen-separated-cap-title}.md`.
+  * For example, a CAP titled "Burn Electricity Using PoW in Stellar" by
+    "cryptocarnage@example.com" would be titled
+    `cap_cryptocarnage_burn-electricity-using-pow-in-stellar.md`.
+  * The email username should be the commiter's.
+* Don't assign a CAP number in the proposal — this will be established once the CAP has reached
+  the state of *Accepted*.
+* Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
   established once the CAP has reached the state of *Finalized* and has been formally implemented.
 * Add a link to the CAP proposal to the proposals table in this document.
-* If your CAP requires images or other supporting files, they should be included in a subdirectory
-  of the `contents` folder for that CAP, such as `contents/cap-amazing-crystal` (for CAP
-  **amazing-crystal**). Links should be relative, for example a link to an image from CAP-X would
-  be `../contents/cap-X/image.png`. *Once accepted, the folders will be renamed.*
+* If your CAP requires images or other supporting files, they should be included in a sub-directory
+  of the `contents` folder for that CAP, such as
+  `contents/cap_cryptocarnage_burn-electricity-using-pow-in-stellar/`. Links should be relative,
+  for example a link to an image from your CAP would be `../contents/cap-X/image.png`. *Once
+  accepted, the folders will be renamed.*
 
 Finally, submit a PR of your draft via your fork of this repository.
 
@@ -179,5 +186,3 @@ Once a CAP is implemented, a PR should be submitted to update its status to `Fin
 **CAP Core Team**: Nicolas (SDF), Jed (SDF), David (SDF)
 
 **CAP Buddies**: Jon (SDF), Graydon (SDF), Jeremy, Johnny (SDF), Orbitlens
-
-[wordlist]: https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt

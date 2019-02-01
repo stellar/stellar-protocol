@@ -70,14 +70,19 @@ and other community forums dedicated to Stellar.
 Draft a formal proposal using the [SEP Template](../sep-template.md), and submit a PR to this
 repository. You should make sure to adhere to the following:
 
-* Use two unique words separated by a hyphen for your SEP number from the
-  [BIP-0039 wordlist][wordlist]. For example, "amazing-crystal". Don't assign a number to the SEP
-  — this will be established once the SEP has reached the state of `Accepted`.
+* Use the following format for the filename of your draft
+  `cap_{email_username}_{hyphen-separated-cap-title}.md`.
+  * For example, a SEP titled "Stellar Happiness Protocol" by "happycoder541@example.com" would be
+    titled `sep_happycoder541_stellar-happiness-protocol.md`
+  * The email username should be the commiter's.
+* Don't assign a SEP number in the proposal — this will be established once the SEP has reached
+  the state of *Accepted*.
 * Add a link to the SEP proposal to the proposals table in this document.
 * If your SEP requires images or other supporting files, they should be included in a subdirectory
-  of the `contents` folder for that SEP, such as `contents/sep-amazing-crystal` (for SEP
-  **amazing-crystal**). Links should be relative, for example a link to an image from SEP-X would
-  be `../contents/cap-X/image.png`. *Once accepted, the folders will be renamed.*
+  of the `contents` folder for that SEP, such as
+  `contents/sep_happycoder541_stellar-happiness-protocol/`. Links should be relative, for example a
+  link to an image from SEP-X would be `../contents/cap-X/image.png`. *Once accepted, the folders
+  will be renamed.*
 
 Finally, submit a PR of your draft via your fork of this repository.
 
@@ -110,5 +115,4 @@ Finally, submit a PR of your draft via your fork of this repository.
 **SEP Team**: Tomer (SDF), Nikhil (SDF) Tom Q. (SDF), Jeremy, Johnny (SDF), orbitlens, David (SDF),
 Jed (SDF)
 
-[wordlist]: https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt
 [ietf]: https://ietf.org/
