@@ -12,7 +12,7 @@ Number             | Title                                           | Owner    
 [0002](cap-0002.md)| Transaction level signature verification        | Nicolas Barry         |   Final
 [0003](cap-0003.md)| Asset-backed offers                             | Jonathan Jove         |   Final
 [0004](cap-0004.md)| Improved Rounding for Cross Offer               | Jonathan Jove         |   Final
-[0005](cap-0005.md)| Throttling and transaction pricing improvements | Nicolas Barry         |   Pending
+[0005](cap-0005.md)| Throttling and transaction pricing improvements | Nicolas Barry         |   Accepted
 [0006](cap-0006.md)| Add ManageBuyOffer Operation                    | Jonathan Jove         |   Pending
 [0007](cap-0007.md)| Deterministic Account Creation                  | Jeremy Rubin         |   Draft
 [0008](cap-0008.md)| Self Identified Pre-Auth Transaction            | Jeremy Rubin         |   Draft
