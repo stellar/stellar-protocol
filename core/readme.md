@@ -23,6 +23,7 @@ Number             | Title                                           | Owner    
 [0014](cap-0014.md)| Adversarial Transaction Set Ordering            | Jeremy Rubin        |   Draft
 [0015](cap-0015.md)| Bump Fee Transactions                           | OrbitLens           |   Draft
 [0016](cap-0016.md)| Cosigned assets: NopOp and COAUTHORIZED_FLAG    | David Mazières      |   Draft
+[0017](cap-0017.md)| Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove      |   Draft
 
 # Contributing CAPs
 
