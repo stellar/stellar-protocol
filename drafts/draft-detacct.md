@@ -74,7 +74,8 @@ enum OperationType
 
 struct CreateDetAccountOp
 {
-    Signer signer;         // first signer to add (with weight 1)
+    opaque salt<32>;       // unique data, if needed by application
+    Signer signer;         // first signer to add
     uint32 weight;         // weight of first signer
     int64 startingBalance; // initial amount to deposit in account
 };
@@ -142,9 +143,9 @@ union AccountID switch (AccountOrSigner type) {
 
 struct CreatorSeqPayload {
     int version;               // Must be zero
+    opaque salt<32>;           // Salt from CreateDetAccountResult
     AccountID account;         // Account that created an account
     SequenceNumber seqNum;     // Sequence number of tx creating account
-    Memo memo;                 // Memo of tx creating account
     unsigned opIndex;          // Index of operation that created account
 };
 ~~~
@@ -219,14 +220,28 @@ typedef AccountConditionType CheckAccountOp<2>;
 // Returns void, since it can never fail
 ~~~
 
-Note that `CHECK_ACCOUNT` affects the validity of a transaction, but
-does not make the transaction fail, as a currently invalid transaction
-may be valid at a later point.  If transaction $C$ refers to
-transaction $P$ using an `ACC_SEQ_MIN` condition, and $C$'s sequence
-number is one less than `seqMin`, then any extra fees in $C$ can
-contribute to executing $P$ if $P$ does not have a sufficient `fee`.
-This solves the problem of insufficient fees on a transaction that
-cannot be resigned.
+Note that `CHECK_ACCOUNT` affects the validity of a transaction.  In
+particular, a transaction is always invalid if the `sourceAccount` of
+a `CHECK_ACCOUNT` operation does not exist or does not satisfy the
+specified conditions at the time of transaction validation.  Note,
+however, that this is different from guaranteeing that `CHECK_ACCOUNT`
+never fails.  In particular, a set of transactions could be ordered so
+as to delete or modify the `sourceAccount`, making a previously valid
+`CHECK_ACCOUNT` operation fail.  In that case the enclosing
+transaction will fail, consuming a fee and sequence number.
+
+Higher-level protocols may depend on a transaction with a
+`CHECK_ACCOUNT` operation not failing.  To ensure the operation does
+not fail, such a protocol must ensure monotonicity of the
+conditions--in other words, an untrustworthy party may have the power
+to make the condition true (rendering the transaction valid), but must
+not subsequently have the power to make the condition false.
+
+If transaction _C_ refers to transaction _P_ using an `ACC_SEQ_MIN`
+condition, and _C_'s sequence number is one less than `seqMin`, then
+any extra fees in _C_ can contribute to executing _P_ if _P_ does not
+have a sufficient `fee`.  This solves the problem of insufficient fees
+on a transaction that cannot be resigned.
 
 ## Rationale
 
@@ -291,7 +306,7 @@ The transactions are then constructed as follows:
 
 * TD has source account F, sequence number 2^{32}+1, and a very high
   fee (so that in the event of rising fees, any user can add funds to
-  E to make TD go through).  It has the following operations:
+  F to make TD go through).  It has the following operations:
     - Deterministically create account D
     - Move enough XLM from E to F for another transaction
 
@@ -310,6 +325,11 @@ The transactions are then constructed as follows:
   high fees), and the following operations:
     - CHECK_ACCOUNT: make sure D exists
     - BUMP_SEQUENCE E to 2^{32}+3+i (or 2^{32}+3+ki if k > 1)
+
+Note that this protocol satisfies the monotonicity property:  Once
+account D exists, it cannot be deleted except by collaboration of all
+the users.  Hence, the `CHECK_ACCOUNT` operations will never cause T_i
+or R_{u,i} to fail, only to be invalid.
 
 ## Implementation
 
