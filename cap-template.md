@@ -40,19 +40,19 @@ concerns raised during discussion.
 ## Backwards Incompatibilities
 All CAPs that introduce backwards incompatibilities must include a section describing these
 incompatibilities and their severity. The CAP must explain how the author proposes to deal with
-these incompatibilities. CAP submissions without a sufficient backwards compatibility treatise may
+these incompatibilities. CAP submissions with an insufficient discussion of backwards compatibility may
 be rejected outright.
 
 ## Security Concerns
 All CAPs should carefully consider areas where security may be a concern, and document them
-accordingly. If a change does not have security implications, write "N/A".
+accordingly. If a change does not have security implications, briefly explain why.
 
 ## Test Cases
 Test cases for an implementation are mandatory for CAPs that are affecting consensus changes. Other
 CAPs can choose to include links to test cases if applicable.
 
 ## Implementation
-The implementation(s) must be completed before any CAPs is given status "Final", but it need not be
+The implementation(s) must be completed before any CAP is given "Final" status, but it need not be
 completed before the CAP is accepted. While there is merit to the approach of reaching consensus on
 the specification and rationale before writing code, the principle of "rough consensus and running
 code" is still useful when it comes to resolving many discussions of API details.
