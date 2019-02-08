@@ -4,7 +4,7 @@ Stellar Protocol
 This repository contains **Core Advancement Proposals** (CAPs) and **Stellar Ecosystem Proposals**
 (SEPs).
 
-Similarly to [BIPs](https://github.com/bitcoin/bips) and [EIPs](https://github.com/ethereum/EIPs),
+Similar to [BIPs](https://github.com/bitcoin/bips) and [EIPs](https://github.com/ethereum/EIPs),
 CAPs and SEPs are the proposals of standards to improve Stellar protocol and related client APIs.
 
 CAPs deal with changes to the core protocol of the Stellar network. Please see [the process for CAPs](core/readme.md).
