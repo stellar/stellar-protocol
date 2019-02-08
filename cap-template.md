@@ -20,7 +20,7 @@ problem that the CAP solves. In particular, CAP submissions without sufficient m
 rejected outright.
 
 ### Goals Alignment
-You should reference which Stellar Network goal(s) that this proposal advances, such as:
+You should reference the Stellar Network goal(s) that this proposal advances, such as:
 * The Stellar Network should run at scale and at low cost to all participants of the network.
 * The Stellar Network should enable cross-border payments.
 
