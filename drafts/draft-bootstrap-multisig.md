@@ -1,10 +1,10 @@
 ## Preamble
 
 ```
-SEP: 0013
+SEP: <to be assigned>
 Title: Bootstrapping Multisig Transaction Submission
 Author: Paul Selden <paul.selden@stellarguard.me>, Nikhil Saraf <nikhil@interstellar.com>
-Status: Accepted
+Status: Draft
 Created: 2018-12-07
 ```
 
