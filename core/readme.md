@@ -24,7 +24,7 @@ Number             | Title                                           | Owner    
 [0015](cap-0015.md)| Bump Fee Transactions                           | OrbitLens             |   Draft
 [0016](cap-0016.md)| Cosigned assets: NopOp and COAUTHORIZED_FLAG    | David Mazières        |   Draft
 [0017](cap-0017.md)| Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove      |   Draft
-[0018](cap-0018.md)| Fine-Grained Control of Authorization           | Jonathan Jove         |   Draft
+[0018](cap-0018.md)| Fine-Grained Control of Authorization           | Jonathan Jove         |   Pending
 
 # Contributing CAPs
 
