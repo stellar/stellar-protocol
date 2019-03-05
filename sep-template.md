@@ -2,7 +2,7 @@
 
 ```
 SEP: To Be Assigned
-Title: <SEP title - keep it short and sweet>
+Title: <SEP title>
 Author: <list of authors' names and optionally, email addresses, separated by commas>
 Track: <Informational or Standard>
 Status: Draft
@@ -24,18 +24,12 @@ A short (~200 word) description of the technical issue being addressed.
 ## Specification
 The technical specification should describe the syntax and semantics of any new feature.
 
-## Rationale
-The rationale fleshes out the specification by describing what motivated the design and why
-particular design decisions were made. It should describe alternate designs that were considered
-and related work, e.g. how the feature is supported in other languages. The rationale may also
-provide evidence of consensus within the community, and should discuss important objections or
-concerns raised during discussion.
-
-## Backwards Compatibility
-All SEPs that introduce backwards incompatibilities with previous SEPs must include a section
-describing these incompatibilities and their severity. The SEP must explain how the author proposes
-to deal with these incompatibilities. SEP submissions without a sufficient backwards compatibility
-treatise may be rejected outright.
+## Design Rationale
+The rationale fleshes out the specification by describing what motivated this particular design and
+why certain design decisions were made. It should describe alternate designs that were
+considered and related work, e.g. how the feature is supported in other protocols. The rationale
+may also provide evidence of consensus within the community, and should discuss important
+objections or concerns raised during discussion.
 
 ## Security Concerns
 All SEPs should carefully consider areas where security may be a concern, and document them

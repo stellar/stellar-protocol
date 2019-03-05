@@ -7,10 +7,10 @@ This repository contains **Core Advancement Proposals** (CAPs) and **Stellar Eco
 Similar to [BIPs](https://github.com/bitcoin/bips) and [EIPs](https://github.com/ethereum/EIPs),
 CAPs and SEPs are the proposals of standards to improve Stellar protocol and related client APIs.
 
-CAPs deal with changes to the core protocol of the Stellar network. Please see [the process for CAPs](core/readme.md).
+CAPs deal with changes to the core protocol of the Stellar network. Please see [the process for CAPs](core/README.md).
 
 SEPs deal with changes to the standards, protocols, and methods used in the ecosystem built on top
-of the Stellar network. Please see [the process for SEPs](ecosystem/readme.md).
+of the Stellar network. Please see [the process for SEPs](ecosystem/README.md).
 
 ## Repository structure
 
@@ -33,20 +33,13 @@ Example repository structure:
 │   ├── cap-0001.md
 │   ├── cap-0002.md
 │   ├── cap-0003.md
-│   ├── drafts
-│   │   └── cap_dm_deterministic-accounts-and-creatortxid.md
-│   └── readme.md
+│   └── README.md
 ├── ecosystem
-│   ├── drafts
-│   │   ├── sep_interstellar_regulated-assets.md
-│   │   ├── sep_no_deposit-server-proposal.md
-│   │   ├── sep_orbitlens_dynamic-asset-metadata.md
-│   │   └── sep_stellar_attachment-convention.md
-│   ├── readme.md
+│   ├── README.md
 │   ├── sep-0001.md
 │   ├── sep-0002.md
 │   ├── sep-0003.md
 └── sep-template.md
 ```
 
-See [CONTRIBUTING](CONTRIBUTING.md) for more information.
+See [CONTRIBUTING](CONTRIBUTING.md) to learn how to contribute.

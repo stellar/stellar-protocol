@@ -2,7 +2,7 @@
 
 ```
 CAP: To Be Assigned
-Title: <CAP title — keep it short and sweet>
+Title: <CAP title>
 Author: <List of authors' names and optionally, email addresses, separated by commas>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
@@ -33,15 +33,15 @@ The technical specification should describe the syntax and semantics of any new 
 ## Design Rationale
 The rationale fleshes out the specification by describing what motivated the design and why
 particular design decisions were made. It should describe alternate designs that were considered
-and related work, e.g. how the feature is supported in other languages. The rationale may also
+and related work, e.g. how the feature is supported in other protocols. The rationale may also
 provide evidence of consensus within the community, and should discuss important objections or
 concerns raised during discussion.
 
 ## Backwards Incompatibilities
 All CAPs that introduce backwards incompatibilities must include a section describing these
 incompatibilities and their severity. The CAP must explain how the author proposes to deal with
-these incompatibilities. CAP submissions with an insufficient discussion of backwards compatibility may
-be rejected outright.
+these incompatibilities. CAP submissions with an insufficient discussion of backwards compatibility
+may be rejected outright.
 
 ## Security Concerns
 All CAPs should carefully consider areas where security may be a concern, and document them

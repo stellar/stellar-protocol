@@ -1,30 +1,37 @@
 # Core Advancement Proposals (CAPs)
 
 ## CAP Status Terms
-* **Archived** — A CAP that did not head towards a disposition due to a lack of consensus _and_
-  support. Generally open to revival with additional edits.
+
+### Primary Workflow
 * **Draft** — A CAP that is currently open for consideration and actively being discussed.
-* **Pending** — A CAP that is ready for final deliberation by the CAP Core Team. After a maximum of
-  three meetings, a vote will take place that will set the CAP's intended FCP disposition
-  (**FCP: Acceptance/Rejection**) or go back into a **Draft** state.
+* **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
+  Core Team. After a maximum of three meetings, a vote will take place that will set the CAP's
+  intended FCP disposition (**FCP: Acceptance/Rejection**) or go back into a **Draft** state.
 * **FCP: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period (FCP) with an
   intended disposition. After one week has passed, during which any new concerns should be
   addressed, the CAP will head towards its intended disposition [**Acceptance/Rejection**] or go
   back into a Draft state.
 * **Accepted** — A CAP that has been formally accepted and is ready for implementation. It is
   expected to be included in a future version of the protocol.
-* **Finalized** — A CAP that has been implemented in Stellar Core in the version specified.
+* **Final** — A CAP that has been implemented in Stellar Core in the version specified. A final CAP
+  should only be updated to correct errata.
+
+### Additional Statuses
+* **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
+  implemented.
+* **Superseded: [New Final CAP]** - A CAP that which was previously final but has been superseded
+  by a new, final CAP. Both CAPs should reference each other.
 
 ## Active Proposals
 
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |
-| [CAP-0001](cap-0001.md) | Bump Sequence | Nicolas Barry | Finalized |
-| [CAP-0002](cap-0002.md) | Transaction level signature verification | Nicolas Barry | Finalized |
-| [CAP-0003](cap-0003.md) | Asset-backed offers | Jonathan Jove | Finalized |
-| [CAP-0004](cap-0004.md) | Improved Rounding for Cross Offer | Jonathan Jove | Finalized |
-| [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Pending |
-| [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Pending |
+| [CAP-0001](cap-0001.md) | Bump Sequence | Nicolas Barry | Final |
+| [CAP-0002](cap-0002.md) | Transaction level signature verification | Nicolas Barry | Final |
+| [CAP-0003](cap-0003.md) | Asset-backed offers | Jonathan Jove | Final |
+| [CAP-0004](cap-0004.md) | Improved Rounding for Cross Offer | Jonathan Jove | Final |
+| [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Accepted |
+| [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Accepted |
 | [CAP-0007](cap-0007.md) | Deterministic Account Creation | Jeremy Rubin | Draft |
 | [CAP-0008](cap-0008.md) | Self Identified Pre-Auth Transaction | Jeremy Rubin | Draft |
 | [CAP-0009](cap-0009.md) | Linear/Exterior Immutable Accounts | Jeremy Rubin | Draft |
@@ -94,7 +101,7 @@ towards pushing Stellar's protocol development forward adhere to the following:
     architecture possible to make changes predictable and easier to test and reason about. Changes
     should be surgical, and minimal invasive. As a result, changes that affect lower levels of the
     implementation have a higher bar for acceptance.
-  * In order from the highest level to the lowest level systems, the systems are:
+  * In order from the lowest level to the highest level systems, the systems are:
     * Historical / Ledger XDR
     * Observable Transaction Semantics
     * Consensus XDR
@@ -126,52 +133,57 @@ Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/
 Draft a formal proposal using the [CAP Template](../cap-template.md), and submit a PR to this
 repository. You should make sure to adhere to the following:
 
-* Make sure to place the draft in the `core/drafts` folder.
-* Use the following format for the filename of your draft
-  `cap_{email_username}_{hyphen-separated-cap-title}.md`.
-  * For example, a CAP titled "Burn Electricity Using PoW in Stellar" by
-    "cryptocarnage@example.com" would be titled
-    `cap_cryptocarnage_burn-electricity-using-pow-in-stellar.md`.
-  * The email username should be the commiter's.
-* Don't assign a CAP number in the proposal — this will be established once the CAP has reached
-  the state of *Accepted*.
-* Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
-  established once the CAP has reached the state of *Finalized* and has been formally implemented.
-* Add a link to the CAP proposal to the proposals table in this document.
-* If your CAP requires images or other supporting files, they should be included in a sub-directory
-  of the `contents` folder for that CAP, such as
-  `contents/cap_cryptocarnage_burn-electricity-using-pow-in-stellar/`. Links should be relative,
-  for example a link to an image from your CAP would be `../contents/cap-X/image.png`. *Once
-  accepted, the folders will be renamed.*
+* Use the following format for the filename of your draft: `cap_{github_username}_{shortsha256sum}.md`
+  * `shortsha256sum` is defined as the first 8 characters of the SHA-256 checksum.
+  * For example, a CAP by Github user `cryptocarnage` with a SHA-256 checksum of `a200f73c`
+    would be titled `cap_cryptocarnage_a200f73c.md`.
+* Make sure to place the draft in the `core/` folder.
 
 Finally, submit a PR of your draft via your fork of this repository.
 
-### Reaching CAP Consensus and Final Disposition
+#### Additional Tips
+* Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
+  established once the CAP has reached the state of *Final* and has been formally implemented.
+* If your CAP requires images or other supporting files, they should be included in a sub-directory
+  of the `contents` folder for that CAP, such as `contents/cap_cryptocarnage_a200f73/`. Links
+  should be relative, for example a link to an image from your CAP would be
+  `../contents/cap_cryptocarnage_a200f73/image.png`.
 
+### Draft: Merging & Further Iteration
 From there, the following process will happen:
-* A CAP buddy is assigned and will merge your PR if you properly followed the steps above. They'll
-  also provide initial feedback, and help pull in any subject matter experts that will help in
-  pushing the CAP towards a final disposition.
+* A CAP buddy is assigned and will merge your PR if you properly followed the steps above.
+  * They'll rename the above files to the latest CAP draft number before merging in the PR.
+  * They'll provide initial feedback, and help pull in any subject matter experts that will help in
+    pushing the CAP towards a final disposition.
 * You should continue the discussion of the draft CAP on the mailing list with an attempt at
   reaching consensus. We welcome any additional PRs that iterate on the draft.
+
+### Draft -> Awaiting Decision
+* When you're ready, you should submit a PR changing the status in the draft to `Awaiting Decision`.
 * Your buddy will continue to help provide guidance on the CAP throughout the discussion — and will
   ultimately be responsible for deciding the CAP's next state:
-  * If the CAP is not receiving enough support, your buddy will mark the CAP as `Pending: Rejection`.
-  * If the CAP has received support and general consensus, it is moved to `Pending: Acceptance`
+  * If the CAP hasn't been sufficiently commented on by the community, your buddy will not change
+    the status until its received enough discussion within the Stellar community.
+  * If the CAP has not received enough support as a draft despite multiple iterations, your buddy
+    can decide to mark the CAP as `Rejected` instead of moving forward to the rest of the core
+    team.
+  * If the CAP has received support and general consensus, it is moved to `Awaiting Decision`.
 * The CAP will be scheduled to be discussed at the next protocol meeting. As the author of the
   proposal, you'll be invited to share your CAP and participate in discussion during the meeting.
+
+### Awaiting Decision -> Final Comment Period (FCP)
 * A vote will take place among the CAP Core Team.
-    * A unanimous approval from the CAP Core Team will put the CAP in a `FCP: Accepted` status.
-    * Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
-      majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
-      raises concerns).
+  * A unanimous approval from the CAP Core Team will put the CAP in a `FCP: Accepted` status.
+  * Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
+    majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
+    raises concerns).
   * It can take upwards of 3 meetings before a disposition is reached.
-* After a week of a Final Comment Period where any major concerns that have not been addressed can
-  be brought up, the CAP will head to its final disposition.
-  * Concerns will be addresses on a case by case basis, and only major concerns that were not
+
+### FCP -> Accepted/Rejected
+* After a week of an Final Comment Period (FCP) where any major concerns that have not been
+  previously addressed can be brought up, the CAP will head to its final disposition.
+  * Concerns will be addressed on a case by case basis, and only major concerns that were not
     addressed earlier will move the CAP back to a `Draft` state.
-  * If Accepted, the CAP will be assigned a number and the buddy will be responsible for renaming
-    the CAP's number and any content folders.
 
 ### CAP Implementation
 
@@ -179,10 +191,11 @@ SDF will prioritize accepted CAPs among its priorities for a given year. However
 ensure your CAP is implemented in a timely manner, it is likely best for you to attempt to
 implement it yourself.
 
-Once a CAP is implemented, a PR should be submitted to update its status to `Final`.
+Once a CAP is implemented, a PR should be submitted to update its status to `Final`, along with the
+version it was released in.
 
 ## CAP Team Members
 
 **CAP Core Team**: Nicolas (SDF), Jed (SDF), David (SDF)
 
-**CAP Buddies**: Jon (SDF), Graydon (SDF), Jeremy, Johnny (SDF), Orbitlens
+**CAP Buddies**: Jon (SDF), Graydon (SDF), Johnny (SDF), Orbitlens
