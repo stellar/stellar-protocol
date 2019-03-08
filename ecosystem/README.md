@@ -50,6 +50,7 @@
 | [SEP-0014](sep-0014.md) | Dynamic Asset Metadata | OrbitLens, Paul Tiplady | Standard | Draft |
 | [SEP-0015](sep-0015.md) | Attachment Convention | Interstellar | Standard | Draft |
 | [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p) | Jeremy Rubin | Standard | Draft |
+| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based) | Tom Quisel | Standard | Draft |
 
 # Contribution Process
 
