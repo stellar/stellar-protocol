@@ -33,14 +33,14 @@
 ## Accepted Proposals
 
 | Number | Title | Author | Track | Status |
-| --- | --- | --- | --- |
+| --- | --- | --- | --- | --- |
 | [SEP-0001](sep-0001.md) | stellar.toml specification | SDF | Standard | Active |
 | [SEP-0002](sep-0002.md) | Federation Protocol | SDF | Standard | Final |
 | [SEP-0003](sep-0003.md) | Compliance Protocol | SDF | Standard | Active |
-| [SEP-0004](sep-0004.md) | Tx Status Endpoint | SDF | Standard |
-| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts | SDF | Final |
+| [SEP-0004](sep-0004.md) | Tx Status Endpoint | SDF | Standard | Final |
+| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts | SDF | Standard | Final |
 | [SEP-0006](sep-0006.md) | Anchor/Client Interoperability | SDF | Standard | Active |
-| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing | Interstellar | Final |
+| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing | Interstellar | Standard | Final |
 | [SEP-0008](sep-0008.md) | Regulated Assets | Interstellar | Standard | Final |
 | [SEP-0009](sep-0009.md) | Standard KYC / AML Fields | SDF | Standard | Active |
 | [SEP-0010](sep-0010.md) | Stellar Web Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
