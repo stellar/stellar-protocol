@@ -4,8 +4,10 @@
 SEP: <to be assigned>
 Title: Bootstrapping Multisig Transaction Submission
 Author: Paul Selden <paul.selden@stellarguard.me>, Nikhil Saraf <nikhil@interstellar.com>
+Track: Standard
 Status: Draft
 Created: 2018-12-07
+Discussion: [https://groups.google.com/forum/#!msg/stellar-dev/-erucceOKbs/ewjFSQcNBwAJ](SEP: Bootstrapping Multisig Coordination)
 ```
 
 ## Simple Summary
