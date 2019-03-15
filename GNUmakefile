@@ -1,5 +1,5 @@
 
-DRAFTS := $(wildcard drafts/*.md)
+DRAFTS := $(wildcard core/drafts/*.md ecosystem/drafts/*.md)
 GFMFILES := $(DRAFTS:.md=.gfm)
 MDFILES := $(DRAFTS) README.md $(wildcard core/*.md ecosystem/*.md)
 HTMLFILES := $(MDFILES:.md=.html)
