@@ -1,0 +1,223 @@
+## Preamble
+
+```
+CAP: <to be assigned>
+Title: Bucket initial entries
+Author: Graydon Hoare <graydon@stellar.org>
+Status: Draft
+Created: 2019-02-04
+Discussion: https://groups.google.com/d/msg/stellar-dev/tF43Z6b0kqU/2gH0u-IMEgAJ
+Protocol version: TBD
+```
+
+## Simple Summary
+
+This CAP extends the `BucketEntryType` enum with two new values called `INITENTRY` and `METAENTRY`,
+and adds a new `metaEntry` field in the `BucketEntry` union.
+
+The semantics of the `INITENTRY` value are identical to the semantics of the `LIVEENTRY` value (and
+reuse the `liveEntry` field) except that `INITENTRY` also denotes the entry that is the
+(chronologically) first copy of the entry in any live range of the entry in the bucket list. In
+other words: a bucket entry marked `INITENTRY` implies that either no entry with the same ledger key
+exists in an older bucket, or else that the (chronologically) preceding entry with the same ledger
+key was `DEADENTRY`.
+
+The purpose of the `METAENTRY` type is to record the ledger protocol version in buckets and, in
+particular, to facilitate switching merge algorithm to accommodate buckets with `INITENTRY`
+semantics. Therefore the `METAENTRY` entry type (or something like it) is a prerequisite for the
+`INITENTRY` type.
+
+## Abstract
+
+The ledger state in stellar-core is maintained in a special-purpose log-structured merge (LSM) tree
+called the bucket list. The design of this data structure is part of the overall protocol and its
+contents are defined in the protocol XDR files. This CAP proposes a very slight change to one of the
+constituent datatypes in the LSM tree to address a performance problem observed in the field.
+
+The current bucket list consists of a set of entries that can be in one of two states: **live** or
+**dead**. Dead entries (so-called "tombstones") exist strictly to override the live-ness of a live
+entry in an older level of the bucket list. If a tombstone is present in the bucket list for which
+no live entry exists in an older level, that tombstone is **redundant**: there is nothing for it to
+override.
+
+The original design of the bucket list assumed that most entries in the ledger would be relatively
+long-lived (such as accounts) and therefore the presence of redundant tombstones would not be a
+major performance issue. In practice, we observe that the great majority of ledger entries have
+turned out to be short-lived (primarily offers) and therefore buckets have accumulated many
+redundant tombstones.
+
+The change in this CAP will eliminate the conditions that create redundant tombstones. They will
+then gradually be merged-out of the set of live buckets, as the ledger evolves and buckets are
+merged. Within a few months, the accumulated redundant tombstones will be eliminated from live
+buckets. Historical buckets containing redundant tombstones will remain, but new buckets will be
+**much** smaller.
+
+## Motivation
+
+At present, buckets in the existing network are overwhelmingly composed of redundant tombstones for
+short-lived offers. As a typical example, a recent second-from-oldest-level bucket contains 5.9m
+redundant offer tombstones and 850k live entries, of which only 4.7k are for live offers. These
+tombstones incur a significant performance cost in a variety of day-to-day operations of the
+network, including point-in-time catchup and regular bucket merge operations during transaction
+processing.
+
+The buildup of redundant tombstones occurs because the existing merge algorithm conservatively
+preserves tombstones until the final level of the bucket list. This conservative behavior is
+required because the existing representation of live entries in buckets does not indicate whether a
+live entry is the _oldest_ existing entry with a given key; the merge algorithm must therefore assume
+the possibility that any tombstone may be shadowing some other live entry in an older bucket, and
+preserve all tombstones.
+
+If the merge algorithm could determine that a tombstone was being merged with the oldest entry with
+a given key -- if it were being merged with a live entry that was marked as the _initial_ entry with
+its key -- then the merge algorithm could discard both the "initial" live entry and the tombstone,
+accumulating zero space in the merged bucket. This is exactly what this CAP proposes to do.
+
+## Specification
+
+The ledger protocol number will be increased, to version TBD. This is a breaking change. Merging
+buckets in a ledger of the newer protocol version (and beyond) will need to use a revised merge
+algorithm (see below).
+
+### XDR changes
+
+The `BucketEntryType` enum will be extended with two new values: `INITENTRY` and `METAENTRY`.
+
+The `BucketEntry` union will be extended with a corresponding new state `metaEntry` of type `MetaEntry`.
+
+The updated relevant XDR definitions follow:
+
+```c++
+enum BucketEntryType
+{
+    LIVEENTRY = 0, // Before protocol TBD: created-or-updated;
+                   // At-and-after protocol TBD: only updated.
+    DEADENTRY = 1,
+    INITENTRY = 2, // At-and-after protocol TBD: only created.
+    METAENTRY = 3  // At-and-after protocol TBD: bucket metadata, should come first.
+};
+
+struct BucketMetadata
+{
+    // Indicates the protocol version used to create / merge this bucket.
+    uint32 ledgerVersion;
+
+    // reserved for future use
+    union switch (int v)
+    {
+    case 0:
+        void;
+    }
+    ext;
+};
+
+union BucketEntry switch (BucketEntryType type)
+{
+case LIVEENTRY:
+case INITENTRY:
+    LedgerEntry liveEntry;
+
+case DEADENTRY:
+    LedgerKey deadEntry;
+case METAENTRY:
+    BucketMetadata metaEntry;
+};
+```
+
+### Bucket content changes
+
+Under protocol TBD, new buckets will have a single METAENTRY written as their first entry, which
+carries metadata that indicates the conditions under which the bucket was formed: currently only its
+protocol version. Absence of a METAENTRY implies that the bucket originates from before protocol
+version TBD.
+
+Under protocol TBD, the semantics of adding a live entry to a fresh bucket at the head of the bucket
+list will be changed to reflect the lifecycle of the live entry: if the entry is being added because
+it is **new** (as the result of a creation event), it must be added in `INITENTRY` state rather than
+the `LIVEENTRY` state. If the entry is being added because of an **update** to the same key, the
+entry must be added in `LIVEENTRY` state.
+
+### Protocol version changes
+
+Any merge will be performed under the maximum protocol version of all of the input buckets and
+shadow buckets involved in the merge. If the protocol version selected by inspecting buckets
+involved in a merge exceeds the protocol version of the ledger at which the merge is being
+started, the merge will fail with an error.
+
+### Merge algorithm changes
+
+Under protocol TBD, the semantics of merging buckets will be changed to the following:
+
+  - If two entries have different keys, emit the lower-ordered one as we do today.
+  - If the two entries have the same key and neither is `INITENTRY`, take the newer entry as we do
+    today.
+  - If the two entries have the same key and at least one is `INITENTRY`:
+    - If the newer entry is of type `DEADENTRY`, output nothing. Consider both entries annihilated.
+    - If the newer entry is of type `LIVEENTRY`, output an entry in `INITENTRY` state with the value
+      of the newer `LIVEENTRY` entry.
+    - If the newer entry is of type `INITENTRY`:
+      - If the older entry is of type `DEADENTRY`, output an entry in `LIVEENTRY` state with the value
+        of the newer `INITENTRY` entry.
+      - Otherwise signal an error: an `INITENTRY` should never be the next lifecycle state for an
+        entry in `INITENTRY` or `LIVEENTRY` state.
+
+
+The following table summarizes the rules for merging entries in `INITENTRY` state:
+
+
+  |  old          |  new         |  result       |
+  |---------------|--------------|---------------|
+  |  INITENTRY    |  DEADENTRY   |  empty        |
+  |  INITENTRY=x  |  LIVEENTRY=y |  INITENTRY=y  |
+  |  DEADENTRY    |  INITENTRY=x |  LIVEENTRY=x  |
+  |  INITENTRY    |  INITENTRY   |  error        |
+  |  LIVEENTRY    |  INITENTRY   |  error        |
+
+### Shadowed entry elision changes
+
+Under protocol TBD, the semantics of emitting shadowed entries during merges will be changed to
+preserve both `INITENTRY` and `DEADENTRY` entries. Only `LIVEENTRY` entries can be elided, in order
+to retain the lifecycle structure of each ledger key over time.
+
+## Rationale
+
+The existing bucket list does compact-out entries that have been shadowed at _newer_ levels; it was
+simply an oversight in the initial design to not compact-out tombstones that are redundant with
+respect to _older_ levels.
+
+Such redundant tombstone compaction is a standard feature of LSM trees, for example see the logic in
+LevelDB:
+
+https://github.com/google/leveldb/blob/master/db/db_impl.cc#L965-L974
+
+We could follow a similar approach to this code, using (for example) ledger sequence numbers and
+deducing that a given tombstone is not relevant based on the ledger number of the bucket it is being
+merged into; but this would be a more invasive (and more fragile) change. The proposed change in
+this CAP is the simplest possible that we could think of.
+
+## Backwards Compatibility
+
+This change will produce ledgers that contain buckets that have a `BucketEntryType` value
+(`INITENTRY`) that is unknown to older versions of stellar-core. If those versions try to process
+such a bucket, they will fail with an error, but this should not occur since they will fail earlier
+with a protocol-version mismatch error.
+
+Since each ledger indicates the protocol version in its header, new versions of stellar-core will be
+able to process both old and new buckets appropriately, enabling the new logic only when forming a
+bucket for a new-version ledger. It should not need to employ version-sensitive logic when _reading_
+buckets, since the old and new behavior are identical on old input buckets (those without
+`INITENTRY` entries).
+
+Semantically, very little will otherwise change: the high level _meaning_ of the bucket list will
+remain unchanged, as will be the contents of the active SQL database against-which transactions
+execute. Only the representation of entries in the bucket list will change: newly-created entries
+will be differentiated from updated entries, and redundant tombstones will thereby be compressed-out
+of buckets.
+
+## Test Cases
+
+Extensive testcases will accompany the implementation.
+
+## Implementation
+
+Prototype implementation is present in https://github.com/stellar/stellar-core/pull/1950
