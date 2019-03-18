@@ -45,7 +45,7 @@
 | [CAP-0017](cap-0017.md)| Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
 | [CAP-0018](cap-0018.md)| Fine-Grained Control of Authorization | Jonathan Jove | FCP: Acceptance |
 | [CAP-0019](cap-0019.md)| Future-upgradable TransactionEnvelope type | David Mazières | Draft |
-| [CAP-0020](cap-0020.md)| Bucket Initial Entries | Graydon Hoare | Draft |
+| [CAP-0020](cap-0020.md)| Bucket Initial Entries | Graydon Hoare | Accepted |
 
 # Contribution Process
 
