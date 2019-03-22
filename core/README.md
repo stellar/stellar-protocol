@@ -11,10 +11,18 @@
   intended disposition. After one week has passed, during which any new concerns should be
   addressed, the CAP will head towards its intended disposition [**Acceptance/Rejection**] or go
   back into a Draft state.
-* **Accepted** — A CAP that has been formally accepted and is ready for implementation. It is
-  expected to be included in a future version of the protocol.
-* **Final** — A CAP that has been implemented in Stellar Core in the version specified. A final CAP
-  should only be updated to correct errata.
+* **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
+  ready for implementation. It is still possible that the CAP may be rejected post-implementation
+  due to the issues that may arise during an initial implementation.
+* **Implementation Review** - A CAP that has been implemented in a Stellar Core implementation.
+  During this time the proposal is brought up again before the protocol group for additional
+  comment, where it is possible that the proposal is rejected based on the issues that arise from
+  an implementation.
+* **Implemented** - A CAP that has been implemented with no issues brought up during
+  **Implementation Review**, with the protocol version specified in the CAP. It will graduate to
+  **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
+* **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
+  final CAP should only be updated to correct errata.
 
 ### Additional Statuses
 * **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
@@ -195,8 +203,18 @@ SDF will prioritize accepted CAPs among its priorities for a given year. However
 ensure your CAP is implemented in a timely manner, it is likely best for you to attempt to
 implement it yourself.
 
-Once a CAP is implemented, a PR should be submitted to update its status to `Final`, along with the
-version it was released in.
+Once a CAP is implemented, a PR should be submitted to update its status to **Implementation
+Review**, along with the protocol version it was released in if applicable.
+
+From here the proposal is brought up again before the protocol group for additional comment, where
+it is possible that the proposal is rejected based on the issues that arise from its
+implementation. If no issues arise, it will move to **Implemented** by a CAP team member.
+
+### CAP Finalization
+
+Once an implemented CAP has been released in a specified version, the CAP should be updated with
+the protocol version that the implementation targets. From there, once a majority of validators on
+the network have accepted the implementation, it will move to **Final**.
 
 ## CAP Team Members
 
