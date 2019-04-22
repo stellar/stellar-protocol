@@ -53,6 +53,7 @@
 | [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based) | Tom Quisel | Standard | Draft |
 | [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Draft |
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission | Paul Selden, Nikhil Saraf | Standard | Draft |
+| [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Draft |
 
 # Contribution Process
 
