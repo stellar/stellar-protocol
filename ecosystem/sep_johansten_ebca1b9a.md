@@ -1,10 +1,12 @@
-SEP: 00xy<br>
-Title: Self-verification of validator nodes<br>
-Author: Johan Stén <johan@futuretense.io><br>
-Track: Standard<br>
-Status: Draft<br>
-Created: 2018-05-06<br>
-Discussion: https://github.com/stellar/stellar-protocol/issues/111<br>
+```
+SEP: 00xy
+Title: Self-verification of validator nodes
+Author: Johan Stén <johan@futuretense.io>
+Track: Standard
+Status: Draft
+Created: 2018-05-06
+Discussion: https://github.com/stellar/stellar-protocol/issues/111
+```
 
 # Simple Summary
 
@@ -12,34 +14,41 @@ Using Stellar accounts to link validator nodes to the entities operating them.
 
 # Abstract
 
-SCP depends on knowing the identies of the nodes you add in your quorum slice and thus choose to listen to. When discovering or verifying validators in the Stellar network it is useful to have a clear link between the nodes and their identity in the wider internet. 
+SCP depends on knowing the identies of the nodes you add in your quorum slice and thus choose to
+listen to. When discovering or verifying validators in the Stellar network it is useful to have a
+clear link between the nodes and their identity in the wider internet.
 
 So who *do* you listen to? And how do you know what nodes belong to them?
 
-Just as Stellar uses federation for anchors, and federated address lookups, we suggest using the same mechanics for a baseline level of verification of validator nodes.
+Just as Stellar uses federation for anchors, and federated address lookups, we suggest using the
+same mechanics for a baseline level of verification of validator nodes.
 
 # Motivation
 
-There is currently no standard way for publishing node metadata. We need better scalability, better discoverability, more decentralization, better information quality.
+There is currently no standard way for publishing node metadata. We need better scalability, better
+discoverability, more decentralization, better information quality.
 
 # Specification
 
 ## Linking
 
-* create an account for the validator node you operate
-* set the account homedomain to your website
-* create a stellar.toml file in `/.well-known` on the website server
-* add your validator node to the stellar.toml file
+* Create an account for the validator node you operate
+* Set the account homedomain to your website
+* Create a stellar.toml file in `/.well-known` on the website server
+* Add your validator node to the stellar.toml file
 
-This creates a two-way link between the node and the website of the operating entity, uniquely identifying it.
+This creates a two-way link between the node and the website of the operating entity, uniquely
+identifying it.
 
 ## Stellar.toml metadata
 
 Please refer to SEP-0001<sup>[1](#note1)</sup> for specifics on how this works.
 
-Whereas SEP-0001 is primarily targetted at asset issuers, the idea is to re-use as much from SEP-0001 as makes sense.
+Whereas SEP-0001 is primarily targetted at asset issuers, the idea is to re-use as much from
+SEP-0001 as makes sense.
 
-At an absolute minimum, `OUR_VALIDATORS` MUST be used since that is what creates a link from the website back to the validator node.
+At an absolute minimum, `OUR_VALIDATORS` MUST be used since that is what creates a link from the
+website back to the validator node.
 
 Recommended fields would be:
 
@@ -50,18 +59,16 @@ HISTORY
 [[PRINCIPALS]]
 ```
 
-
-
-#### Example code for linking:
+#### Example code for linking
 
 ```javascript
 const userKeys = StellarSdk.Keypair.fromSecret(...);
-                                               
-// validator node NODE_SEED                                               
+
+// validator node NODE_SEED
 const nodeKeys = StellarSdk.Keypair.fromSecret(...);
 const nodeId = nodeKeys.publicKey();
 
-// the 
+// the
 const homeDomain = '...';
 
 const account = await server.loadAccount(userKeys.publicKey());
@@ -83,9 +90,7 @@ tx.sign(nodeKeys);
 const result = await server.submitTransaction(tx);
 ```
 
-
-
-#### Example look-up:
+#### Example look-up
 
 ```
 MacBook-Pro:~ Johan$ curl https://horizon.stellar.org/accounts/GBFZFQRGOPQC5OEAWO76NOY6LBRLUNH4I5QYPUYAK53QSQWVTQ2D4FT5
@@ -105,25 +110,28 @@ OUR_VALIDATORS=[
 ...
 ```
 
-
-
 # Design Rationale
 
 Federation is well-established as a building block for protocols built on Stellar.
 
-Validator nodes have keypairs and are already using public keys as their identity, so it's not much of a stretch to add accounts into the mix, in order to start using reverse federation as a means of looking up metadata associated with a specific validator node.
+Validator nodes have keypairs and are already using public keys as their identity, so it's not much
+of a stretch to add accounts into the mix, in order to start using reverse federation as a means of
+looking up metadata associated with a specific validator node.
 
 # Security Concerns
 
-With a validator node account linked to a homedomain stellar.toml file like suggested, we're really relying on the integrity of the stellar.toml file and the server it resides on, making sure it only has write access by authorized users.
+With a validator node account linked to a homedomain stellar.toml file like suggested, we're really
+relying on the integrity of the stellar.toml file and the server it resides on, making sure it only
+has write access by authorized users.
 
-Additional security measures that could be taken include signing the stellar.toml file with the validator key(s), and serving in a file next to the stellar.toml file. 
+Additional security measures that could be taken include signing the stellar.toml file with the
+validator key(s), and serving in a file next to the stellar.toml file.
 
-Another thing might be to add DKIF<sup>[2](#note2)</sup>-style protection, and sign the stellar.toml file with a private key unrelated to the validator node(s), and publish the public key in the DNS response.
+Another thing might be to add DKIF<sup>[2](#note2)</sup>-style protection, and sign the
+stellar.toml file with a private key unrelated to the validator node(s), and publish the public key
+in the DNS response.
 
-These are most likely the topic of an SEP by themselves.
-
-
+These are most likely the topic of a SEP by themselves.
 
 # Links
 
