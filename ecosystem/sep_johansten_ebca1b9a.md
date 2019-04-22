@@ -12,17 +12,15 @@ Using Stellar accounts to link validator nodes to the entities operating them.
 
 # Abstract
 
-Contrary to Bitcoin, which was designed to remove the need to trust third parties, trust is fundamental to FBA/SCP -- node operators explicitly have to select sets of nodes which they trust. 
+SCP depends on knowing the identies of the nodes you add in your quorum slice and thus choose to listen to. When discovering or verifying validators in the Stellar network it is useful to have a clear link between the nodes and their identity in the wider internet. 
 
-So who *do* you trust? And how do you know what nodes belong to them?
+So who *do* you listen to? And how do you know what nodes belong to them?
 
 Just as Stellar uses federation for anchors, and federated address lookups, we suggest using the same mechanics for a baseline level of verification of validator nodes.
 
 # Motivation
 
-The current protocol for publishing node metadata is highly centralized, relying on SDF as a central gatekeeper as the maintainers of the different validator lists (https://github.com/stellar/docs/blob/master/validators.md, and https://www.stellar.org/developers/guides/nodes.html / https://github.com/stellar/dashboard/blob/master/common/nodes.js)
-
-We need better scalability, better discoverability, more decentralization, better information quality.
+There is currently no standard way for publishing node metadata. We need better scalability, better discoverability, more decentralization, better information quality.
 
 # Specification
 
