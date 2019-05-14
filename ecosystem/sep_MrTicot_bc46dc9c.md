@@ -4,9 +4,9 @@
 SEP: 0011
 Title: On-chain signature & transaction sharing
 Author: Mister.Ticot
+Track: Informational
 Status: Draft
 Created: 2018-08-31
-Version: 0.1.0
 ```
 
 *(Personal note: this is the first time I'm doing a protocol proposal. Please
