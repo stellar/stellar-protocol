@@ -50,10 +50,11 @@
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | Draft |
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
-| [CAP-0017](cap-0017.md)| Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
-| [CAP-0018](cap-0018.md)| Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
-| [CAP-0019](cap-0019.md)| Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
-| [CAP-0020](cap-0020.md)| Bucket Initial Entries | Graydon Hoare | Implemented |
+| [CAP-0017](cap-0017.md) | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
+| [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
+| [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
+| [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Implemented |
+| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 
 # Contribution Process
 
