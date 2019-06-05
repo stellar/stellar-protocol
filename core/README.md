@@ -60,6 +60,8 @@
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 
 ## Rejected Proposals
+| Number | Title | Author | Status |
+| --- | --- | --- | --- |
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 
 # Contribution Process
