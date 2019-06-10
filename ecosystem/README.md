@@ -30,7 +30,7 @@
 * **Superseded: [New Final SEP]** - A SEP that which was previously final but has been superseded
   by a new, final SEP. Both SEPs should reference each other.
 
-## Accepted Proposals
+## List of Proposals
 
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
@@ -46,6 +46,11 @@
 | [SEP-0010](sep-0010.md) | Stellar Web Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières | Standard | Active |
 | [SEP-0012](sep-0012.md) | Anchor/Client Customer Info Transfer | Interstellar | Standard | Active |
+
+### Draft Proposals
+
+| Number | Title | Author | Track | Status |
+| --- | --- | --- | --- | --- |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Draft |
 | [SEP-0014](sep-0014.md) | Dynamic Asset Metadata | OrbitLens, Paul Tiplady | Standard | Draft |
 | [SEP-0015](sep-0015.md) | Attachment Convention | Interstellar | Standard | Draft |
