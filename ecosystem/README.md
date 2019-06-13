@@ -60,6 +60,7 @@
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission | Paul Selden, Nikhil Saraf | Standard | Draft |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Draft |
 | [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing | Mister.Ticot | Informational | Draft |
+| [SEP-0022](sep-0022.md) | IPFS Support | Samuel B. Sendelbach | Informational | Draft |
 
 # Contribution Process
 
