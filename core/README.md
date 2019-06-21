@@ -30,7 +30,7 @@
 * **Superseded: [New Final CAP]** - A CAP that which was previously final but has been superseded
   by a new, final CAP. Both CAPs should reference each other.
 
-## Active Proposals
+## List of Proposals
 
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |
@@ -40,6 +40,14 @@
 | [CAP-0004](cap-0004.md) | Improved Rounding for Cross Offer | Jonathan Jove | Final |
 | [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Implemented |
 | [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Implemented |
+| [CAP-0017](cap-0017.md) | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
+| [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
+| [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
+| [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Implemented |
+
+### Draft Proposals
+| Number | Title | Author | Status |
+| --- | --- | --- | --- |
 | [CAP-0007](cap-0007.md) | Deterministic Account Creation | Jeremy Rubin | Draft |
 | [CAP-0008](cap-0008.md) | Self Identified Pre-Auth Transaction | Jeremy Rubin | Draft |
 | [CAP-0009](cap-0009.md) | Linear/Exterior Immutable Accounts | Jeremy Rubin | Draft |
@@ -49,11 +57,12 @@
 | [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Draft |
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | Draft |
+| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | FCP: Acceptance |
+
+### Rejected Proposals
+| Number | Title | Author | Status |
+| --- | --- | --- | --- |
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
-| [CAP-0017](cap-0017.md)| Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
-| [CAP-0018](cap-0018.md)| Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
-| [CAP-0019](cap-0019.md)| Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
-| [CAP-0020](cap-0020.md)| Bucket Initial Entries | Graydon Hoare | Implemented |
 
 # Contribution Process
 

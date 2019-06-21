@@ -30,7 +30,7 @@
 * **Superseded: [New Final SEP]** - A SEP that which was previously final but has been superseded
   by a new, final SEP. Both SEPs should reference each other.
 
-## Accepted Proposals
+## List of Proposals
 
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
@@ -46,6 +46,11 @@
 | [SEP-0010](sep-0010.md) | Stellar Web Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières | Standard | Active |
 | [SEP-0012](sep-0012.md) | Anchor/Client Customer Info Transfer | Interstellar | Standard | Active |
+
+### Draft Proposals
+
+| Number | Title | Author | Track | Status |
+| --- | --- | --- | --- | --- |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Draft |
 | [SEP-0014](sep-0014.md) | Dynamic Asset Metadata | OrbitLens, Paul Tiplady | Standard | Draft |
 | [SEP-0015](sep-0015.md) | Attachment Convention | Interstellar | Standard | Draft |
@@ -55,6 +60,7 @@
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission | Paul Selden, Nikhil Saraf | Standard | Draft |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Draft |
 | [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing | Mister.Ticot | Informational | Draft |
+| [SEP-0022](sep-0022.md) | IPFS Support | Samuel B. Sendelbach | Informational | Draft |
 
 # Contribution Process
 
