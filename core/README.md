@@ -56,7 +56,7 @@
 | [CAP-0012](cap-0012.md) | Deterministic accounts and creatorTxID | David Mazières | Draft |
 | [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Draft |
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
-| [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | Draft |
+| [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | FCP: Acceptance |
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | FCP: Acceptance |
 
 ### Rejected Proposals
