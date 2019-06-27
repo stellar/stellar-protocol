@@ -46,6 +46,7 @@
 | [SEP-0010](sep-0010.md) | Stellar Web Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières | Standard | Active |
 | [SEP-0012](sep-0012.md) | Anchor/Client Customer Info Transfer | Interstellar | Standard | Active |
+| [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
 
 ### Draft Proposals
 
@@ -58,7 +59,6 @@
 | [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based) | Tom Quisel | Standard | Draft |
 | [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Draft |
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission | Paul Selden, Nikhil Saraf | Standard | Draft |
-| [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Draft |
 | [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing | Mister.Ticot | Informational | Draft |
 | [SEP-0022](sep-0022.md) | IPFS Support | Samuel B. Sendelbach | Informational | Draft |
 
