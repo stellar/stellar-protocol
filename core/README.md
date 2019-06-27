@@ -58,6 +58,7 @@
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | FCP: Acceptance |
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | FCP: Acceptance |
+| [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0023](cap-0023.md) | Two-Part Payments with BalanceEntry | Jonathan Jove | Draft |
 
 ### Rejected Proposals
