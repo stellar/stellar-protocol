@@ -40,6 +40,7 @@
 | [CAP-0004](cap-0004.md) | Improved Rounding for Cross Offer | Jonathan Jove | Final |
 | [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Implemented |
 | [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Implemented |
+| [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | Accepted |
 | [CAP-0017](cap-0017.md) | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
 | [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
 | [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
@@ -56,8 +57,7 @@
 | [CAP-0012](cap-0012.md) | Deterministic accounts and creatorTxID | David Mazières | Draft |
 | [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Draft |
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
-| [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | FCP: Acceptance |
-| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | FCP: Acceptance |
+| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0023](cap-0023.md) | Two-Part Payments with BalanceEntry | Jonathan Jove | Draft |
 
