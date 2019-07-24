@@ -38,13 +38,13 @@
 | [CAP-0002](cap-0002.md) | Transaction level signature verification | Nicolas Barry | Final |
 | [CAP-0003](cap-0003.md) | Asset-backed offers | Jonathan Jove | Final |
 | [CAP-0004](cap-0004.md) | Improved Rounding for Cross Offer | Jonathan Jove | Final |
-| [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Implemented |
-| [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Implemented |
+| [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Final |
+| [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Final |
 | [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | Accepted |
 | [CAP-0017](cap-0017.md) | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
 | [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
 | [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
-| [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Implemented |
+| [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
