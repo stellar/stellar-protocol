@@ -62,6 +62,7 @@
 | [CAP-0023](cap-0023.md) | Two-Part Payments with BalanceEntry | Jonathan Jove | Draft |
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Draft |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | FCP: Acceptance |
+| [cap_orbitlens_41fc89b6](cap_orbitlens_41fc89b6.md) | Disable Inflation Mechanism | OrbitLens | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
