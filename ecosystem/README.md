@@ -18,8 +18,7 @@
   which any new concerns should be addressed, the SEP's status will become `Active`.
 * **Active** - An actively maintained SEP that is intended for immediate adoption by the entire
   ecosystem. Additional updates may be made without changing the SEP number.
-* **Final** - A finalized SEP that is being used in live products and will not be changed aside from
-  minor errata.
+* **Final** - A finalized SEP will not be changed aside from minor errata. For a proposal to be a candidate to be made Final it must be being used in live products.
 
 ### Additional Statuses
 * **Rejected** - A Standards SEP that has been formally rejected by the SEP Team, and will not be
