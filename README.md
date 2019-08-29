@@ -43,3 +43,7 @@ Example repository structure:
 ```
 
 See [CONTRIBUTING](CONTRIBUTING.md) to learn how to contribute.
+
+git checkout master 
+git merge --no-ff ekkarat.w@gmail.com 
+git push ต้นกำเนิดมาสเตอร์
