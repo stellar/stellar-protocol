@@ -144,7 +144,8 @@ From there, the following process will happen:
 * Minor changes may be made as more implementations are brought online highlighting any edge cases.
 
 ### Active -> Final
-* Once there are live implementations being used in production, the SEP team can move the SEP to `Final` status.
+* Once the SEP team determines that an active SEP is complete, proven, and won't be extended, the SEP can move to `Final` status.
+* This promotion can only occur once there are multiple live implementations being used in production to ensure any edge cases or incompatibilities are found.
 * No changes will be made to a finalized SEP aside from fixing minor errata.
 * Much consideration should be given before moving to Final status, it is OK for SEPs to live in Active status for a long time.
 
