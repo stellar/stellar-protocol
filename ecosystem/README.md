@@ -15,14 +15,11 @@
   Team. If enough the approval requirements are met by SEP team members, the SEP will move towards 
   `FCP`. Otherwise, it'll regress to a `Draft`.
 * **FCP** — A SEP that has entered a Final Comment Period (FCP). After one week has passed, during
-  which any new concerns should be addressed, the SEP's status will become `Active` or `Final`,
-  depending on the content of the SEP.
+  which any new concerns should be addressed, the SEP's status will become `Active`.
 * **Active** - An actively maintained SEP that is intended for immediate adoption by the entire
-  ecosystem by its author(s), and if it is a Standard, by SDF as well. Additional updates may be
-  made without changing the SEP number.
-* **Final** - A finalized SEP that is intended for immediate adoption by the entire
-  ecosystem by its author(s), and if it is a Standard, by SDF as well. A final SEP should only be
-  updated to correct errata.
+  ecosystem. Additional updates may be made without changing the SEP number.
+* **Final** - A finalized SEP that is being used in live products and will not be changed aside from
+  minor errata.
 
 ### Additional Statuses
 * **Rejected** - A Standards SEP that has been formally rejected by the SEP Team, and will not be
@@ -141,11 +138,16 @@ From there, the following process will happen:
 * Once a SEP has been approved, it goes into FCP which is broadcast to the protocol meeting members
   along with the mailing list.
 
-### FCP -> Active/Final
-* If no major concerns are brought up, the SEP is marked as `Active` or `Final` by your SEP buddy:
-  * If the SEP requires active maintenance, such as having an open schema, it should be marked at
-    `Active`.
-  * Otherwise, the SEP should be marked as `Final`.
+### FCP -> Active
+* If no major concerns are brought up, the SEP is marked as `Active` by your SEP buddy.
+* Ideally there will be a reference implementation exhibiting the behavior and value of the SEP before moving to active state.
+* Active SEPs should be brought into production by ecosystem members.
+* Minor changes may be made as more implementations are brought online highlighting any edge cases.
+
+### Active -> Final
+* Once there are live implementations being used in production, the SEP team can move the SEP to `Final` status.
+* No changes will be made to a finalized SEP aside from fixing minor errata.
+* Much consideration should be given before moving to Final status, it is OK for SEPs to live in Active status for a long time.
 
 ## SEP Team Members
 
