@@ -149,7 +149,7 @@ From there, the following process will happen:
 
 ## SEP Team Members
 
-**SEP Team**: Tomer (SDF), Nikhil (SDF) Tom Q. (SDF), Johnny (SDF), orbitlens, David (SDF), Jed
+**SEP Team**: Tomer (SDF), Nikhil (SDF) Tom Q. (SDF), Michael (SDF), Alex (SDF), orbitlens, David (SDF), Jed
 (SDF)
 
 [ietf]: https://ietf.org/
