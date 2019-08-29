@@ -9,14 +9,12 @@
   which any new concerns should be addressed, the SEP's status will become `Active` or `Final`,
   depending on the content of the SEP.
 * **Active** - An actively maintained SEP that is intended for immediate adoption by the entire
-  ecosystem by its author(s), and if it is a Standard, by SDF as well. Additional updates may be
-  made without changing the SEP number.
+  ecosystem. Additional updates may be made without changing the SEP number.
 * **Final** - A finalized SEP that is intended for immediate adoption by the entire
-  ecosystem by its author(s), and if it is a Standard, by SDF as well. A final SEP should only be
-  updated to correct errata.
+  ecosystem. A final SEP should only be updated to correct errata.
 
 ### Additional Statuses
-* **Rejected** - A Standards SEP that has been formally rejected by the SEP Team, and will not be
+* **Rejected** - A SEP that has been formally rejected by the SEP Team, and will not be
   implemented.
 * **Superseded: [New Final SEP]** - A SEP that which was previously final but has been superseded
   by a new, final SEP. Both SEPs should reference each other.
