@@ -29,6 +29,7 @@
   implemented.
 * **Superseded: [New Final SEP]** - A SEP that which was previously final but has been superseded
   by a new, final SEP. Both SEPs should reference each other.
+* **Deprecated** - A SEP that was previously on an active track but has been deprecated and is no longer suggested for use. There may be legacy usage of a deprecated SEP.
 
 ## List of Proposals
 
