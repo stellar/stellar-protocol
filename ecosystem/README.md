@@ -10,6 +10,7 @@
   and it requires approval by 2 SDF members of the SEP Team.
 
 ## SEP Status Terms
+* **Deprecated** - A SEP that was previously on an active track but has been deprecated and is no longer suggested for use. There may be legacy usage of a deprecated SEP.
 * **Draft** - A SEP that is currently open for consideration and actively being discussed.
 * **Awaiting Decision** — A mature and ready SEP that is ready for approval by the SEP
   Team. If enough the approval requirements are met by SEP team members, the SEP will move towards 
@@ -146,6 +147,10 @@ From there, the following process will happen:
   * If the SEP requires active maintenance, such as having an open schema, it should be marked at
     `Active`.
   * Otherwise, the SEP should be marked as `Final`.
+  
+### Regression
+* It is possible for a SEP to move from `Active` to `Draft` or `Deprecated` if it is never adopted, or is abandoned by the community.
+* Regression of an active SEP occurs via the same process as a proposal (`Draft` -> `Awaiting Decision` -> `FCP` -> `Deprecated`)
 
 ## SEP Team Members
 
