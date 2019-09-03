@@ -10,7 +10,6 @@
   and it requires approval by 2 SDF members of the SEP Team.
 
 ## SEP Status Terms
-* **Deprecated** - A SEP that was previously on an active track but has been deprecated and is no longer suggested for use. There may be legacy usage of a deprecated SEP.
 * **Draft** - A SEP that is currently open for consideration and actively being discussed.
 * **Awaiting Decision** — A mature and ready SEP that is ready for approval by the SEP
   Team. If enough the approval requirements are met by SEP team members, the SEP will move towards 
@@ -26,6 +25,7 @@
   updated to correct errata.
 
 ### Additional Statuses
+* **Deprecated** - A SEP that was previously on an active track but has been deprecated and is no longer suggested for use. There may be legacy usage of a deprecated SEP.
 * **Rejected** - A Standards SEP that has been formally rejected by the SEP Team, and will not be
   implemented.
 * **Superseded: [New Final SEP]** - A SEP that which was previously final but has been superseded
