@@ -25,6 +25,7 @@
   updated to correct errata.
 
 ### Additional Statuses
+* **Deprecated** - A SEP that was previously on an active track but has been deprecated and is no longer suggested for use. There may be legacy usage of a deprecated SEP.
 * **Rejected** - A Standards SEP that has been formally rejected by the SEP Team, and will not be
   implemented.
 * **Superseded: [New Final SEP]** - A SEP that which was previously final but has been superseded
@@ -146,6 +147,10 @@ From there, the following process will happen:
   * If the SEP requires active maintenance, such as having an open schema, it should be marked at
     `Active`.
   * Otherwise, the SEP should be marked as `Final`.
+  
+### Regression
+* It is possible for a SEP to move from `Active` to `Draft` or `Deprecated` if it is never adopted, or is abandoned by the community.
+* Regression of an active SEP occurs via the same process as a proposal (`Draft` -> `Awaiting Decision` -> `FCP` -> `Deprecated`)
 
 ## SEP Team Members
 
