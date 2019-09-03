@@ -40,7 +40,7 @@
 ### Draft Proposals
 
 | Number | Title | Author | Status |
-| --- | --- | --- | --- | --- |
+| --- | --- | --- | --- |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Draft |
 | [SEP-0014](sep-0014.md) | Dynamic Asset Metadata | OrbitLens, Paul Tiplady | Draft |
 | [SEP-0015](sep-0015.md) | Attachment Convention | Interstellar | Draft |
