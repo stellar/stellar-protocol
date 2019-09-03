@@ -21,6 +21,7 @@
 * **Final** - A finalized SEP will not be changed aside from minor errata. For a proposal to be a candidate to be made Final it must be being used in live products.
 
 ### Additional Statuses
+* **Deprecated** - A SEP that was previously on an active track but has been deprecated and is no longer suggested for use. There may be legacy usage of a deprecated SEP.
 * **Rejected** - A Standards SEP that has been formally rejected by the SEP Team, and will not be
   implemented.
 * **Superseded: [New Final SEP]** - A SEP that which was previously final but has been superseded
@@ -100,6 +101,7 @@ repository. You should make sure to adhere to the following:
   * For example, a SEP by Github user `happycoder` with a SHA-256 checksum of `a200f73c`
     would be titled `sep_happycoder_b274f73c.md`.
 * Make sure to place your SEP in the `ecosystem/` folder.
+* Include GitHub handles or emails for all authors listed.  GitHub handles are preferred.
 
 Finally, submit a PR of your draft via your fork of this repository.
 
@@ -148,6 +150,10 @@ From there, the following process will happen:
 * This promotion can only occur once there are multiple live implementations being used in production to ensure any edge cases or incompatibilities are found.
 * No changes will be made to a finalized SEP aside from fixing minor errata.
 * Much consideration should be given before moving to Final status, it is OK for SEPs to live in Active status for a long time.
+  
+### Regression
+* It is possible for a SEP to move from `Active` to `Draft` or `Deprecated` if it is never adopted, or is abandoned by the community.
+* Regression of an active SEP occurs via the same process as a proposal (`Draft` -> `Awaiting Decision` -> `FCP` -> `Deprecated`)
 
 ## SEP Team Members
 
