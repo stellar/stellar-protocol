@@ -49,7 +49,6 @@
 
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
-| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Draft |
 | [SEP-0014](sep-0014.md) | Dynamic Asset Metadata | OrbitLens, Paul Tiplady | Standard | Draft |
 | [SEP-0015](sep-0015.md) | Attachment Convention | Interstellar | Standard | Draft |
 | [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p) | Jeremy Rubin | Standard | Draft |
@@ -58,6 +57,13 @@
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission | Paul Selden, Nikhil Saraf | Standard | Draft |
 | [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing | Mister.Ticot | Informational | Draft |
 | [SEP-0022](sep-0022.md) | IPFS Support | Samuel B. Sendelbach | Informational | Draft |
+
+### Rejected and Deprecated Proposals
+
+| Number | Title | Author | Track | Status |
+| --- | --- | --- | --- | --- |
+| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Rejected |
+
 
 # Contribution Process
 
