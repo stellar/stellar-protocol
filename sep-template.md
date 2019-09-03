@@ -3,7 +3,7 @@
 ```
 SEP: To Be Assigned
 Title: <SEP title>
-Author: <list of authors' names and optionally, email addresses, separated by commas>
+Author: <list of authors' names, Github handles, and optionally, email addresses, separated by commas>
 Track: <Informational or Standard>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>

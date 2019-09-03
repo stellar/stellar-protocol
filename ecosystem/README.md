@@ -105,6 +105,7 @@ repository. You should make sure to adhere to the following:
   * For example, a SEP by Github user `happycoder` with a SHA-256 checksum of `a200f73c`
     would be titled `sep_happycoder_b274f73c.md`.
 * Make sure to place your SEP in the `ecosystem/` folder.
+* Include Github handles or emails for all authors listed.  Github handles are preferred.
 
 Finally, submit a PR of your draft via your fork of this repository.
 
