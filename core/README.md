@@ -14,10 +14,10 @@
 * **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
   ready for implementation. It is still possible that the CAP may be rejected post-implementation
   due to the issues that may arise during an initial implementation.
-* **Implementation Review** - A CAP that has been implemented in a Stellar Core implementation.
-  During this time the proposal is brought up again before the protocol group for additional
-  comment, where it is possible that the proposal is rejected based on the issues that arise from
-  an implementation.
+* **Implementation Review** - A CAP that has a preliminary implementation, often in the form of a pull
+  request against an existing Stellar Core repository. During this time the proposal is brought up
+  again before the protocol group for additional comment, where it is possible that the proposal is
+  rejected based on the issues that arise from an implementation.
 * **Implemented** - A CAP that has been implemented with no issues brought up during
   **Implementation Review**, with the protocol version specified in the CAP. It will graduate to
   **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
