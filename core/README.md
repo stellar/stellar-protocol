@@ -45,6 +45,7 @@
 | [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
 | [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
 | [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
+| [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Implemented |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Implemented |
 
 ### Draft Proposals
@@ -61,7 +62,6 @@
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0023](cap-0023.md) | Two-Part Payments with BalanceEntry | Jonathan Jove | Draft |
-| [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Draft |
 | [cap_orbitlens_41fc89b6](cap_orbitlens_41fc89b6.md) | Disable Inflation Mechanism | OrbitLens | Draft |
 
 ### Rejected Proposals
