@@ -36,7 +36,6 @@
 | [SEP-0003](sep-0003.md) | Compliance Protocol | SDF | Standard | Active |
 | [SEP-0004](sep-0004.md) | Tx Status Endpoint | SDF | Standard | Final |
 | [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts | SDF | Standard | Final |
-
 | [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing | Interstellar | Standard | Final |
 | [SEP-0008](sep-0008.md) | Regulated Assets | Interstellar | Standard | Final |
 | [SEP-0009](sep-0009.md) | Standard KYC / AML Fields | SDF | Standard | Active |
