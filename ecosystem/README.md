@@ -63,7 +63,7 @@
 
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
-| [SEP-0006](sep-0006.md) | Anchor/Client Interoperability | SDF | Standard | Deprecated |
+| [SEP-0006](sep-0006.md) | Anchor/Client Interoperability | SDF | Standard | Deprecated in favor of SEP-24 |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Rejected |
 
 
