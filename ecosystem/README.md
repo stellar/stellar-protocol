@@ -35,7 +35,6 @@
 | [SEP-0002](sep-0002.md) | Federation Protocol | SDF | Standard | Final |
 | [SEP-0004](sep-0004.md) | Tx Status Endpoint | SDF | Standard | Final |
 | [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts | SDF | Standard | Final |
-| [SEP-0006](sep-0006.md) | Anchor/Client Interoperability | SDF | Standard | Active |
 | [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing | Interstellar | Standard | Final |
 | [SEP-0008](sep-0008.md) | Regulated Assets | Interstellar | Standard | Final |
 | [SEP-0009](sep-0009.md) | Standard KYC / AML Fields | SDF | Standard | Active |
@@ -43,6 +42,7 @@
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières | Standard | Active |
 | [SEP-0012](sep-0012.md) | Anchor/Client Customer Info Transfer | Interstellar | Standard | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
+| [SEP-0024](sep-0024.md) | Simplified Anchor/Client Interoperability | SDF | Standard | Active |
 
 ### Draft Proposals
 
@@ -62,6 +62,7 @@
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
 | [SEP-0003](sep-0003.md) | Compliance Protocol | SDF | Standard | Deprecated |
+| [SEP-0006](sep-0006.md) | Anchor/Client Interoperability | SDF | Standard | Deprecated in favor of SEP-24 |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Rejected |
 
 
