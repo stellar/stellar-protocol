@@ -33,7 +33,7 @@
 ## List of Proposals
 
 | Number | Title | Author | Status |
-| --- | --- | --- | --- |
+| ---- | --- | --- | --- |
 | [CAP-0001](cap-0001.md) | Bump Sequence | Nicolas Barry | Final |
 | [CAP-0002](cap-0002.md) | Transaction level signature verification | Nicolas Barry | Final |
 | [CAP-0003](cap-0003.md) | Asset-backed offers | Jonathan Jove | Final |
