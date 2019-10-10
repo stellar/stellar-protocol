@@ -47,6 +47,7 @@
 | [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Implemented |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Implemented |
+| [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Implemented |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -62,7 +63,7 @@
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0023](cap-0023.md) | Two-Part Payments with BalanceEntry | Jonathan Jove | Draft |
-| [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Implemented |
+
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
