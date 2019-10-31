@@ -45,9 +45,9 @@
 | [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Accepted |
 | [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
 | [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
-| [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Implemented |
-| [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Implemented |
-| [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Implemented |
+| [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
+| [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Final |
+| [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
