@@ -103,10 +103,7 @@ Draft a formal proposal using the [SEP Template](../sep-template.md), and submit
 repository. You should make sure to adhere to the following:
 
 * Use the following format for the filename of your draft:
-  `sep_{github_username}_{shorttitle}.md`
-  * `shorttitle` is a tiny description of the SEP.
-  * For example, a SEP by Github user `happycoder` with a proposal concerning new account deposits
-    would be titled `sep_happycoder_newaccountdeposit.md`.
+  `sep_{shorttitle}.md`, for example `sep_newaccountdeposit.md`
 * Make sure to place your SEP in the `ecosystem/` folder.
 * Include GitHub handles or emails for all authors listed.  GitHub handles are preferred.
 
