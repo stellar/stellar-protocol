@@ -2,7 +2,7 @@
 ## Preamble
 
 ```
-SEP: sep_msfeldstein_newaccountdeposit
+SEP: 0025
 Title: New account deposit
 Author: @msfeldstein
 Track: Standard
