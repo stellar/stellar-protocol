@@ -33,7 +33,6 @@
 | --- | --- | --- | --- | --- |
 | [SEP-0001](sep-0001.md) | stellar.toml specification | SDF | Standard | Active |
 | [SEP-0002](sep-0002.md) | Federation Protocol | SDF | Standard | Final |
-| [SEP-0003](sep-0003.md) | Compliance Protocol | SDF | Standard | Active |
 | [SEP-0004](sep-0004.md) | Tx Status Endpoint | SDF | Standard | Final |
 | [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts | SDF | Standard | Final |
 | [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing | Interstellar | Standard | Final |
@@ -62,6 +61,7 @@
 
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
+| [SEP-0003](sep-0003.md) | Compliance Protocol | SDF | Standard | Deprecated |
 | [SEP-0006](sep-0006.md) | Anchor/Client Interoperability | SDF | Standard | Deprecated in favor of SEP-24 |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Rejected |
 
