@@ -7,7 +7,7 @@ Author: Lobstr.co
 Track: Informational
 Status: Draft
 Created: 2019-11-20
-Discussion: <link to where discussion for this SEP is taking place, typically the mailing list>
+Discussion: https://groups.google.com/forum/#!topic/stellar-dev/kAqhpCMe96c
 ```
 
 ## Simple Summary
