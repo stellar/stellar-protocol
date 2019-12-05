@@ -30,7 +30,7 @@ Line feeds should not be added to the base64-encoded data.
 
 ## Example
 
-Encoding XDR messages as base64 can be done consistently in the following languages. These are examples, not an exhaustive list.
+These examples of base64-encoding XDR messages perform the encoding per the above specification. These are examples, not an exhaustive list of all programming langauges that are known to support the standard.
 
 ### Go
 ```go
