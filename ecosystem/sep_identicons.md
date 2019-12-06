@@ -36,6 +36,7 @@ Identicons can be used in the interface of products built on Stellar to improve 
 
 This SEP describes the algorithm used to generate the images and provides links to several reference implementations.
 
+Identicons should be used only as an additional tool in the application UI, to provide more context to the user and help prevent errors. A full public address should still be visible to the user and available for verification.
 
 ## Specification
 
@@ -44,7 +45,7 @@ The generator takes a public key ("G...") as an input.
 First, the public key is converted to a sequence of bytes, in a manner identical to the `keypair.rawPublicKey()` function of JS Stellar SDK. A portion of bytes from the raw public key in the position from 2 to 16 are used for the identicon generation (`keypair.rawPublicKey().slice(2,16)`), while the remaining bytes are ignored.
 
 The first byte of that slice is used to pick a color for the identicon.  
-The byte value is used to determine hue parameter in the HSV color scheme, with the static values for saturation and value parameters.  Hence, the identicon may be colored in one of the 256 colors.
+The byte value is used to determine hue parameter in the HSV color scheme, with the static values for saturation and value parameters.  Hence, the identicon may be colored in one of the 256 colors. Default values for saturation and lightness parameters are 0.7 and 0.8 respectively, but developers may adjust the resulting color scheme, for example, to match the night mode theme.
 
 The remaining bytes are used to generate a 7x7 matrix, with a vertical symmetry, where each cell is either filled with selected color or left blank, depending on the value of individual bits in the bytes sequence.
 
@@ -78,7 +79,7 @@ Good algorithm for generating identicons should have the following properties:
 Each identicon image is a square consisting of 7x7 mono colored blocks (pixels).  
 Identicons have a vertical line of symmetry, which makes it's easier to memorize them.
 
-The images are using PNG format, which is efficient for images with mono colored blocks and supported on most platforms.
+Existing implementations are using PNG output format, which is efficient for images with mono colored blocks and supported on most platforms. Depending on the needs, developers may also use vector formats (like SVG) to achieve better scaling quality.
 The resulting images have a size of about 1KB.  
 
 Alternative implementations of identicons in other blockchain protocols:
@@ -88,11 +89,9 @@ Alternative implementations of identicons in other blockchain protocols:
 
 ## Security Concerns
 
-The total number of different identicons is `256*2^(3*7+7)=68,719,476,736`, as the whole identicon can be colored in any of the 256 colors and the structure can be defined by 3 left columns and a central column (due to vertical symmetry). Each column has 7 pixels, each pixel can be in one of 2 states: filled or empty.
+The total number of different identicons is `256*2^(4*7)=68,719,476,736`, as the whole identicon can be colored in any of the 256 colors and the structure can be defined by 3 left columns and a central column (due to vertical symmetry). Each column has 7 pixels, each pixel can be in one of 2 states: filled or empty.
 
 However, the number of existing public keys greatly exceeds the amount of different identicons.  
 So, collisions are possible - different public keys may have the same identicon.
 
 For most practical purposes the probability of these collisions is rather low, as there are over 68 billion possible identicons.
-
-Still, identicons should be used only as an additional tool in the application UI, to provide more context to the user and help prevent errors. A full public address should still be visible to the user and available for verification.
