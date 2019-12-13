@@ -62,7 +62,8 @@
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
-| [CAP-0023](cap-0023.md) | Two-Part Payments with BalanceEntry | Jonathan Jove | Draft |
+| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Draft |
+| [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Draft |
 
 
 ### Rejected Proposals
