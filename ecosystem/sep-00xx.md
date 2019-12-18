@@ -28,7 +28,84 @@ Padding must always be used, and never removed from the message.
 
 Line feeds should not be added to the base64-encoded data.
 
-## Example
+## Test Cases
+
+### Valid Encoding
+
+#### No Padding
+
+Base64 Encoded Message:
+```
+AAAABgABAvD+/wAA
+```
+
+Decoded Message:
+```
+00000000  00 00 00 06 00 01 02 f0  fe ff 00 00              |............|
+```
+
+#### One Character Padding
+
+Base64 Encoded Message:
+```
+AAAABAABAvA=
+```
+
+Decoded Message:
+```
+00000000  00 00 00 04 00 01 02 f0                           |........|
+```
+
+#### Two Character Padding
+
+Base64 Encoded Message:
+```
+AAAACgABAvD+/wAAAAAAAA==
+```
+
+Decoded Message:
+```
+00000000  00 00 00 0a 00 01 02 f0  fe ff 00 00 00 00 00 00  |................|
+```
+
+#### No Line Feeds
+
+Base64 Encoded Message:
+```
+AAAASwD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wA=
+```
+
+Decoded Message:
+```
+00000000  00 00 00 4b 00 fe ff 00  fe ff 00 fe ff 00 fe ff  |...K............|
+00000010  00 fe ff 00 fe ff 00 fe  ff 00 fe ff 00 fe ff 00  |................|
+00000020  fe ff 00 fe ff 00 fe ff  00 fe ff 00 fe ff 00 fe  |................|
+00000030  ff 00 fe ff 00 fe ff 00  fe ff 00 fe ff 00 fe ff  |................|
+00000040  00 fe ff 00 fe ff 00 fe  ff 00 fe ff 00 fe ff 00  |................|
+```
+
+### Invalid Encoding
+
+#### No Padding when Required
+
+```
+AAAACgABAvD+/wAAAAAAAA
+```
+
+#### Alternate Alphabet (e.g. URL/Filename Safe Alphabet)
+
+```
+AAAACgABAvD-_wAAAAAAAA==
+```
+
+#### Line Feeds
+
+```
+AAAASwD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wD+
+/wD+/wD+/wD+/wD+/wD+/wD+/wD+/wA=
+```
+
+## Example Implementations
 
 These examples of base64-encoding XDR messages perform the encoding per the above specification. These are examples, not an exhaustive list of all programming langauges that are known to support the standard.
 
