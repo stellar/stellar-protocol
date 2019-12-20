@@ -43,6 +43,7 @@
 | [SEP-0012](sep-0012.md) | Anchor/Client Customer Info Transfer | Interstellar | Standard | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
 | [SEP-0024](sep-0024.md) | Simplified Anchor/Client Interoperability | SDF | Standard | Active |
+| [SEP-0028](sep-0028.md) | XDR Base64 Encoding | SDF | Standard | Final |
 
 ### Draft Proposals
 
