@@ -66,6 +66,7 @@
 | [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Draft |
 | [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Draft |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
+| [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
