@@ -41,9 +41,11 @@
 | [SEP-0010](sep-0010.md) | Stellar Web Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières | Standard | Active |
 | [SEP-0012](sep-0012.md) | Anchor/Client Customer Info Transfer | Interstellar | Standard | Active |
+| [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
 | [SEP-0024](sep-0024.md) | Simplified Anchor/Client Interoperability | SDF | Standard | Active |
 | [SEP-0028](sep-0028.md) | XDR Base64 Encoding | SDF | Standard | Final |
+| [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
 
 ### Draft Proposals
 
@@ -53,12 +55,11 @@
 | [SEP-0015](sep-0015.md) | Attachment Convention | Interstellar | Standard | Draft |
 | [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p) | Jeremy Rubin | Standard | Draft |
 | [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based) | Tom Quisel | Standard | Draft |
-| [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Draft |
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission | Paul Selden, Nikhil Saraf | Standard | Draft |
 | [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing | Mister.Ticot | Informational | Draft |
 | [SEP-0022](sep-0022.md) | IPFS Support | Samuel B. Sendelbach | Informational | Draft |
 | [SEP-0023](sep-0023.md) | Augmented strkey format for multiplexed addresses | David Mazières and Tomer Weller | Standard | Draft |
-| [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Draft |
+
 
 
 ### Rejected and Deprecated Proposals
