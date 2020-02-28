@@ -5,8 +5,8 @@
 <h1>Stellar Protocol</h1>
 </div>
 <p align="center">
-<a href="./core"><img alt="Docs: CAPs" src="https://img.shields.io/badge/docs-CAPs-blue" /></a>
-<a href="./ecosystem"><img alt="Docs: SEPs" src="https://img.shields.io/badge/docs-SEPs-blue" /></a>
+<a href="./core/README.md"><img alt="Docs: CAPs" src="https://img.shields.io/badge/docs-CAPs-blue" /></a>
+<a href="./ecosystem/README.md"><img alt="Docs: SEPs" src="https://img.shields.io/badge/docs-SEPs-blue" /></a>
 </p>
 
 This repository is home to **Core Advancement Proposals** (CAPs) and **Stellar Ecosystem Proposals**
