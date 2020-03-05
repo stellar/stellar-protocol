@@ -58,7 +58,6 @@
 | [CAP-0010](cap-0010.md) | Fee Bump Account | Jeremy Rubin | Draft |
 | [CAP-0011](cap-0011.md) | Relative Account Freeze | Jeremy Rubin | Draft |
 | [CAP-0012](cap-0012.md) | Deterministic accounts and creatorTxID | David Mazières | Draft |
-| [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Draft |
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
@@ -72,6 +71,7 @@
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
+| [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Rejected |
 
 # Contribution Process
 
