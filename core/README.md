@@ -48,6 +48,8 @@
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Final |
 | [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
+| [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Accepted |
+| [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -62,10 +64,8 @@
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0023](cap-0023.md) | Two-Part Payments with PreparedTrustLineEntry and ClaimableBalanceEntry | Jonathan Jove | Draft |
-| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Draft |
-| [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | FCP |
+| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | FCP |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
-| [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | FCP |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
