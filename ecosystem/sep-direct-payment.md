@@ -90,10 +90,9 @@ This protocol involves the transfer of value, and so HTTPS is required for all e
 
 ## API Endpoints
 
-* [`GET /info`](#info): required
-* [`POST /send`](#send): required
-* [`GET /transactions`](#transaction-history): required
-* [`GET /transaction`](#single-historical-transaction): required
+* [`GET /info`](#info)
+* [`POST /send`](#send)
+* [`GET /transaction`](#single-historical-transaction)
 
 ### Info
 #### Request
