@@ -23,7 +23,7 @@ This proposal facilitates the ability for anchors to build a rail between two re
 
 Alice, in Nigeria, wants to send money to Bob in Europe. Alice signs up with NigeriaPay to make this payment to send money directly into Bob’s bank account. Bob doesn’t need to do anything, or know anything about this payment, besides letting Alice know what his bank account information is. Alice only needs to deal with her anchor (NigeriaPay).
 
-Cowrie will utilize its European rail, enabled with EuroPay Anchor service, to move the money to EuroPay in order to deposit it into Bob’s bank account.
+NigeriaPay will utilize its European rail, enabled with EuroPay Anchor service, to move the money to EuroPay in order to deposit it into Bob’s bank account.
 
 ## Prerequisites
 
