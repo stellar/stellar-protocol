@@ -84,7 +84,9 @@ This protocol involves the transfer of value, and so HTTPS is required for all e
 1. Once all needed information is provided and the receiving anchor is ready to complete this transaction, the `POST /send` call will return a `200` status along with information needed to complete the transaction over the stellar network.
 1. The sending anchor should collect the fiat from the sending client, and perform the specified stellar transaction to send the money to the receiving anchor.  This is usually a path payment, but can be done with a regular payment as well, so long as the receiving anchor gets the token they expect.
 1. Once the stellar transaction is completed, the receiving anchor should deposit the money in the receivers bank account.
-1. The sending anchor can query the status of this transaction via the [`/transaction`](#transaction) endpoint, and should communicate updates to the sending client as that progresses.
+1. If the receiver finds out during a bank deposit that some of the receivers information is incorrect, the transaction should be placed in the `pending_info_update` status so the sender can correct it.
+1. The sending anchor can query the status of this transaction via the [`/transaction`](#transaction) endpoint, and should communicate updates to the sending client as that progresses.  If the status is `pending_info_update` it should request that info from the sending client and provide it to the receiving anchor via the [`/update`](#update) endpoint.
+1. Once the [`/transaction`](#transaction) endpoint returns a `completed` status the transaction has been completed.
 
 
 
@@ -93,6 +95,7 @@ This protocol involves the transfer of value, and so HTTPS is required for all e
 * [`GET /info`](#info)
 * [`POST /send`](#send)
 * [`GET /transaction`](#single-historical-transaction)
+* [`PUT /update`](#update-transaction)
 
 ### Info
 #### Request
@@ -210,7 +213,7 @@ Name | Type | Description
 -----|-----|------
 `require_receiver_info` | array | A list of [SEP-9](sep-0009.md) values requested for the receiving client
 `amount` | number | Amount of payment in destination currency
-`fields` | object | A key-pair object containing the values requested by the receiving anchor in their `/info` endpoint
+`fields` | object | A key-pair object containing the values requested by the receiving anchor in their `/info` endpoint, broken out by sender, receiver, and transacton.
 `lang` | string | (optional) Defaults to `en`. Language code specified using [ISO 639-1](https://en.wikipedia.org/wiki/ISO_639-1).  Any human readable error codes or field descriptions will be returned in this language.
 
 #### Responses
@@ -233,7 +236,7 @@ In the case where the sending anchor didn't provide all the information requeste
 Name | Type | Description
 -----|------|------------
 `error`| string | `customer_info_needed`
-`fields` | object | A key-value pair of missing fields in the same format as fields described in [`/info`](#info)
+`fields` | object | A key-value pair of missing fields in the same format as fields described in [`/info`](#info), broken out by sender, receiver, and transacton.
 
 ##### Error (403 Forbidden)
 
@@ -287,11 +290,14 @@ Name | Type | Description
 `stellar_transaction_id` | string | (optional) transaction_id on Stellar network of the transfer that either initiated the payment.
 `external_transaction_id` | string | (optional) ID of transaction on external network that either completes the payment into the receivers account.
 `refunded` | boolean | (optional) Should be true if the transaction was refunded. Not including this field means the transaction was not refunded.
+`required_info_message` | string | (optional) A human readable message indicating any errors that require updated information from the sender
+`required_info_updates` | object | (optional) A set of fields that require upate from the sender, in the same format as described in [/info](#info).  Fields should be broken out by sender, receiver, and transacton as in /info.
 
 `status` should be one of:
 
 * `pending_sender` -- awaiting payment to be initiated by sending anchor
 * `pending_stellar` -- transaction has been submitted to Stellar network, but is not yet confirmed.
+* `pending_info_update` -- certain pieces of information need to be updated by the sending anchor.  See [pending info update](#pending-info-update) section
 * `pending_receiver` -- payment is being processed by the receiving anchor
 * `pending_external` -- payment has been submitted to external network, but is not yet confirmed.
 * `completed` -- deposit/withdrawal fully completed.
@@ -314,4 +320,75 @@ Example response:
 }
 ```
 
+
+```json
+{
+  "transaction": {
+      "id": "82fhs729f63dh0v4",
+      "status": "pending_info_update",
+      "status_eta": 3600,
+      "external_transaction_id": "ABCDEFG1234567890",
+      "amount_in": "18.34",
+      "amount_out": "18.24",
+      "amount_fee": "0.1",
+      "started_at": "2017-03-20T17:05:32Z",
+      "required_info_message": "The bank reported an incorrect name for the receiver, please ensure the name matches legal documents",
+      "required_info_fields": {
+         "receiver": {
+            "first_name":"The receiver's first name",
+            "last_name":"The receiver's last name"
+         }
+      }
+    }
+}
+```
+
 If the transaction cannot be found, the endpoint should return a `404 NOT FOUND` result.
+
+#### Pending info update
+
+In certain cases the receiver might need to request updated information, for example if the bank tells them that the provided receiver name is incorrect, or missing a middle initial.  In this case, the transaction should go into the `pending_info_update` state until the sender provides updates.
+
+### Update
+
+The `/update` endpoint allows for updating certain pieces of information that need to be corrected.  For example a bank may reject a deposit because a name is mis-spelled, or a middle initial is missing.  This allows transactions to be updated instead of errored and refunded.
+
+```
+PUT DIRECT_PAYMENT_SERVER/update
+```
+
+Request parameters:
+
+Name | Type | Description
+-----|------|------------
+`id` | string | The id of the transaction.
+`fields` | object | A key-pair object containing the values requested to be updated by the receiving anchor.
+
+#### Example
+
+```
+PUT DIRECT_PAYMENT_SERVER/update
+
+{
+   id: "82fhs729f63dh0v4",
+   fields: {
+      receiver: {
+         first_name: "Bob",
+         last_name: "Jones"
+      }
+   }
+}
+```
+
+#### Success 200 OK
+
+If the information was successfully updated, respond with a 200 status code, and return the transaction json in the body. The transaction should return to `pending_receiver`, though it is possible that the information could still need to be updated again.
+
+#### Error 400
+
+If the information was malformed, or if the sender tried to update data that isn't updateable, return a 400 with an object containing an error message.
+
+```
+{
+   "error": "Supplied fields do not allow updates, please only try to updates the fields requested"
+}
