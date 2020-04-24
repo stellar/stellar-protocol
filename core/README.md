@@ -43,7 +43,7 @@
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Final |
 | [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
-| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Accepted |
+| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Implemented |
 | [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Implemented |
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Implemented |
 
