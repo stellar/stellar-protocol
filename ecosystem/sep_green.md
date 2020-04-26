@@ -116,8 +116,8 @@ commands:
           - create_account:
               account: *joe
               starting_balance: "1000"
-              signatures:
-                  - *alice
+      signatures:
+          - *alice
   # you can create single op transactions faster using helpers:
   - create_account:
       account: *joe
@@ -154,6 +154,17 @@ commands:
       <<: [*usd_eur_market, *passive_source] # you can extend multiple templates
       price: {n: 100, d: 400}
       amount: "3000"
+  # you can also anchor transactions to use as preauth tx signer
+  - transaction: &preauth
+      submit: false # don't submit - build and use as a signer
+      source: *alice
+      fee: 200
+      seqnum: 1001
+      operations:
+          - create_account:
+              account: *joe
+              starting_balance: "1000"
+  - add_signer: {source: *alice, signer: *preauth, weight: 20}
   # commands below are not building transactions but print information
   # about the current state of the ledger or history, useful in playgrounds,
   # can be ignored in headless.
