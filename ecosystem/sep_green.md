@@ -41,13 +41,13 @@ Scenario file consists of top-level `version` value and `commands` map. The list
 
 Creates a new account using a network master account. Most often used to init accounts participating in a scenario and as an anchor to use in transactions and signing.
 
-Param Name | Description
--|-
-`random` | Creates a random account
-`secret_key` | Secret key of the account
-`public_key` | Public key of the account
-`id` | ID if an account is a multiplexed account
-`create` | Set to `false` to not create an account (ex. to use as a signer only).
+| Param Name   | Description                                                            |
+|--------------|------------------------------------------------------------------------|
+| `random`     | Creates a random account                                               |
+| `secret_key` | Secret key of the account                                              |
+| `public_key` | Public key of the account                                              |
+| `id`         | ID if an account is a multiplexed account                              |
+| `create`     | Set to `false` to not create an account (ex. to use as a signer only). |
 
 Only one of `random`, `secret_key`, `public_key` are allowed.
 
@@ -55,19 +55,19 @@ Only one of `random`, `secret_key`, `public_key` are allowed.
 
 Transaction command builds and submits a new transaction. The only required param is `operations`.
 
-Param Name | Description
--|-
-`source` | Anchor to an `account`, if not present defaults to network master account.
-`operations` | List of operations
+| Param Name   | Description                                                                |
+|--------------|----------------------------------------------------------------------------|
+| `source`     | Anchor to an `account`, if not present defaults to network master account. |
+| `operations` | List of operations                                                         |
 
 ### `create_account` command
 
 Create account is a helper that creates a transaction with a single `create_account` operation. Can be extended with `transaction` params like `memo` or `fee`.
 
-Param Name | Description
--|-
-`account` | Anchor to an account to create
-`starting_balance` | Starting balance
+| Param Name         | Description                    |
+|--------------------|--------------------------------|
+| `account`          | Anchor to an account to create |
+| `starting_balance` | Starting balance               |
 
 #### Difference between `create_account` and `account` commands
 
