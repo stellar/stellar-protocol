@@ -81,10 +81,6 @@ Adds a new signer (sends a transaction with a single `set_options` operation). I
 
 This command is ignored, it's only used for creating map templates that can be used for building other commands. See examples below.
 
-### `print_account` command
-
-Prints current account state. Useful in playgrounds to follow changes to a ledger entry or history data. Can be ignored in headless environments.
-
 ### Example
 
 See this example in https://yaml-online-parser.appspot.com/ to understand how it will be parsed.
@@ -165,12 +161,6 @@ commands:
               account: *joe
               starting_balance: "1000"
   - add_signer: {source: *alice, signer: *preauth, weight: 20}
-  # commands below are not building transactions but print information
-  # about the current state of the ledger or history, useful in playgrounds,
-  # can be ignored in headless.
-  - print_market: *usd_eur_market
-  - print_account: *alice
-  - print_transactions: *alice
 ```
 
 ## Design Rationale
