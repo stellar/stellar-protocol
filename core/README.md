@@ -62,6 +62,7 @@
 | [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Draft |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Draft |
+| [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
