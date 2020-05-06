@@ -13,7 +13,7 @@ Version 1.0.0
 
 ## Simple Summary
 
-This SEP defines a protocol for enabling fiat to fiat payments between two real world accounts, facilitated by two different anchors.
+This SEP defines a protocol for enabling fiat to fiat payments between two financial accounts that exist outside of the Stellar network. The payments are facilitated by two anchors.
 
 ## Abstract
 
