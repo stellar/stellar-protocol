@@ -172,6 +172,7 @@ Each `fields` sub-object contains a key for each field name and an object with t
 
 * `description`: description of field to show to user.
 * `choices`: list of possible values for the field.
+* `optional`: true if this field is not required to be provided
 
 ### Send
 
@@ -229,7 +230,7 @@ Name | Type | Description
 `stellar_memo` | string | The memo to attach to the stellar payment
 `receiver_info` | object | Key-value pairs of the information the sender requested via `require_receiver_info`
 
-##### Customer Info Needed (403 forbidden)
+##### Customer Info Needed (400 Bad Request)
 
 In the case where the sending anchor didn't provide all the information requested in `/info`, or if the transacton requires extra information, the request should fail with a 403 status code and the following body in JSON format.  The sender should then retry the entire request including all the previously sent fields plus the fields described in the response.
 
@@ -238,7 +239,7 @@ Name | Type | Description
 `error`| string | `customer_info_needed`
 `fields` | object | A key-value pair of missing fields in the same format as fields described in [`/info`](#info), broken out by sender, receiver, and transacton.
 
-##### Error (403 Forbidden)
+##### Error (400 Bad Request)
 
 In the case where the transacton just cannot be completed, return an error response with a JSON object containing an `error` key describing the error in human readable format in the language indicated in the request.
 
@@ -352,6 +353,8 @@ In certain cases the receiver might need to request updated information, for exa
 ### Update
 
 The `/update` endpoint allows for updating certain pieces of information that need to be corrected.  For example a bank may reject a deposit because a name is mis-spelled, or a middle initial is missing.  This allows transactions to be updated instead of errored and refunded.
+
+This endpoint should only be used when the receiver requests more info via the `pending_info_update` status.  If the sender tries to update at a time when no info is requested the receiver should fail with an error response.
 
 ```
 PUT DIRECT_PAYMENT_SERVER/update
