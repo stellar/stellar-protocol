@@ -61,15 +61,15 @@
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Draft |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
-| [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |
-| [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 | [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Rejected |
+| [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
+| [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Rejected |
 
 # Contribution Process
 
