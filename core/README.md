@@ -43,7 +43,7 @@
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Final |
 | [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
-| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Accepted |
+| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Implemented |
 | [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Implemented |
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Implemented |
 
@@ -59,14 +59,17 @@
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
-| [CAP-0023](cap-0023.md) | Two-Part Payments with PreparedTrustLineEntry and ClaimableBalanceEntry | Jonathan Jove | Draft |
+| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Draft |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
+| [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
+| [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |
-| [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 | [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Rejected |
+| [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
+| [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Rejected |
 
 # Contribution Process
 
