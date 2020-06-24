@@ -1,11 +1,19 @@
-Stellar Protocol
-================
+<div align="center">
+<img alt="Stellar" src="https://github.com/stellar/.github/raw/master/stellar-logo.png" width="558" />
+<br/>
+<strong>Creating equitable access to the global financial system</strong>
+<h1>Stellar Protocol</h1>
+</div>
+<p align="center">
+<a href="./core/README.md"><img alt="Docs: CAPs" src="https://img.shields.io/badge/docs-CAPs-blue" /></a>
+<a href="./ecosystem/README.md"><img alt="Docs: SEPs" src="https://img.shields.io/badge/docs-SEPs-blue" /></a>
+</p>
 
-This repository contains **Core Advancement Proposals** (CAPs) and **Stellar Ecosystem Proposals**
+This repository is home to **Core Advancement Proposals** (CAPs) and **Stellar Ecosystem Proposals**
 (SEPs).
 
 Similar to [BIPs](https://github.com/bitcoin/bips) and [EIPs](https://github.com/ethereum/EIPs),
-CAPs and SEPs are the proposals of standards to improve Stellar protocol and related client APIs.
+CAPs and SEPs are the proposals of standards to improve the Stellar protocol and related client APIs.
 
 CAPs deal with changes to the core protocol of the Stellar network. Please see [the process for CAPs](core/README.md).
 
@@ -42,4 +50,8 @@ Example repository structure:
 └── sep-template.md
 ```
 
+## Contributing
+
 See [CONTRIBUTING](CONTRIBUTING.md) to learn how to contribute.
+
+[Stellar Development Foundation]: https://stellar.org
