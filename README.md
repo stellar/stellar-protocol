@@ -1,12 +1,12 @@
 <div align="center">
-<img alt="Stellar" src="https://www.stellar.org/old-content/2019/03/stellar-logo-solo-1.png" width="558" />
+<img alt="Stellar" src="https://github.com/stellar/.github/raw/master/stellar-logo.png" width="558" />
 <br/>
 <strong>Creating equitable access to the global financial system</strong>
 <h1>Stellar Protocol</h1>
 </div>
 <p align="center">
-<a href="./core"><img alt="Docs: CAPs" src="https://img.shields.io/badge/docs-CAPs-blue" /></a>
-<a href="./ecosystem"><img alt="Docs: SEPs" src="https://img.shields.io/badge/docs-SEPs-blue" /></a>
+<a href="./core/README.md"><img alt="Docs: CAPs" src="https://img.shields.io/badge/docs-CAPs-blue" /></a>
+<a href="./ecosystem/README.md"><img alt="Docs: SEPs" src="https://img.shields.io/badge/docs-SEPs-blue" /></a>
 </p>
 
 This repository is home to **Core Advancement Proposals** (CAPs) and **Stellar Ecosystem Proposals**
