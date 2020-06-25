@@ -61,6 +61,7 @@
 | [SEP-0022](sep-0022.md) | IPFS Support | Samuel B. Sendelbach | Informational | Draft |
 | [SEP-0023](sep-0023.md) | Augmented strkey format for multiplexed addresses | David Mazières and Tomer Weller | Standard | Draft |
 | [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin | Standard | Draft |
+| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Draft |
 | [SEP-????](sep-????.md) | Asset Address | Leigh McCulloch | Standard | Draft |
 
 
