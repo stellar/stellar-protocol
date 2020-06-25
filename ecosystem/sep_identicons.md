@@ -1,10 +1,9 @@
 ## Preamble
 
 ```
-SEP: To Be Assigned
+SEP: 0033
 Title: Identicons for Stellar Accounts
-Author: Lobstr.co
-Track: Informational
+Author: Lobstr.co, Gleb Pitsevich (@pitsevich)
 Status: Draft
 Created: 2019-11-20
 Discussion: https://groups.google.com/forum/#!topic/stellar-dev/kAqhpCMe96c
