@@ -59,10 +59,10 @@
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
-| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Draft |
+| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | FCP |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
-| [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Draft |
+| [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | FCP |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
