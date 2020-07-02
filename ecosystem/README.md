@@ -47,6 +47,7 @@
 | [SEP-0024](sep-0024.md) | Simplified Anchor/Client Interoperability | SDF | Standard | Active |
 | [SEP-0028](sep-0028.md) | XDR Base64 Encoding | SDF | Standard | Final |
 | [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
+| [SEP-0031](sep-0031.md) | Direct Payments | SDF | Standard | Active |
 
 ### Draft Proposals
 
