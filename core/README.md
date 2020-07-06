@@ -63,6 +63,7 @@
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | FCP |
+| [CAP-0034](cap-0034.md) | Single-Candidate Externalized Values | Terence Rokop | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
