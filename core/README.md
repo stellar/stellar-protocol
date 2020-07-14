@@ -35,17 +35,17 @@
 | [CAP-0004](cap-0004.md) | Improved Rounding for Cross Offer | Jonathan Jove | Final |
 | [CAP-0005](cap-0005.md) | Throttling and transaction pricing improvements | Nicolas Barry | Final |
 | [CAP-0006](cap-0006.md) | Add ManageBuyOffer Operation | Jonathan Jove | Final |
-| [CAP-0015](cap-0015.md) | Bump Fee Transactions | OrbitLens | Implemented |
+| [CAP-0015](cap-0015.md) | Fee Bump Transactions | OrbitLens | Final |
 | [CAP-0017](cap-0017.md) | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
-| [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Implemented |
+| [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Final |
 | [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
 | [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Final |
 | [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
-| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Implemented |
-| [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Implemented |
-| [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Implemented |
+| [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Final |
+| [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Final |
+| [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
