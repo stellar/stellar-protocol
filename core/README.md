@@ -40,14 +40,15 @@
 | [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Final |
 | [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
 | [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
-| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Accepted |
+| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Implemented |
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Final |
 | [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
 | [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Final |
 | [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Final |
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
-| [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Accepted |
+| [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Implemented |
+| [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Implemented |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -63,7 +64,6 @@
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
-| [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | FCP |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
