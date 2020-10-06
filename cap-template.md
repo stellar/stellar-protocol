@@ -3,7 +3,10 @@
 ```
 CAP: To Be Assigned
 Title: <CAP title>
-Author: <List of authors' names and optionally, email addresses, separated by commas>
+Working Group:
+    Owner: <Person accountable for the CAP - name/email address/github alias>
+    Recommender: <List of comma separated name/email address/github alias>
+    Consulted: <List of comma separated name/email address/github alias>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
 Discussion: <link to where discussion for this CAP is taking place, typically the mailing list>
@@ -13,6 +16,32 @@ Protocol version: TBD
 ## Simple Summary
 "If you can't explain it simply, you don't understand it well enough." Please provide a simplified
 and layman-accessible explanation of the CAP.
+
+## Working Group
+
+This section describes the composition of the working group.
+
+The following sections are examples of typical changes, and working group composition.
+
+### Semantic protocol changes
+
+For changes that make semantic changes to the protocol, like the addition or change of operations.
+
+The working group must include a representative set of
+  * downstream systems developers (Horizon, block explorers, etc)
+  * SDK developers (golang, Javascript)
+
+In some cases, application developers (or somebody representing their interest) can also be involved.
+
+The motivation section should clearly show how the changes will be used end to end.
+
+### Ledger and historical subsystem changes
+
+The working group must include a representative set of
+  * downstream systems developers (Horizon, block explorers, etc)
+  * node operators
+
+The motivation section should articulate the positive impact on stakeholders (the "Protocol Upgrade Transition" section can focus on other aspects).
 
 ## Motivation
 You should clearly explain why the existing protocol specification is inadequate to address the
@@ -30,6 +59,13 @@ A short (~200 word) description of the technical issue being addressed.
 ## Specification
 The technical specification should describe the syntax and semantics of any new feature.
 
+### xdr changes
+This section includes all changes to the xdr, presented as a "diff"
+against the latest version of the protocol (or in some rare exception,
+on top of a different CAP).
+For large changes, it may be beneficial to link to actual xdr files copied
+in the relevant "contents" folder.
+
 ## Design Rationale
 The rationale fleshes out the specification by describing what motivated the design and why
 particular design decisions were made. It should describe alternate designs that were considered
@@ -37,11 +73,26 @@ and related work, e.g. how the feature is supported in other protocols. The rati
 provide evidence of consensus within the community, and should discuss important objections or
 concerns raised during discussion.
 
-## Backwards Incompatibilities
+## Protocol Upgrade Transition
+Typically CAPs have a direct impact on core that should be well understood,
+and indirect impact on other systems in the ecosystem (Horizon, SDKs,
+application, etc).
+
+The following sections look at common challenges associated with those
+protocol transitions.
+
+### Backwards Incompatibilities
 All CAPs that introduce backwards incompatibilities must include a section describing these
-incompatibilities and their severity. The CAP must explain how the author proposes to deal with
-these incompatibilities. CAP submissions with an insufficient discussion of backwards compatibility
+incompatibilities and their severity.
+
+The CAP must propose how to deal with these incompatibilities, potentially pointing to other standard documents that complements the CAP (for example SEPs).
+
+CAP submissions with an insufficient discussion of backwards compatibility
 may be rejected outright.
+
+### Resource Utilization
+Reasonable effort should be made to understand the impact of the CAP on
+resource utilization like CPU, memory, network bandwidth and disk/database.
 
 ## Security Concerns
 All CAPs should carefully consider areas where security may be a concern, and document them
