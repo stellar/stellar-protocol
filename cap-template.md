@@ -5,7 +5,7 @@ CAP: To Be Assigned
 Title: <CAP title>
 Working Group:
     Owner: <Person accountable for the CAP - name/email address/github alias>
-    Recommender: <List of comma separated name/email address/github alias>
+    Authors: <List of comma separated name/email address/github alias>
     Consulted: <List of comma separated name/email address/github alias>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
@@ -21,21 +21,35 @@ and layman-accessible explanation of the CAP.
 
 This section describes the composition of the working group.
 
-The following sections are examples of typical changes, and working group composition.
+### Recommended structure
 
-### Semantic protocol changes
+The recommended structure of the working group is based on the [RACI](https://en.wikipedia.org/wiki/Responsibility_assignment_matrix#Role_distinction) model.
 
-For changes that make semantic changes to the protocol, like the addition or change of operations.
+The model contains the following roles:
+  * Authors - ("Recommender" in RACI) group of people that author the CAP with the owner
+  * Owner - ("Accountable" in RACI) the person that owns the CAP. This includes
+    * signing off on any changes to the CAP and
+    * moving the CAP through the [CAP process](core/README.md)
+  * Consulted - list of people that needs to be consulted and provide feedback
+  * Informed - not explicitely listed, the developer mailing list allows for that.
+
+### Example working group composition
+
+#### Semantic protocol changes
+
+Example:
+  * adding or modifying operations
+  * modifying the behavior of operations
 
 The working group must include a representative set of
   * downstream systems developers (Horizon, block explorers, etc)
-  * SDK developers (golang, Javascript)
+  * SDK developers (golang, Javascript, etc)
 
 In some cases, application developers (or somebody representing their interest) can also be involved.
 
 The motivation section should clearly show how the changes will be used end to end.
 
-### Ledger and historical subsystem changes
+#### Ledger and historical subsystem changes
 
 The working group must include a representative set of
   * downstream systems developers (Horizon, block explorers, etc)
@@ -59,11 +73,11 @@ A short (~200 word) description of the technical issue being addressed.
 ## Specification
 The technical specification should describe the syntax and semantics of any new feature.
 
-### xdr changes
-This section includes all changes to the xdr, presented as a "diff"
+### XDR changes
+This section includes all changes to the XDR (`.x` files), presented as a "diff"
 against the latest version of the protocol (or in some rare exception,
 on top of a different CAP).
-For large changes, it may be beneficial to link to actual xdr files copied
+For large changes, it may be beneficial to link to actual XDR files copied
 in the relevant "contents" folder.
 
 ## Design Rationale

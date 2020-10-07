@@ -84,7 +84,7 @@ towards pushing Stellar's protocol development forward adhere to the following:
   aligns with those goals and values, it's unlikely to ever be implemented.
 - Gather feedback from discussion on the dev mailing list and other forums, and utilize it to begin
   a draft proposal, otherwise known as a CAP (Core Advancement Proposal).
-- Follow the proposal process listed below
+- Follow the proposal process listed below.
 
 ## Stellar Network Goals
 * **The Stellar Network should be secure and reliable, and should bias towards safety, simplicity,
@@ -181,15 +181,11 @@ The CAP and associated files will get renamed based on the latest
 CAP draft number before merging.
 
 #### Assembling a working group
+
 As your idea gets traction, you'll need to assemble a working group as
 to increase the chances of success that this CAP proceeds through the stages.
 
-The recommended structure of the working group is based on the [RACI](https://en.wikipedia.org/wiki/Responsibility_assignment_matrix#Role_distinction) model.
-
-The template contains the following roles:
-  * Recommender - group of people that author the CAP with the owner
-  * Owner - maps to "Accountable" in RACI, the person responsible for the CAP
-  * Consulted - list of people that needs to be consulted and provide feedback
+For more information on this, review the [working group section](../cap-template.md#working-group) of the CAP template.
 
 #### Iterating on the CAP
 
@@ -220,7 +216,7 @@ You may invite any other members of your working group.
 The protocol meetings will be used to decide on next step:
   * If the CAP has received support and general consensus, it is moved to `Awaiting Decision` ;
   * If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned ; 
-  * If for any reason the CAP gets abandonned, it gets a status of `Rejected`.
+  * If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
 
 ### Awaiting Decision -> Final Comment Period (FCP)
 * A vote will take place among the CAP Core Team.
