@@ -43,7 +43,7 @@ Example:
 
 The working group must include a representative set of
   * downstream systems developers (Horizon, block explorers, etc)
-  * SDK developers (golang, Javascript, etc)
+  * SDK developers (Go, Javascript, etc)
 
 In some cases, application developers (or somebody representing their interest) can also be involved.
 
