@@ -30,7 +30,7 @@ The model contains the following roles:
   * Owner - ("Accountable" in RACI) the person that owns the CAP. This includes
     * signing off on any changes to the CAP and
     * moving the CAP through the [CAP process](core/README.md)
-  * Consulted - list of people that needs to be consulted and provide feedback
+  * Consulted - list of people that need to be consulted and provide feedback
   * Informed - not explicitely listed, the developer mailing list allows for that.
 
 ### Example working group composition
