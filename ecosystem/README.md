@@ -66,7 +66,7 @@
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Draft |
 | [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors | Jake Urban and Leigh McCulloch | Standard | Final Comment Period |
 | [SEP-0035](sep-0035.md) | Operation IDs | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard | Draft |
-
+| [SEP-0036](sep-0036.md) | Regulated Assets Transacting | Howard Chen | Standard | Draft |
 
 
 ### Rejected and Deprecated Proposals
@@ -74,6 +74,7 @@
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
 | [SEP-0003](sep-0003.md) | Compliance Protocol | SDF | Standard | Deprecated |
+| [SEP-0008](sep-0008.md) | Regulated Assets | Interstellar | Standard | Deprecated |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Rejected |
 
 
