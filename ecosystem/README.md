@@ -66,6 +66,7 @@
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Draft |
 | [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors | Jake Urban and Leigh McCulloch | Standard | Final Comment Period |
 | [SEP-0035](sep-0035.md) | Operation IDs | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard | Draft |
+| [SEP-0036](sep-address-directory-api.md) | Address Directory API | OrbitLens | Informational | Draft |
 
 
 
