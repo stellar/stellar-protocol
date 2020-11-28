@@ -84,10 +84,7 @@ towards pushing Stellar's protocol development forward adhere to the following:
   aligns with those goals and values, it's unlikely to ever be implemented.
 - Gather feedback from discussion on the dev mailing list and other forums, and utilize it to begin
   a draft proposal, otherwise known as a CAP (Core Advancement Proposal).
-- Follow the proposal process listed below. If you're having difficulty moving the proposal
-  forward, talk to the buddy that's assigned the CAP; they'll often have guidance on how to move
-  things forward, as well as feedback regarding feasibility and how the proposal does or does not
-  align with the Stellar protocol's goals and values.
+- Follow the proposal process listed below.
 
 ## Stellar Network Goals
 * **The Stellar Network should be secure and reliable, and should bias towards safety, simplicity,
@@ -161,43 +158,65 @@ Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/
 Draft a formal proposal using the [CAP Template](../cap-template.md), and submit a PR to this
 repository. You should make sure to adhere to the following:
 
-* Use the following format for the filename of your draft: `cap_{github_username}_{shortsha256sum}.md`
-  * `shortsha256sum` is defined as the first 8 characters of the SHA-256 checksum.
-  * For example, a CAP by Github user `cryptocarnage` with a SHA-256 checksum of `a200f73c`
-    would be titled `cap_cryptocarnage_a200f73c.md`.
 * Make sure to place the draft in the `core/` folder.
+* Your CAP should be named `cap-TBD.md`
+* If your CAP requires images or other supporting files, they should be included in a sub-directory
+  of the `contents` folder for that CAP, such as `contents/cap-TBD/`. Links
+  should be relative, for example a link to an image from your CAP would be
+  `../contents/cap-TBD/image.png`.
 
 Finally, submit a PR of your draft via your fork of this repository.
 
 #### Additional Tips
 * Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
   established once the CAP has reached the state of *Final* and has been formally implemented.
-* If your CAP requires images or other supporting files, they should be included in a sub-directory
-  of the `contents` folder for that CAP, such as `contents/cap_cryptocarnage_a200f73/`. Links
-  should be relative, for example a link to an image from your CAP would be
-  `../contents/cap_cryptocarnage_a200f73/image.png`.
 
 ### Draft: Merging & Further Iteration
-From there, the following process will happen:
-* A CAP buddy is assigned and will merge your PR if you properly followed the steps above.
-  * They'll rename the above files to the latest CAP draft number before merging in the PR.
-  * They'll provide initial feedback, and help pull in any subject matter experts that will help in
-    pushing the CAP towards a final disposition.
-* You should continue the discussion of the draft CAP on the mailing list with an attempt at
-  reaching consensus. We welcome any additional PRs that iterate on the draft.
+From there, the following process will happen.
+
+#### CAP gets merged
+If you properly followed the steps above, your PR will get merged.
+
+The CAP and associated files will get renamed based on the latest
+CAP draft number before merging.
+
+#### Assembling a working group
+
+As your idea gets traction, you'll need to assemble a working group as
+to increase the chances of success that this CAP proceeds through the stages.
+
+For more information on this, review the [working group section](../cap-template.md#working-group) of the CAP template.
+
+#### Iterating on the CAP
+
+You should continue the discussion of the draft CAP on the mailing list
+with an attempt at reaching consensus.
+
+When opening PRs to modify the draft:
+* changes have to either be submitted by one of the authors (Recommender or Owner) or
+signed off by the authors
+* avoid discussions in the PR itself as it makes it more difficult for future contributors to understand the rational for changes.
+  * best is to always discuss in the mailing list.
+  * alternatively, a recap of the discussion that happened in the PR could be posted in the mailing list (but it's easy to forget to do this).
 
 ### Draft -> Awaiting Decision
-* When you're ready, you should submit a PR changing the status in the draft to `Awaiting Decision`.
-* Your buddy will continue to help provide guidance on the CAP throughout the discussion — and will
-  ultimately be responsible for deciding the CAP's next state:
-  * If the CAP hasn't been sufficiently commented on by the community, your buddy will not change
-    the status until its received enough discussion within the Stellar community.
-  * If the CAP has not received enough support as a draft despite multiple iterations, your buddy
-    can decide to mark the CAP as `Rejected` instead of moving forward to the rest of the core
-    team.
-  * If the CAP has received support and general consensus, it is moved to `Awaiting Decision`.
-* The CAP will be scheduled to be discussed at the next protocol meeting. As the author of the
-  proposal, you'll be invited to share your CAP and participate in discussion during the meeting.
+
+When your CAP received sufficient feedback from the community,
+you'll need to present it to a subset of the CAP Core Team for review.
+
+For that, when you're ready, you should submit a PR changing the status
+in the draft to `Awaiting Decision`.
+
+The CAP will be scheduled to be discussed at a protocol meeting.
+As the owner of the CAP, you will be invited to share your CAP
+and participate in discussion during the meeting.
+
+You may invite any other members of your working group.
+
+The protocol meetings will be used to decide on next step:
+  * If the CAP has received support and general consensus, it is moved to `Awaiting Decision` ;
+  * If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned ; 
+  * If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
 
 ### Awaiting Decision -> Final Comment Period (FCP)
 * A vote will take place among the CAP Core Team.
@@ -235,5 +254,3 @@ the network have accepted the implementation, it will move to **Final**.
 ## CAP Team Members
 
 **CAP Core Team**: Nicolas (SDF), Jed (SDF), David (SDF)
-
-**CAP Buddies**: Jon (SDF), Graydon (SDF), Orbitlens
