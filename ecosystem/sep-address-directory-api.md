@@ -7,7 +7,7 @@ Author: OrbitLens<orbit@stellar.expert>
 Track: Informational
 Status: Draft
 Created: 2020-09-04
-Discussion: <link to where discussion for this SEP is taking place, typically the mailing list>
+Discussion: https://groups.google.com/u/1/g/stellar-dev/c/vScYxlymqm0
 ```
 
 ## Simple Summary
