@@ -64,6 +64,9 @@
 | [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin | Standard | Draft |
 | [SEP-0032](sep-0032.md) | Asset Address | Leigh McCulloch | Standard | Draft |
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Draft |
+| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors | Jake Urban and Leigh McCulloch | Standard | Final Comment Period |
+| [SEP-0035](sep-0035.md) | Operation IDs | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard | Draft |
+| [SEP-0037](sep-0037.md) | Address Directory API | OrbitLens | Informational | Draft |
 
 
 
