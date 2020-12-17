@@ -65,6 +65,7 @@
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Draft |
+| [CAP-0035](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
