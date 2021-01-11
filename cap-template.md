@@ -80,6 +80,11 @@ on top of a different CAP).
 For large changes, it may be beneficial to link to actual XDR files copied
 in the relevant "contents" folder.
 
+### Semantics
+This section includes subsections, one for each logical change included in the XDR changes,
+that describes how each new or changed type functions and is used, and for new operations
+a step-by-step description of what happens when the operation is executed.
+
 ## Design Rationale
 The rationale fleshes out the specification by describing what motivated the design and why
 particular design decisions were made. It should describe alternate designs that were considered
