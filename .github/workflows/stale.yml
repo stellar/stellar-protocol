@@ -16,13 +16,5 @@ jobs:
           days-before-close: 5
           stale-issue-message: 'This issue is stale because it has been open for 30 days with no activity. It will be closed in 5 days unless the stale label is removed, or a comment is posted.'
           stale-pr-message: 'This pull request is stale because it has been open for 30 days with no activity. It will be closed in 5 days unless the stale label is removed, or a comment is posted.'
-          exempt-issue-labels: 
-          - needs draft
-          - needs pilot
-          - accepted
-          - blocked
-          exempt-pr-labels:
-          - needs draft
-          - needs pilot
-          - accepted
-          - blocked
+          exempt-issue-labels: 'needs draft,needs pilot,accepted,blocked'
+          exempt-pr-labels: 'needs draft,needs pilot,accepted,blocked'
