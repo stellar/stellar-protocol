@@ -2,6 +2,7 @@ name: 'Stale Issues'
 on:
   schedule:
     - cron: '30 1 * * *'
+  pull_request:
 
 jobs:
   stale:
