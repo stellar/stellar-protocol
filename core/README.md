@@ -65,7 +65,6 @@
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Draft |
-| [CAP-0036](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -73,6 +72,7 @@
 | [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Rejected |
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 | [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Rejected |
+| [CAP-0036](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Rejected |
 
 # Contribution Process
 
