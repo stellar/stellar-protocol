@@ -49,6 +49,7 @@
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
 | [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Implemented |
 | [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Implemented |
+| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -64,7 +65,6 @@
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
-| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | FCP: Acceptance |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
