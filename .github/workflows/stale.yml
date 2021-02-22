@@ -20,3 +20,4 @@ jobs:
           stale-pr-label: stale
           exempt-issue-labels: 'needs draft,needs pilot,accepted,blocked'
           exempt-pr-labels: 'needs draft,needs pilot,accepted,blocked'
+          remove-stale-when-updated: true
