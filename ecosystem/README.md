@@ -76,6 +76,7 @@
 | --- | --- | --- | --- | --- |
 | [SEP-0003](sep-0003.md) | Compliance Protocol | SDF | Standard | Deprecated |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal | @no, @ant, @manran, @pacngfar | Informational | Rejected |
+| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Standard | Rejected |
 
 
 # Contribution Process
