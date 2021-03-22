@@ -46,9 +46,11 @@
 | [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
 | [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Final |
 | [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Final |
+| [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Accepted |
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
 | [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Implemented |
 | [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Implemented |
+| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -62,10 +64,7 @@
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
 | [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
-| [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
-| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Draft |
-| [CAP-0036](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -73,6 +72,7 @@
 | [CAP-0013](cap-0013.md) | Change Trustlines to Balances | Dan Robinson | Rejected |
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 | [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Rejected |
+| [CAP-0036](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Rejected |
 
 # Contribution Process
 
