@@ -50,7 +50,7 @@
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
 | [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Final |
 | [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
-| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Accepted |
+| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Implemented |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
