@@ -66,6 +66,7 @@
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
+| [CAP-0038](cap-0038.md) | Automated Market Makers | Jonathan Jove | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
