@@ -15,8 +15,8 @@ Discussion: <link to where discussion for this SEP is taking place, typically th
 layman-accessible explanation of the SEP.
 
 ## Dependencies
-
 Should clearly list the dependencies this SEP has on other SEPs or CAPs. May go into further discussion about the circumstances of the dependency, although a list sufficient.
+
 ## Motivation
 Should clearly explain why the existing protocol specification is inadequate to address the problem
 that the SEP solves. SEP submissions without sufficient motivation may be rejected outright.
