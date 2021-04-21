@@ -8,7 +8,7 @@ Track: <Informational or Standard>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
 Discussion: <link to where discussion for this SEP is taking place, typically the mailing list>
-Dependencies: <SEPs and CAPs that this SEP depends on>
+Depends-On: <SEPs and CAPs that this SEP depends on>
 ```
 
 ## Simple Summary
