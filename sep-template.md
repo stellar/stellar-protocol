@@ -8,12 +8,16 @@ Track: <Informational or Standard>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
 Discussion: <link to where discussion for this SEP is taking place, typically the mailing list>
-Depends-On: <SEPs and CAPs that this SEP depends on>
 ```
 
 ## Simple Summary
 "If you can't explain it simply, you don't understand it well enough." Provide a simplified and
 layman-accessible explanation of the SEP.
+
+## Dependencies
+Should clearly list the dependencies this SEP has on other SEPs or CAPs. May
+go into further discussion about the circumstances of the dependency,
+although a list sufficient.
 
 ## Motivation
 Should clearly explain why the existing protocol specification is inadequate to address the problem
