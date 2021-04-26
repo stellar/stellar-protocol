@@ -48,6 +48,7 @@
 | [SEP-0028](sep-0028.md) | XDR Base64 Encoding | SDF | Standard | Final |
 | [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
 | [SEP-0031](sep-0031.md) | Direct Payments | SDF | Standard | Active |
+| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Active |
 
 ### Draft Proposals
 
@@ -63,10 +64,10 @@
 | [SEP-0023](sep-0023.md) | Augmented strkey format for multiplexed addresses | David Mazières and Tomer Weller | Standard | Draft |
 | [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin | Standard | Draft |
 | [SEP-0032](sep-0032.md) | Asset Address | Leigh McCulloch | Standard | Draft |
-| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Draft |
 | [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors | Jake Urban and Leigh McCulloch | Standard | Final Comment Period |
 | [SEP-0035](sep-0035.md) | Operation IDs | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard | Draft |
 | [SEP-0037](sep-0037.md) | Address Directory API | OrbitLens | Informational | Draft |
+| [SEP-0038](sep-0038.md) | Anchor RFQ API | Jake Urban and Leigh McCulloch | Standard | Draft |
 
 
 
