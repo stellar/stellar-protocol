@@ -76,7 +76,13 @@ The technical specification should describe the syntax and semantics of any new 
 ### XDR changes
 This section includes all changes to the XDR (`.x` files), presented as a "diff"
 against the latest version of the protocol (or in some rare exception,
-on top of a different CAP).
+on top of a different CAP). Diffs should be generated against on the XDR in the
+[stellar-core repository].
+
+To generate diffs, use the `git diff` command.
+
+To apply diffs, use the `git apply --reject --whitespace=fix` command.
+
 For large changes, it may be beneficial to link to actual XDR files copied
 in the relevant "contents" folder.
 
@@ -126,3 +132,5 @@ The implementation(s) must be completed before any CAP is given "Final" status, 
 completed before the CAP is accepted. While there is merit to the approach of reaching consensus on
 the specification and rationale before writing code, the principle of "rough consensus and running
 code" is still useful when it comes to resolving many discussions of API details.
+
+[stellar-core repository]: https://github.com/stellar/stellar-core
