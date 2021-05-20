@@ -31,23 +31,23 @@
 
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
-| [SEP-0001](sep-0001.md) | stellar.toml specification | SDF | Standard | Active |
+| [SEP-0001](sep-0001.md) | Stellar Info File | SDF | Standard | Active |
 | [SEP-0002](sep-0002.md) | Federation Protocol | SDF | Standard | Final |
 | [SEP-0004](sep-0004.md) | Tx Status Endpoint | SDF | Standard | Final |
 | [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts | SDF | Standard | Final |
+| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API | SDF | Standard | Active (Interactive components are deprecated in favor of SEP-24) |
 | [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing | Interstellar | Standard | Final |
-| [SEP-0006](sep-0006.md) | Anchor/Client Interoperability | SDF | Standard | Active (Interactive components are deprecated in favor of SEP-24) |
 | [SEP-0008](sep-0008.md) | Regulated Assets | Interstellar | Standard | Final |
-| [SEP-0009](sep-0009.md) | Standard KYC / AML Fields | SDF | Standard | Active |
-| [SEP-0010](sep-0010.md) | Stellar Web Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
+| [SEP-0009](sep-0009.md) | Standard KYC Fields | SDF | Standard | Active |
+| [SEP-0010](sep-0010.md) | Stellar Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières | Standard | Active |
-| [SEP-0012](sep-0012.md) | Anchor/Client Customer Info Transfer | Interstellar | Standard | Active |
+| [SEP-0012](sep-0012.md) | KYC API | Interstellar | Standard | Active |
 | [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
-| [SEP-0024](sep-0024.md) | Simplified Anchor/Client Interoperability | SDF | Standard | Active |
+| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal | SDF | Standard | Active |
 | [SEP-0028](sep-0028.md) | XDR Base64 Encoding | SDF | Standard | Final |
 | [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
-| [SEP-0031](sep-0031.md) | Direct Payments | SDF | Standard | Active |
+| [SEP-0031](sep-0031.md) | Cross-Border Payments API | SDF | Standard | Active |
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Active |
 
 ### Draft Proposals
