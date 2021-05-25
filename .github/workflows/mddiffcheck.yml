@@ -15,5 +15,5 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1
-    - run: go get github.com/stellar/mddiffcheck@latest
+    - run: GOPROXY=direct go get github.com/stellar/mddiffcheck@latest
     - run: mddiffcheck -repo https://github.com/stellar/stellar-core core/*.md
