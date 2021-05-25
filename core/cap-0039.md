@@ -61,7 +61,7 @@ accounts for contracts, such as payment channels.
 This patch of XDR changes is based on the XDR files in commit
 `b9e10051eafa1125e8d238a47e5915dad30c2640` of stellar-core.
 
-```diff check.base=b9e10051eafa1125e8d238a47e5915dad30c2640
+```diff mddiffcheck.base=b9e10051eafa1125e8d238a47e5915dad30c2640
 diff --git a/src/xdr/Stellar-ledger-entries.x b/src/xdr/Stellar-ledger-entries.x
 index 0e7bc842..68c52758 100644
 --- a/src/xdr/Stellar-ledger-entries.x
