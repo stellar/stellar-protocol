@@ -11,5 +11,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - run: go get github.com/stellar/mddiffcheck@latest
+    - run: go get github.com/stellar/mddiffcheck
     - run: mddiffcheck -repo https://github.com/stellar/stellar-core core/*.md
