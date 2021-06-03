@@ -44,7 +44,7 @@
 | [SEP-0012](sep-0012.md) | KYC API | Interstellar | Standard | Active |
 | [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
-| [SEP-0023](sep-0023.md) | Augmented strkey format for multiplexed addresses | David Mazières and Tomer Weller | Standard | Active |
+| [SEP-0023](sep-0023.md) | Augmented strkey format for multiplexed addresses | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Standard | Active |
 | [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal | SDF | Standard | Active |
 | [SEP-0028](sep-0028.md) | XDR Base64 Encoding | SDF | Standard | Final |
 | [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
