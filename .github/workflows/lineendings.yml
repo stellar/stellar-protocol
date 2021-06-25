@@ -1,0 +1,15 @@
+name: 'Check CAP Line Endings'
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+
+jobs:
+  lineendings:
+    runs-on: ubuntu-latest
+    steps:
+    - run: sudo apt-get update && sudo apt-get install dos2unix
+    - uses: actions/checkout@v2
+    - run: (ls core/cap-*.md | xargs -I '{}' sh -c 'cat {} | dos2unix | cmp - {}') || (echo 'Documents listed above contain CRLF line endings, and should be LF.'; exit 1)
