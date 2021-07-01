@@ -164,8 +164,10 @@ From there, the following process will happen:
 * If no major concerns are brought up, the SEP is marked as `Active` and updated to version `v1.0.0` by your SEP buddy.
 * Ideally there will be a reference implementation exhibiting the behavior and value of the SEP before moving to active state.
 * Active SEPs should be brought into production by ecosystem members.
-* Minor changes may be made as more implementations are brought online highlighting any edge cases.
 * Increment the major, minor, or patch versions on each change. See [SEP Versioning].
+* Patch changes may be made to address bugs, errors, clarifications, or to fix errata.
+* Minor changes may be made as more implementations are brought online highlighting any edge cases.
+* Major changes, and breaking changes, should be considered with care as they may reduce interoperability.
 
 ### Active -> Final
 * Once the SEP team determines that an active SEP is complete, proven, and won't be extended, the SEP can move to `Final` status.
