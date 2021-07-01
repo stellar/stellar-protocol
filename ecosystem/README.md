@@ -190,4 +190,4 @@ During draft a SEP should have a major version of `0` to indicate that anything 
 
 [ietf]: https://ietf.org/
 [semantic versioning]: https://semver.org/
-[SEP Versioning: #sep-versioning
+[SEP Versioning]: #sep-versioning
