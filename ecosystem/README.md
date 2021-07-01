@@ -175,7 +175,13 @@ From there, the following process will happen:
 
 ## SEP Team Members
 
-**SEP Team**: Tomer (SDF), Nikhil (SDF), Leigh (SDF), Jake (SDF), Alex (SDF), orbitlens, David (SDF), Jed
-(SDF)
+- Tomer Weller <@tomerweller> (SDF)
+- Nikhil Saraf<@nikhilsaraf> (SDF)
+- Leigh McCulloch <@leighmcculloch> (SDF)
+- Jake Urban <@JakeUrban> (SDF)
+- Alex Cordeiro <@accordeiro> (SDF)
+- Orbit Lens <@orbitlens>
+- David Mazières <@stanford-scs> (SDF)
+- Jed McCaleb <@jedmccaleb> (SDF)
 
 [ietf]: https://ietf.org/
