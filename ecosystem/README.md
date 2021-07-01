@@ -139,6 +139,7 @@ From there, the following process will happen:
 * You should continue the discussion of the draft SEP on the mailing list to gather additional
   feedback. We welcome any additional PRs that iterate on the draft.
 * Keep the version of the SEP as a v0 version while in draft.
+* Increment the minor or patch versions on each change while in draft. See [SEP Versioning].
 
 ### Draft -> Awaiting Decision -> Final Comment Period (FCP)
 * When you're ready, you should submit a PR changing the status in the draft to `Awaiting Decision`.
@@ -164,6 +165,7 @@ From there, the following process will happen:
 * Ideally there will be a reference implementation exhibiting the behavior and value of the SEP before moving to active state.
 * Active SEPs should be brought into production by ecosystem members.
 * Minor changes may be made as more implementations are brought online highlighting any edge cases.
+* Increment the major, minor, or patch versions on each change. See [SEP Versioning].
 
 ### Active -> Final
 * Once the SEP team determines that an active SEP is complete, proven, and won't be extended, the SEP can move to `Final` status.
@@ -188,3 +190,4 @@ During draft a SEP should have a major version of `0` to indicate that anything 
 
 [ietf]: https://ietf.org/
 [semantic versioning]: https://semver.org/
+[SEP Versioning: #sep-versioning
