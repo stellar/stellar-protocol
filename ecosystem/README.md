@@ -120,6 +120,7 @@ repository. You should make sure to adhere to the following:
   `sep_{shorttitle}.md`, for example `sep_newaccountdeposit.md`
 * Make sure to place your SEP in the `ecosystem/` folder.
 * Include GitHub handles or emails for all authors listed.  GitHub handles are preferred.
+* Set the version to `v0.0.1`.
 
 Finally, submit a PR of your draft via your fork of this repository.
 
@@ -137,6 +138,7 @@ From there, the following process will happen:
     pushing the SEP towards a final disposition.
 * You should continue the discussion of the draft SEP on the mailing list to gather additional
   feedback. We welcome any additional PRs that iterate on the draft.
+* Keep the version of the SEP as a v0 version while in draft.
 
 ### Draft -> Awaiting Decision -> Final Comment Period (FCP)
 * When you're ready, you should submit a PR changing the status in the draft to `Awaiting Decision`.
@@ -158,7 +160,7 @@ From there, the following process will happen:
   along with the mailing list.
 
 ### FCP -> Active
-* If no major concerns are brought up, the SEP is marked as `Active` by your SEP buddy.
+* If no major concerns are brought up, the SEP is marked as `Active` and updated to version `v1.0.0` by your SEP buddy.
 * Ideally there will be a reference implementation exhibiting the behavior and value of the SEP before moving to active state.
 * Active SEPs should be brought into production by ecosystem members.
 * Minor changes may be made as more implementations are brought online highlighting any edge cases.
@@ -173,9 +175,16 @@ From there, the following process will happen:
 * It is possible for a SEP to move from `Active` to `Draft` or `Deprecated` if it is never adopted, or is abandoned by the community.
 * Regression of an active SEP occurs via the same process as a proposal (`Draft` -> `Awaiting Decision` -> `FCP` -> `Deprecated`)
 
+## SEP Versioning
+
+Unlike CAPs, SEPs are assigned versions because they are dynamic and change over time. SEPs use [semantic versioning] in the form `vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
+
+During draft a SEP should have a major version of `0` to indicate that anything in the SEP may change at anytime. Once a SEP moves to Active it should be changed to `v1.0.0` and the rules of semantic versioning apply.
+
 ## SEP Team Members
 
 **SEP Team**: Tomer (SDF), Nikhil (SDF) Tom Q. (SDF), Michael (SDF), Alex (SDF), orbitlens, David (SDF), Jed
 (SDF)
 
 [ietf]: https://ietf.org/
+[semantic versioning]: https://semver.org/
