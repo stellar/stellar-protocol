@@ -175,11 +175,14 @@ From there, the following process will happen:
 
 ## SEP Team Members
 
+- Justin Rice <@rice2000> (SDF)
 - Tomer Weller <@tomerweller> (SDF)
 - Nikhil Saraf<@nikhilsaraf> (SDF)
 - Leigh McCulloch <@leighmcculloch> (SDF)
 - Jake Urban <@JakeUrban> (SDF)
 - Alex Cordeiro <@accordeiro> (SDF)
+- Marcelo Salloum <@marcelosalloum> (SDF)
+- 
 - Orbit Lens <@orbitlens>
 - David Mazières <@stanford-scs> (SDF)
 - Jed McCaleb <@jedmccaleb> (SDF)
