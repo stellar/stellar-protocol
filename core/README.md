@@ -68,7 +68,7 @@
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
 | [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines | Leigh McCulloch | Draft |
-| [CAP-0040](cap-0040.md) | Ed25519 Signed Hash Signer | Leigh McCulloch | Draft |
+| [CAP-0040](cap-0040.md) | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
