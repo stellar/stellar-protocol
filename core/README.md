@@ -67,7 +67,6 @@
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
-| [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines | Leigh McCulloch | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -76,6 +75,7 @@
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 | [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Rejected |
 | [CAP-0036](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Rejected |
+| [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines | Leigh McCulloch | Draft |
 
 # Contribution Process
 
