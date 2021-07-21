@@ -51,6 +51,7 @@
 | [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Final |
 | [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
 | [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Implemented |
+| [CAP-0038](cap-0038.md) | Automated Market Makers | Jonathan Jove | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -66,8 +67,7 @@
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
-| [CAP-0038](cap-0038.md) | Automated Market Makers | Jonathan Jove | Draft |
-| [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines | Leigh McCulloch | Draft |
+| [CAP-0040](cap-0040.md) | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -76,6 +76,7 @@
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 | [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Rejected |
 | [CAP-0036](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Rejected |
+| [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines | Leigh McCulloch | Rejected |
 
 # Contribution Process
 

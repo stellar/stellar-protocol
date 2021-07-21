@@ -44,6 +44,7 @@
 | [SEP-0012](sep-0012.md) | KYC API | Interstellar | Standard | Active |
 | [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
+| [SEP-0023](sep-0023.md) | Muxed Account Strkeys | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Standard | Active |
 | [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal | SDF | Standard | Active |
 | [SEP-0028](sep-0028.md) | XDR Base64 Encoding | SDF | Standard | Final |
 | [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
@@ -61,7 +62,6 @@
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission | Paul Selden, Nikhil Saraf | Standard | Draft |
 | [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing | Mister.Ticot | Informational | Draft |
 | [SEP-0022](sep-0022.md) | IPFS Support | Samuel B. Sendelbach | Informational | Draft |
-| [SEP-0023](sep-0023.md) | Augmented strkey format for multiplexed addresses | David Mazières and Tomer Weller | Standard | Draft |
 | [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin | Standard | Draft |
 | [SEP-0032](sep-0032.md) | Asset Address | Leigh McCulloch | Standard | Draft |
 | [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors | Jake Urban and Leigh McCulloch | Standard | Final Comment Period |
@@ -120,6 +120,7 @@ repository. You should make sure to adhere to the following:
   `sep_{shorttitle}.md`, for example `sep_newaccountdeposit.md`
 * Make sure to place your SEP in the `ecosystem/` folder.
 * Include GitHub handles or emails for all authors listed.  GitHub handles are preferred.
+* Set the version to `v0.0.1`.
 
 Finally, submit a PR of your draft via your fork of this repository.
 
@@ -137,6 +138,8 @@ From there, the following process will happen:
     pushing the SEP towards a final disposition.
 * You should continue the discussion of the draft SEP on the mailing list to gather additional
   feedback. We welcome any additional PRs that iterate on the draft.
+* Keep the version of the SEP as a v0 version while in draft.
+* Increment the minor or patch versions on each change while in draft. See [SEP Versioning].
 
 ### Draft -> Awaiting Decision -> Final Comment Period (FCP)
 * When you're ready, you should submit a PR changing the status in the draft to `Awaiting Decision`.
@@ -158,24 +161,45 @@ From there, the following process will happen:
   along with the mailing list.
 
 ### FCP -> Active
-* If no major concerns are brought up, the SEP is marked as `Active` by your SEP buddy.
+* If no major concerns are brought up, the SEP is marked as `Active` and updated to version `v1.0.0` by your SEP buddy.
 * Ideally there will be a reference implementation exhibiting the behavior and value of the SEP before moving to active state.
 * Active SEPs should be brought into production by ecosystem members.
+* Increment the major, minor, or patch versions on each change. See [SEP Versioning].
+* Patch changes may be made to address bugs, errors, clarifications, or to fix errata.
 * Minor changes may be made as more implementations are brought online highlighting any edge cases.
+* Major changes, and breaking changes, should be considered with care as they may reduce interoperability.
 
 ### Active -> Final
 * Once the SEP team determines that an active SEP is complete, proven, and won't be extended, the SEP can move to `Final` status.
 * This promotion can only occur once there are multiple live implementations being used in production to ensure any edge cases or incompatibilities are found.
-* No changes will be made to a finalized SEP aside from fixing minor errata.
+* No changes will be made to a finalized SEP aside from fixing errata.
+* Changes should increment the patch version number only.
 * Much consideration should be given before moving to Final status, it is OK for SEPs to live in Active status for a long time.
   
 ### Regression
 * It is possible for a SEP to move from `Active` to `Draft` or `Deprecated` if it is never adopted, or is abandoned by the community.
 * Regression of an active SEP occurs via the same process as a proposal (`Draft` -> `Awaiting Decision` -> `FCP` -> `Deprecated`)
 
+## SEP Versioning
+
+Unlike CAPs, SEPs are assigned versions because they are dynamic and change over time. SEPs use [semantic versioning] in the form `vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
+
+During draft a SEP should have a major version of `0` to indicate that anything in the SEP may change at anytime. Once a SEP moves to Active it should be changed to `v1.0.0` and the rules of semantic versioning apply.
+
 ## SEP Team Members
 
-**SEP Team**: Tomer (SDF), Nikhil (SDF) Tom Q. (SDF), Michael (SDF), Alex (SDF), orbitlens, David (SDF), Jed
-(SDF)
+- Justin Rice <@rice2000> (SDF)
+- Tomer Weller <@tomerweller> (SDF)
+- Nikhil Saraf<@nikhilsaraf> (SDF)
+- Leigh McCulloch <@leighmcculloch> (SDF)
+- Jake Urban <@JakeUrban> (SDF)
+- Alex Cordeiro <@accordeiro> (SDF)
+- Marcelo Salloum <@marcelosalloum> (SDF)
+- 
+- Orbit Lens <@orbitlens>
+- David Mazières <@stanford-scs> (SDF)
+- Jed McCaleb <@jedmccaleb> (SDF)
 
 [ietf]: https://ietf.org/
+[semantic versioning]: https://semver.org/
+[SEP Versioning]: #sep-versioning
