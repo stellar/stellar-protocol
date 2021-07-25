@@ -32,6 +32,7 @@ alongside the implicit benefits of this CAP insofar as creating equitable access
 Draft overview: still working to unravel how to implement.
 
 `ForwardSplit` and `ReverseSplit` called by issuing peer:
+
 ```ForwardSplit {
   int32 splitRatio
   string assetCode
