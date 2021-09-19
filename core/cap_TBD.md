@@ -35,7 +35,8 @@ Stellar is a phenomenal blockchain for securities representation, and the core d
 Scrapped-together manual implementations of stock splits require issuers to suffer effectively complete illiquidity during split executions which frankly clog the network with foolishly-repetitive transactions. Thus, we proposed two new transaction operations for forward and reverse splits, both of which take in a split ratio.
 
 ## Specification
-Draft overview: still working to unravel how to implement.
+
+### XDR changes
 
 `ForwardSplit` and `ReverseSplit` called by issuing peer:
 
@@ -51,8 +52,6 @@ ReverseSplit {
 ```
 
 ### Semantics
-
-Todo: implementation
 
 ...where `splitRatio` is "divided" by 7 for decimal places like account balances, allowing for granular split rations (some companies do weird stuff like 2499:2500 splits or $GE's 104:100 split in 2019).
 
@@ -70,3 +69,6 @@ Just as messing around with trustline or signer operations can seriously screw u
 
 ## Security Concerns
 None
+
+### Implementation
+Todo
