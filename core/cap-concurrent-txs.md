@@ -113,7 +113,7 @@ A transaction submitted will be valid only if, for a next ledger `n`:
 - `ledgerBounds` `minLedger` set to `n-1`, `maxLedger`
 is set to `n`, and its hash was not included in `n-1`'s
 transaction set.
-- `ledgerBounds` `minLedger` set to `n` and `maxLedger` set to `n` or
+- `ledgerBounds` `minLedger` set to `n`, and `maxLedger` set to `n` or
 `n+1`.
 
 A transaction submitted with a `seqNum` of zero that does not satisfy
