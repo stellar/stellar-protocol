@@ -51,8 +51,10 @@ single virtual terminal. This problem is one of the problems often abstracted
 from merchants of credit networks by payment gateways and payment service
 providers.
 
+Modern software products perform tasks concurrently and integrate with APIs
+and external systems without coordinating or synchronizing on a resource.
 These problems increase the complexity of integrating with the Stellar
-network.
+network, especially horizontally scaled systems.
 
 ### Goals Alignment
 
