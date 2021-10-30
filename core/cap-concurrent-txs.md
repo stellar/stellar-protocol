@@ -20,8 +20,9 @@ Protocol version: TBD
 This proposal provides transactors with the capability to submit transactions
 to the Stellar network concurrently, without coordinating the sequence number
 of those transactions. This capability is limited to transactions that are
-valid for a short window, intended for use in the most common use case where
-users are building, signing, and submitting transactions immediately.
+valid for two ledgers only, intended for use in the most common payments and
+transacting use case where users are building, signing, and submitting
+transactions immediately.
 
 ## Working Group
 
@@ -29,7 +30,14 @@ TBD
 
 ## Motivation
 
-TBD
+- Users have to navigate sequence numbers.
+- Sequence numbers allow us to guarantee no replay of transactions forever for an account.
+- Most users want to submit transactions now and are not presigning transactions or creating preauthorized transactions that need submitting in the future.
+- Most users do not need their transactions to sit in the transaction queues for many ledgers.
+- Most application developers code for immediate success/failure, and not delayed success.
+- Since the vastly most common use case on Stellar is to build a transaction and submit it immediately, we don't need to be able to prevent replay forever.
+- Since the vast majority of application developers implement assuming single ledger success/failure, and not delayed success, there is little value in keeping these types of transactions in the transaction queue to be accepted in the near future.
+- For most users we only need to be able to prevent replay over a short window of time, and transactions can fail fast, since that's what application developers assume will happen.
 
 ### Goals Alignment
 
@@ -48,7 +56,9 @@ assets in a manner that is fast, cheap, and highly usable.
 ## Abstract
 
 This proposal allows a transaction to be valid with a zero sequence number if
-the 
+the transaction is valid for only two ledgers. Transactions are typically valid
+only if their sequence number is the next sequence number after the sequence
+number of the account at the time they are executed.
 
 This proposal is dependent on the `ledgerBounds` transaction precondition
 proposed in [CAP-21].
