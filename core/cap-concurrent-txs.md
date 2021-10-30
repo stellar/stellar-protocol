@@ -132,6 +132,34 @@ makes the transaction invalid.
 
 ## Design Rationale
 
+Sequence numbers allow the protocol to guarantee that no replay of a
+transaction is ever possible for an account, forever, without a
+validator needing to remember all transactions that have been
+included in past ledgers. This reduces the storage and lookup costs
+for a validator.
+
+However, for the majority of transactions on the Stellar network
+sequence numbers do not need to provide this guarantee forever. The
+majority of users of the Stellar network build, sign, and submit
+transactions immediately with an expectation of success or failure
+within a single ledger. Even though the Stellar network provides a
+transaction queue which allow transactions to be accepted in a near
+future ledger during congestion, most application developers assume
+success or failure within a single ledger. We could argue from this
+behavior by application developers that they do not signal a need
+for most transactions to be valid for more than a single ledger.
+
+These qualities of the majority of use cases submitting transactions
+to the network indicate that the network does not need to prevent
+replay using sequence numbers forever.
+
+Validators can efficiently check that a transaction has not occurred
+in the last ledger with limited storage or memory requirements since
+the transaction set is limited to the transactions in a single
+ledger.
+
+### Sequence Number Zero
+
 The zero (`0`) sequence number is selected because it has no meaning
 within the Stellar protocol since no transaction is valid with that
 value. The zero value is also the default integer value and in the
@@ -143,34 +171,30 @@ any Stellar network, however that invariance of invalidity can be
 maintained by [SEP-10] transactions never setting the
 `ledgerBounds` field of a transaction.
 
-Sequence numbers allow the protocol to guarantee that no replay of a
-transaction is ever possible for an account, forever, without a
-validator needing to remember all transactions that have been
-included in past ledgers.
+### Ledger Bounds
 
-However, for the majority of transactions on the Stellar network
-sequence numbers do not need to provide this guarantee forever. The
-majority of users of the Stellar network build, sign, and submit
-transactions immediately with an expectation of success or failure
-within a single ledger. Even though the Stellar network provides a
-transaction queue which allow transactions to be accepted in a near
-future ledger, most application developers assume success or failure
-within a single ledger.
+The `ledgerBounds` precondition proposed in [CAP-21] allows a
+user to define a transaction that is valid only for a fixed range
+of ledgers. The precondition allows a user to specify that a
+transaction is valid only for the next ledger, and is more accurate
+at achieving this than `timeBounds`.
 
-- Users have to navigate sequence numbers.
-- Sequence numbers allow us to guarantee no replay of transactions forever for an account.
-- Most users want to submit transactions now and are not presigning transactions or creating preauthorized transactions that need submitting in the future.
-- Most users do not need their transactions to sit in the transaction queues for many ledgers.
-- Most application developers code for immediate success/failure, and not delayed success.
-- Since the vastly most common use case on Stellar is to build a transaction and submit it immediately, we don't need to be able to prevent replay forever.
-- Since the vast majority of application developers implement assuming single ledger success/failure, and not delayed success, there is little value in keeping these types of transactions in the transaction queue to be accepted in the near future.
-- For most users we only need to be able to prevent replay over a short window of time, and transactions can fail fast, since that's what application developers assume will happen.
+### Transaction Result Code Duplicate
+
+The `TransactionResultCode` `txDUPLICATE` is introduced because
+other result codes semantics do not fit the case where the
+`ledgerBounds` are valid but a transaction is valid. When a
+duplicate transaction is submitted with the protocol today it
+will likely receive a `txBAD_SEQ` result code, however in this
+case the sequence number is zero or not set.
 
 ## Protocol Upgrade Transition
 
 ### Backwards Incompatibilities
 
-This proposal is backwards compatible.
+This proposal is completely backwards compatible as it defines new
+functionality that is only accessible with transactions that are currently
+invalid.
 
 ### Resource Utilization
 
