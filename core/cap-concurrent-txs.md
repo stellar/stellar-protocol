@@ -18,7 +18,7 @@ Protocol version: TBD
 ## Simple Summary
 
 This proposal provides users with the capability to submit transactions
-to the Stellar network concurrently, without coordinating the sequence number
+to the Stellar network concurrently, without coordinating the sequence numbers
 of those transactions. This capability is limited to transactions that are
 valid for two ledgers only, intended for use in the most common payments and
 transacting use case where users are building, signing, and submitting
