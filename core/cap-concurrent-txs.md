@@ -54,7 +54,7 @@ providers.
 Modern software products perform tasks concurrently and integrate with APIs
 and external systems without coordinating or synchronizing on a resource.
 These problems increase the complexity of integrating with the Stellar
-network, especially horizontally scaled systems.
+network, and create an experience more alike to acquiring payment systems and not modern concurrent systems.
 
 ### Goals Alignment
 
