@@ -31,7 +31,7 @@ TBD
 ## Motivation
 
 Users of the Stellar network must coordinate and navigate the sequence number
-for their account when transacting with more than one transaction at a time.
+for their account when submitting more than one transaction at a time.
 
 Typically this involves throttling payments to be processed serially and
 risking the failure of one transaction invalidating a subsequent transaction.
