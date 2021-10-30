@@ -88,12 +88,16 @@ index 1a4e491a..f388c69c 100644
 
 This proposal changes the values that are valid for the `seqNum` of a
 `TransactionV1Envelope` to not only the next sequence number of its
-`sourceAccount`, but also zero (`0`), if its `ledgerBounds` limits
-the transaction to being valid only for two ledgers.
+`sourceAccount`, but also zero (`0`), if its `ledgerBounds` is set to
+a non-zero value and limits the transaction to being valid only for
+two or less ledgers.
 
-A transaction submitted will only be valid if:
-- `ledgerBounds` `minLedger` is set to the last ledger, `maxLedger` is set to the next ledger, and its hash was not included in the last ledgers transaction set.
-- `ledgerBounds` `minLedger` set to the next ledger and `maxLedger` set to the ledger after.
+A transaction submitted will be valid only if, for a next ledger `n`:
+- `ledgerBounds` `minLedger` is set to the `n-1` or `n`, `maxLedger`
+is set to `n`, and its hash was not included in the last ledgers
+transaction set.
+- `ledgerBounds` `minLedger` set `n` and `maxLedger` set to `n` or
+`n+1`.
 
 A transaction submitted with a `seqNum` of zero that does not satisfy
 the `ledgerBounds` requirements is rejected with
@@ -101,9 +105,15 @@ the `ledgerBounds` requirements is rejected with
 the next ledger, or `txTOO_EARLY` if its `minLedger` is greater than
 the next ledger.
 
-A transaction submitted with a `seqNum` of zero that does satisfy the `ledgerBounds` requirements, but whose hash is included in the last ledgers transaction set, is rejected with `TransactionResultCode` `txDUPLICATE`.
+A transaction submitted with a `seqNum` of zero that satisfies the
+`ledgerBounds` requirements, but whose hash is included in the last
+ledgers transaction set, is rejected with `TransactionResultCode`
+`txDUPLICATE`.
 
-This proposal introduces a new `TransactionResultCode` `txDUPLICATE`.
+This proposal introduces a new `TransactionResultCode` `txDUPLICATE`
+that is used whenever a transaction is submitted a subsequent time
+after it has been included in a past ledger, and no other condition
+makes the transaction invalid.
 
 ## Design Rationale
 
