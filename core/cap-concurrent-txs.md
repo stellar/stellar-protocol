@@ -34,7 +34,7 @@ Users of the Stellar network must coordinate and navigate the sequence number
 for their account when submitting more than one transaction at a time.
 
 Typically this involves throttling payments to be processed serially and
-risking the failure of one transaction invalidating a subsequent transaction.
+risking one transaction in the chain being invalid preventing a subsequent transaction from executing.
 
 Users who need to transact concurrently, or who do not wish to risk failed
 subsequent transactions, can create a pool of Stellar accounts that exist
