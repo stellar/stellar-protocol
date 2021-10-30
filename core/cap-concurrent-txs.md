@@ -41,8 +41,8 @@ subsequent transactions, can create a pool of Stellar accounts that exist
 only to be the source accounts of transactions to provide sequence numbers.
 Users must create the pool of accounts, maintain their balances to cover
 transaction fees, and operate a database or infrastructure supporting
-synchronized locking of the accounts. An account is locked, or marked as in-use, when selected for
-use with a transaction and unlocked after the transaction's time bounds have
+synchronized locking of the accounts. An account is locked when selected for
+use with a transaction and unlocked after the transaction is seen to succeed or its time bounds have
 been exceeded by a closed ledger.
 
 These problems are very similar to the problems faced by users of credit
