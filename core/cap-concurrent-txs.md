@@ -107,14 +107,17 @@ This proposal changes the values that are valid for the `seqNum` of a
 `TransactionV1Envelope` to not only the next sequence number of its
 `sourceAccount`, but also zero (`0`), if its `ledgerBounds` is set to
 a non-zero value and limits the transaction to being valid only for
-two or less ledgers.
+two or less ledgers, and if it has a memo set.
 
-A transaction submitted will be valid only if, for a next ledger `n`:
+A transaction submitted will be valid only if had a memo set and, for a next ledger `n`:
 - `ledgerBounds` `minLedger` set to `n-1`, `maxLedger`
 is set to `n`, and its hash was not included in `n-1`'s
 transaction set.
 - `ledgerBounds` `minLedger` set to `n`, and `maxLedger` set to `n` or
 `n+1`.
+
+A transaction submitted with a `seqNum` of zero but whose memo is not set, is rejected
+with `TransactonResultCode` `txMISSING_MEMO`.
 
 A transaction submitted with a `seqNum` of zero that does not satisfy
 the `ledgerBounds` requirements is rejected with
@@ -122,7 +125,7 @@ the `ledgerBounds` requirements is rejected with
 the next ledger, or `txTOO_EARLY` if its `minLedger` is greater than
 the next ledger.
 
-A transaction submitted with a `seqNum` of zero that satisfies the
+A transaction submitted with a `seqNum` of zero satisfies the
 `ledgerBounds` requirements, but whose hash is included in the last
 ledgers transaction set, is rejected with `TransactionResultCode`
 `txDUPLICATE`.
@@ -131,6 +134,10 @@ This proposal introduces a new `TransactionResultCode` `txDUPLICATE`
 that is used whenever a transaction is submitted a subsequent time
 after it has been included in a past ledger, and no other condition
 makes the transaction invalid.
+
+This proposal introduces a new `TransactionResultCode` `txMISSING_MEMO`
+that is used whenever a transaction is submitted a `seqNum` zero
+without a memo. 
 
 ## Design Rationale
 
@@ -180,6 +187,15 @@ of ledgers. The precondition allows a user to specify that a
 transaction is valid only for the next ledger, and is more accurate
 at achieving this than `timeBounds`.
 
+of ledgers. The precondition allows a user to specify that a
+transaction is valid only for the next ledger, and is more accurate
+at achieving this than `timeBounds`.
+
+### Transaction Result Code Missing Memo
+
+The `TransactionResultCode` `txMISSING_MEMO` is introduced because
+submitting a sequenceless transaction without a memo is unlikely to guarantee any uniquely identifying data that will differentiate two conceptually unique transactions that happen to contain the same logical operations.
+
 ### Transaction Result Code Duplicate
 
 The `TransactionResultCode` `txDUPLICATE` is introduced because
@@ -189,6 +205,11 @@ transaction is invalid due to replay. When a
 duplicate transaction is submitted with the protocol today it
 will likely receive a `txBAD_SEQ` result code, however in this
 case the sequence number is zero or not set.
+
+This result code will not be seen by most users because
+Horizon's transaction submission system provides idempotency,
+identifying duplicate submissions and returning the previous
+result.
 
 ## Protocol Upgrade Transition
 
