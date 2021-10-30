@@ -157,8 +157,7 @@ replay using sequence numbers forever.
 
 Validators can efficiently check that a transaction has not occurred
 in the last ledger with limited storage or memory requirements since
-the transaction set is limited to the transactions in a single
-ledger.
+the data set is limited to the transactions in a single ledger.
 
 ### Sequence Number Zero
 
