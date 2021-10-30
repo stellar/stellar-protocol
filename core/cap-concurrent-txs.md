@@ -84,17 +84,18 @@ proposed in [CAP-21].
 
 ```diff mddiffcheck.base=74498070b99a7fb1d18b78d104f95d797b4f4c2c
 diff --git a/src/xdr/Stellar-transaction.x b/src/xdr/Stellar-transaction.x
-index 1a4e491a..f388c69c 100644
+index 1a4e491a..4574a038 100644
 --- a/src/xdr/Stellar-transaction.x
 +++ b/src/xdr/Stellar-transaction.x
-@@ -1508,7 +1508,9 @@ enum TransactionResultCode
+@@ -1508,7 +1508,10 @@ enum TransactionResultCode
  
      txNOT_SUPPORTED = -12,         // transaction type not supported
      txFEE_BUMP_INNER_FAILED = -13, // fee bump inner transaction failed
 -    txBAD_SPONSORSHIP = -14        // sponsorship not confirmed
 +    txBAD_SPONSORSHIP = -14,       // sponsorship not confirmed
 +
-+    txDUPLICATE = -15 // transaction has been included in a prior ledger
++    txMISSING_MEMO = -15, // transaction is missing a memo and required without sequence number
++    txDUPLICATE = -16     // transaction has been included in a prior ledger
  };
  
  // InnerTransactionResult must be binary compatible with TransactionResult
