@@ -205,8 +205,8 @@ overlaps with the last ledger and the next ledger. This will require a cost of
 lookup trending towards O(1) assuming a hash set, map, dictionary, or similar
 data structure can be used. The size of the data set will be limited to the
 number of operations permitted into any ledger. At this time that limit is
-1000 operations. Therefore, the data set will be at most 2000 transactions,
-and will consume at least 64KB if stored in memory, assuming transaction
+1000 operations. Therefore, the data set will be at most 1000 transactions,
+and will consume at least 32KB if stored in memory, assuming transaction
 hashes are 32bytes.
 
 This proposal requires validators to hold a list of all transactions hashes
