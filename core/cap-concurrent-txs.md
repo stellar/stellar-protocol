@@ -1,10 +1,10 @@
-# CAP-00xx: Concurrent Limited Validity Transactions
+# CAP-00xx: Concurrent Transactions
 
 ## Preamble
 
 ```text
 CAP: 00xx
-Title: Concurrent Limited Validity Transactions
+Title: Concurrent Transactions
 Working Group:
     Owner: Leigh McCulloch <@leighmcculloch>
     Authors: Leigh McCulloch <@leighmcculloch>, David Mazières <@stanford-scs>
