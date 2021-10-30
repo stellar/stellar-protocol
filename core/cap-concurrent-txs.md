@@ -7,7 +7,7 @@ CAP: 00xx
 Title: Concurrent Limited Validity Transactions
 Working Group:
     Owner: Leigh McCulloch <@leighmcculloch>
-    Authors: Leigh McCulloch <@leighmcculloch>
+    Authors: Leigh McCulloch <@leighmcculloch>, David Mazières <@stanford-scs>
     Consulted: TBD
 Status: Draft
 Created: 2021-10-29
@@ -55,10 +55,8 @@ assets in a manner that is fast, cheap, and highly usable.
 
 ## Abstract
 
-This proposal allows a transaction to be valid with a zero sequence number if
-the transaction is valid for only two ledgers. Transactions are typically valid
-only if their sequence number is the next sequence number after the sequence
-number of the account at the time they are executed.
+This proposal allows a transaction to be valid if its `seqNum` is zero (`0`), if
+the transaction is valid for only two ledgers.
 
 This proposal is dependent on the `ledgerBounds` transaction precondition
 proposed in [CAP-21].
@@ -67,11 +65,45 @@ proposed in [CAP-21].
 
 ### XDR changes
 
-None.
+```diff mddiffcheck.base=74498070b99a7fb1d18b78d104f95d797b4f4c2c
+diff --git a/src/xdr/Stellar-transaction.x b/src/xdr/Stellar-transaction.x
+index 1a4e491a..f388c69c 100644
+--- a/src/xdr/Stellar-transaction.x
++++ b/src/xdr/Stellar-transaction.x
+@@ -1508,7 +1508,9 @@ enum TransactionResultCode
+ 
+     txNOT_SUPPORTED = -12,         // transaction type not supported
+     txFEE_BUMP_INNER_FAILED = -13, // fee bump inner transaction failed
+-    txBAD_SPONSORSHIP = -14        // sponsorship not confirmed
++    txBAD_SPONSORSHIP = -14,       // sponsorship not confirmed
++
++    txDUPLICATE = -15 // transaction has been included in a prior ledger
+ };
+ 
+ // InnerTransactionResult must be binary compatible with TransactionResult
+
+```
 
 ### Semantics
 
+This proposal changes the values that are valid for the `seqNum` of a
+`TransactionV1Envelope` to not only the next sequence number of its
+`sourceAccount`, but also zero (`0`), if its `ledgerBounds` limits
+the transaction to being valid only for two ledgers.
 
+A transaction submitted will only be valid if:
+- `ledgerBounds` `minLedger` is set to the last ledger, `maxLedger` is set to the next ledger, and its hash was not included in the last ledgers transaction set.
+- `ledgerBounds` `minLedger` set to the next ledger and `maxLedger` set to the ledger after.
+
+A transaction submitted with a `seqNum` of zero that does not satisfy
+the `ledgerBounds` requirements is rejected with
+`TransactionResultCode` `txTOO_LATE` if its `maxLedger` is less than
+the next ledger, or `txTOO_EARLY` if its `minLedger` is greater than
+the next ledger.
+
+A transaction submitted with a `seqNum` of zero that does satisfy the `ledgerBounds` requirements, but whose hash is included in the last ledgers transaction set, is rejected with `TransactionResultCode` `txDUPLICATE`.
+
+This proposal introduces a new `TransactionResultCode` `txDUPLICATE`.
 
 ## Design Rationale
 
