@@ -30,14 +30,29 @@ TBD
 
 ## Motivation
 
-- Users have to navigate sequence numbers.
-- Sequence numbers allow us to guarantee no replay of transactions forever for an account.
-- Most users want to submit transactions now and are not presigning transactions or creating preauthorized transactions that need submitting in the future.
-- Most users do not need their transactions to sit in the transaction queues for many ledgers.
-- Most application developers code for immediate success/failure, and not delayed success.
-- Since the vastly most common use case on Stellar is to build a transaction and submit it immediately, we don't need to be able to prevent replay forever.
-- Since the vast majority of application developers implement assuming single ledger success/failure, and not delayed success, there is little value in keeping these types of transactions in the transaction queue to be accepted in the near future.
-- For most users we only need to be able to prevent replay over a short window of time, and transactions can fail fast, since that's what application developers assume will happen.
+Users of the Stellar network must coordinate and navigate the sequence number
+for their account when transacting with more than one transaction at a time.
+
+Typically this involves throttling payments to be processed serially and
+risking the failure of one transaction invalidating a subsequent transaction.
+
+Users who need to transact concurrently, or who do not wish to risk failed
+subsequent transactions, can create a pool of Stellar accounts that exist
+only to be the source accounts of transactions to provide sequence numbers.
+Users must create the pool of accounts, maintain their balances to cover
+transaction fees, and operate a database or infrastructure supporting
+synchronized locking of the accounts. An account is locked when selected for
+use with a transaction and unlocked after the transaction's time bounds have
+been exceeded by a closed ledger.
+
+These problems are very similar to the problems faced by users of credit
+network acquiring payment systems that do not allow concurrent payments on a
+single virtual terminal. This problem is one of the problems often abstracted
+from merchants of credit networks by payment gateways and payment service
+providers.
+
+These problems increase the complexity of integrating with the Stellar
+network.
 
 ### Goals Alignment
 
@@ -117,7 +132,39 @@ makes the transaction invalid.
 
 ## Design Rationale
 
+The zero (`0`) sequence number is selected because it has no meaning
+within the Stellar protocol since no transaction is valid with that
+value. The zero value is also the default integer value and in the
+Stellar protocol the zero value is routinely used as an indicator of
+no value being set, as is the case in `TimeBounds`. The zero (`0`)
+sequence number does have meaning in [SEP-10] as a method for
+creating a Stellar transaction that is guaranteed to be invalid on
+any Stellar network, however that invariance of invalidity can be
+maintained by [SEP-10] transactions never setting the
+`ledgerBounds` field of a transaction.
 
+Sequence numbers allow the protocol to guarantee that no replay of a
+transaction is ever possible for an account, forever, without a
+validator needing to remember all transactions that have been
+included in past ledgers.
+
+However, for the majority of transactions on the Stellar network
+sequence numbers do not need to provide this guarantee forever. The
+majority of users of the Stellar network build, sign, and submit
+transactions immediately with an expectation of success or failure
+within a single ledger. Even though the Stellar network provides a
+transaction queue which allow transactions to be accepted in a near
+future ledger, most application developers assume success or failure
+within a single ledger.
+
+- Users have to navigate sequence numbers.
+- Sequence numbers allow us to guarantee no replay of transactions forever for an account.
+- Most users want to submit transactions now and are not presigning transactions or creating preauthorized transactions that need submitting in the future.
+- Most users do not need their transactions to sit in the transaction queues for many ledgers.
+- Most application developers code for immediate success/failure, and not delayed success.
+- Since the vastly most common use case on Stellar is to build a transaction and submit it immediately, we don't need to be able to prevent replay forever.
+- Since the vast majority of application developers implement assuming single ledger success/failure, and not delayed success, there is little value in keeping these types of transactions in the transaction queue to be accepted in the near future.
+- For most users we only need to be able to prevent replay over a short window of time, and transactions can fail fast, since that's what application developers assume will happen.
 
 ## Protocol Upgrade Transition
 
