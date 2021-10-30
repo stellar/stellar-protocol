@@ -224,3 +224,4 @@ None yet.
 None yet.
 
 [CAP-21]: https://stellar.org/protocol/cap-21
+[SEP-10]: https://stellar.org/protocol/sep-10
