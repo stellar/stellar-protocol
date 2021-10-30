@@ -184,7 +184,8 @@ at achieving this than `timeBounds`.
 
 The `TransactionResultCode` `txDUPLICATE` is introduced because
 other result codes semantics do not fit the case where the
-`ledgerBounds` are valid but a transaction is valid. When a
+`ledgerBounds` are valid, there is no sequence number, but a
+transaction is invalid due to replay. When a
 duplicate transaction is submitted with the protocol today it
 will likely receive a `txBAD_SEQ` result code, however in this
 case the sequence number is zero or not set.
