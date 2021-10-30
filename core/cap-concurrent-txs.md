@@ -110,7 +110,7 @@ a non-zero value and limits the transaction to being valid only for
 two or less ledgers.
 
 A transaction submitted will be valid only if, for a next ledger `n`:
-- `ledgerBounds` `minLedger` is set to the `n-1` or `n`, `maxLedger`
+- `ledgerBounds` `minLedger` is set to the `n-1`, `maxLedger`
 is set to `n`, and its hash was not included in the last ledgers
 transaction set.
 - `ledgerBounds` `minLedger` set `n` and `maxLedger` set to `n` or
