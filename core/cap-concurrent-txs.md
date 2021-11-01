@@ -17,12 +17,11 @@ Protocol version: TBD
 
 ## Simple Summary
 
-This proposal provides users with the capability to submit transactions
-to the Stellar network concurrently, without coordinating the sequence numbers
-of those transactions. This capability is limited to transactions that are
-valid for two ledgers only, intended for use in the most common payments and
-transacting use case where users are building, signing, and submitting
-transactions immediately.
+This proposal provides users with the capability to submit transactions to the
+Stellar network concurrently, without coordinating the sequence numbers of those
+transactions. This capability is limited to transactions that are valid for two
+ledgers only, intended for use in the most common payments and transacting use
+case where users are building, signing, and submitting transactions immediately.
 
 ## Working Group
 
@@ -33,28 +32,29 @@ TBD
 Users of the Stellar network must coordinate and navigate the sequence number
 for their account when submitting more than one transaction at a time.
 
-Typically this involves throttling payments to be processed serially and
-risking one transaction in the chain being invalid preventing a subsequent transaction from executing.
+Typically this involves throttling payments to be processed serially and risking
+one transaction in the chain being invalid preventing a subsequent transaction
+from executing.
 
 Users who need to transact concurrently, or who do not wish to risk failed
-subsequent transactions, can create a pool of Stellar accounts that exist
-only to be the source accounts of transactions to provide sequence numbers.
-Users must create the pool of accounts, maintain their balances to cover
-transaction fees, and operate a database or infrastructure supporting
-synchronized locking of the accounts. An account is locked when selected for
-use with a transaction. An account is unlocked after the transaction is seen as confirmed in a ledger as successful or failed, or its time bounds have
-been exceeded by a closed ledger.
+subsequent transactions, can create a pool of Stellar accounts that exist only
+to be the source accounts of transactions to provide sequence numbers.  Users
+must create the pool of accounts, maintain their balances to cover transaction
+fees, and operate a database or infrastructure supporting synchronized locking
+of the accounts. An account is locked when selected for use with a transaction.
+An account is unlocked after the transaction is seen as confirmed in a ledger as
+successful or failed, or its time bounds have been exceeded by a closed ledger.
 
-These problems are very similar to the problems faced by users of credit
-network acquiring payment systems that do not allow concurrent payments on a
-single virtual terminal. This problem is one of the problems often abstracted
-from merchants of credit networks by payment gateways and payment service
-providers.
+These problems are very similar to the problems faced by users of credit network
+acquiring payment systems that do not allow concurrent payments on a single
+virtual terminal. This problem is one of the problems often abstracted from
+merchants of credit networks by payment gateways and payment service providers.
 
-Modern software products perform tasks concurrently and integrate with APIs
-and external systems without coordinating or synchronizing on a resource.
-These problems increase the complexity of integrating with the Stellar
-network, and create an experience more alike to acquiring payment systems and not modern concurrent systems.
+Modern software products perform tasks concurrently and integrate with APIs and
+external systems without coordinating or synchronizing on a resource.  These
+problems increase the complexity of integrating with the Stellar network, and
+create an experience more alike to acquiring payment systems and not modern
+concurrent systems.
 
 ### Goals Alignment
 
@@ -67,8 +67,8 @@ create highly usable products.
 the network.
 
 - The Stellar Network should enable cross-border payments, i.e. payments via 
-exchange of assets, throughout the globe, enabling users to make payments between 
-assets in a manner that is fast, cheap, and highly usable.
+exchange of assets, throughout the globe, enabling users to make payments
+between assets in a manner that is fast, cheap, and highly usable.
 
 ## Abstract
 
@@ -106,119 +106,108 @@ index 1a4e491a..4574a038 100644
 
 This proposal changes the values that are valid for the `seqNum` of a
 `TransactionV1Envelope` to not only the next sequence number of its
-`sourceAccount`, but also zero (`0`), if its `ledgerBounds` is set to
-a non-zero value and limits the transaction to being valid only for
-two or less ledgers, and if it has a memo set.
+`sourceAccount`, but also zero (`0`), if its `ledgerBounds` is set to a non-zero
+value and limits the transaction to being valid only for two or less ledgers,
+and if it has a memo set.
 
-A transaction submitted will be valid only if had a memo set and, for a next ledger `n`:
-- `ledgerBounds` `minLedger` set to `n-1`, `maxLedger`
-is set to `n`, and its hash was not included in `n-1`'s
-transaction set.
-- `ledgerBounds` `minLedger` set to `n`, and `maxLedger` set to `n` or
-`n+1`.
+A transaction submitted will be valid only if had a memo set and, for a next
+ledger `n`:
+- `ledgerBounds` `minLedger` set to `n-1`, `maxLedger` is set to `n`, and its
+hash was not included in `n-1`'s transaction set.
+- `ledgerBounds` `minLedger` set to `n`, and `maxLedger` set to `n` or `n+1`.
 
-A transaction submitted with a `seqNum` of zero but whose memo is not set, is rejected
-with `TransactonResultCode` `txMISSING_MEMO`.
+A transaction submitted with a `seqNum` of zero but whose memo is not set, is
+rejected with `TransactonResultCode` `txMISSING_MEMO`.
 
-A transaction submitted with a `seqNum` of zero that does not satisfy
-the `ledgerBounds` requirements is rejected with
-`TransactionResultCode` `txTOO_LATE` if its `maxLedger` is less than
-the next ledger, or `txTOO_EARLY` if its `minLedger` is greater than
-the next ledger.
+A transaction submitted with a `seqNum` of zero that does not satisfy the
+`ledgerBounds` requirements is rejected with `TransactionResultCode`
+`txTOO_LATE` if its `maxLedger` is less than the next ledger, or `txTOO_EARLY`
+if its `minLedger` is greater than the next ledger.
 
-A transaction submitted with a `seqNum` of zero satisfies the
-`ledgerBounds` requirements, but whose hash is included in the last
-ledgers transaction set, is rejected with `TransactionResultCode`
-`txDUPLICATE`.
+A transaction submitted with a `seqNum` of zero satisfies the `ledgerBounds`
+requirements, but whose hash is included in the last ledgers transaction set, is
+rejected with `TransactionResultCode` `txDUPLICATE`.
 
-This proposal introduces a new `TransactionResultCode` `txDUPLICATE`
-that is used whenever a transaction is submitted a subsequent time
-after it has been included in a past ledger, and no other condition
-makes the transaction invalid.
+This proposal introduces a new `TransactionResultCode` `txDUPLICATE` that is
+used whenever a transaction is submitted a subsequent time after it has been
+included in a past ledger, and no other condition makes the transaction invalid.
 
-This proposal introduces a new `TransactionResultCode` `txMISSING_MEMO`
-that is used whenever a transaction is submitted a `seqNum` zero
-without a memo. 
+This proposal introduces a new `TransactionResultCode` `txMISSING_MEMO` that is
+used whenever a transaction is submitted a `seqNum` zero without a memo. 
 
 ## Design Rationale
 
-Sequence numbers allow the protocol to guarantee that no replay of a
-transaction is ever possible for an account, forever, without a
-validator needing to remember all transactions that have been
-included in past ledgers. This reduces the storage and lookup costs
-for a validator.
+Sequence numbers allow the protocol to guarantee that no replay of a transaction
+is ever possible for an account, forever, without a validator needing to
+remember all transactions that have been included in past ledgers. This reduces
+the storage and lookup costs for a validator.
 
-However, for the majority of transactions on the Stellar network
-sequence numbers do not need to provide this guarantee forever. The
-majority of users of the Stellar network build, sign, and submit
-transactions immediately with an expectation of success or failure
-within a single ledger. Even though the Stellar network provides a
-transaction queue which allow transactions to be accepted in a near
-future ledger during congestion, most application developers assume
-success or failure within a single ledger. We could argue from this
-behavior by application developers that they do not signal a need
-for most transactions to be valid for more than a single ledger.
+However, for the majority of transactions on the Stellar network sequence
+numbers do not need to provide this guarantee forever. The majority of users of
+the Stellar network build, sign, and submit transactions immediately with an
+expectation of success or failure within a single ledger. Even though the
+Stellar network provides a transaction queue which allow transactions to be
+accepted in a near future ledger during congestion, most application developers
+assume success or failure within a single ledger. We could argue from this
+behavior by application developers that they do not signal a need for most
+transactions to be valid for more than a single ledger.
 
-These qualities of the majority of use cases submitting transactions
-to the network indicate that the network does not need to prevent
-replay using sequence numbers forever.
+These qualities of the majority of use cases submitting transactions to the
+network indicate that the network does not need to prevent replay using sequence
+numbers forever.
 
-Validators can efficiently check that a transaction has not occurred
-in the last ledger with limited storage or memory requirements since
-the data set is limited to the transactions in a single ledger.
+Validators can efficiently check that a transaction has not occurred in the last
+ledger with limited storage or memory requirements since the data set is limited
+to the transactions in a single ledger.
 
 ### Sequence Number Zero
 
-The zero (`0`) sequence number is selected because it has no meaning
-within the Stellar protocol since no transaction is valid with that
-value. The zero value is also the default integer value and in the
-Stellar protocol the zero value is routinely used as an indicator of
-no value being set, as is the case in `TimeBounds`. The zero (`0`)
-sequence number does have meaning in [SEP-10] as a method for
-creating a Stellar transaction that is guaranteed to be invalid on
-any Stellar network, however that invariance of invalidity can be
-maintained by [SEP-10] transactions never setting the
-`ledgerBounds` field of a transaction.
+The zero (`0`) sequence number is selected because it has no meaning within the
+Stellar protocol since no transaction is valid with that value. The zero value
+is also the default integer value and in the Stellar protocol the zero value is
+routinely used as an indicator of no value being set, as is the case in
+`TimeBounds`. The zero (`0`) sequence number does have meaning in [SEP-10] as a
+method for creating a Stellar transaction that is guaranteed to be invalid on
+any Stellar network, however that invariance of invalidity can be maintained by
+[SEP-10] transactions never setting the `ledgerBounds` field of a transaction.
 
 ### Ledger Bounds
 
-The `ledgerBounds` precondition proposed in [CAP-21] allows a
-user to define a transaction that is valid only for a fixed range
-of ledgers. The precondition allows a user to specify that a
-transaction is valid only for the next ledger, and is more accurate
-at achieving this than `timeBounds`.
+The `ledgerBounds` precondition proposed in [CAP-21] allows a user to define a
+transaction that is valid only for a fixed range of ledgers. The precondition
+allows a user to specify that a transaction is valid only for the next ledger,
+and is more accurate at achieving this than `timeBounds`.
 
-of ledgers. The precondition allows a user to specify that a
-transaction is valid only for the next ledger, and is more accurate
-at achieving this than `timeBounds`.
+of ledgers. The precondition allows a user to specify that a transaction is
+valid only for the next ledger, and is more accurate at achieving this than
+`timeBounds`.
 
 ### Transaction Result Code Missing Memo
 
-The `TransactionResultCode` `txMISSING_MEMO` is introduced because
-submitting a sequenceless transaction without a memo is unlikely to guarantee any uniquely identifying data that will differentiate two conceptually unique transactions that happen to contain the same logical operations.
+The `TransactionResultCode` `txMISSING_MEMO` is introduced because submitting a
+sequenceless transaction without a memo is unlikely to guarantee any uniquely
+identifying data that will differentiate two conceptually unique transactions
+that happen to contain the same logical operations.
 
 ### Transaction Result Code Duplicate
 
-The `TransactionResultCode` `txDUPLICATE` is introduced because
-other result codes semantics do not fit the case where the
-`ledgerBounds` are valid, there is no sequence number, but a
-transaction is invalid due to replay. When a
-duplicate transaction is submitted with the protocol today it
-will likely receive a `txBAD_SEQ` result code, however in this
-case the sequence number is zero or not set.
+The `TransactionResultCode` `txDUPLICATE` is introduced because other result
+codes semantics do not fit the case where the `ledgerBounds` are valid, there is
+no sequence number, but a transaction is invalid due to replay. When a duplicate
+transaction is submitted with the protocol today it will likely receive a
+`txBAD_SEQ` result code, however in this case the sequence number is zero or not
+set.
 
-This result code will not be seen by most users because
-Horizon's transaction submission system provides idempotency,
-identifying duplicate submissions and returning the previous
-result.
+This result code will not be seen by most users because Horizon's transaction
+submission system provides idempotency, identifying duplicate submissions and
+returning the previous result.
 
 ## Protocol Upgrade Transition
 
 ### Backwards Incompatibilities
 
-This proposal is completely backwards compatible as it defines new
-functionality that is only accessible with transactions that are currently
-invalid.
+This proposal is completely backwards compatible as it defines new functionality
+that is only accessible with transactions that are currently invalid.
 
 ### Resource Utilization
 
@@ -228,15 +217,14 @@ included in the last ledger if it has a zero sequence number, and with
 overlaps with the last ledger and the next ledger. This will require a cost of
 lookup trending towards O(1) assuming a hash set, map, dictionary, or similar
 data structure can be used. The size of the data set will be limited to the
-number of operations permitted into any ledger. At this time that limit is
-1000 operations. Therefore, the data set will be at most 1000 transactions,
-and will consume at least 32KB if stored in memory, assuming transaction
-hashes are 32 bytes.
+number of operations permitted into any ledger. At this time that limit is 1000
+operations. Therefore, the data set will be at most 1000 transactions, and will
+consume at least 32KB if stored in memory, assuming transaction hashes are 32
+bytes.
 
-This proposal requires validators to hold a list of all transactions hashes
-from the last ledger. Validators typically already store a list of the
-transactions from a number of recent ledgers and so no new storage is
-expected.
+This proposal requires validators to hold a list of all transactions hashes from
+the last ledger. Validators typically already store a list of the transactions
+from a number of recent ledgers and so no new storage is expected.
 
 ## Test Cases
 
