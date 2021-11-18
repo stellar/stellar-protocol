@@ -117,6 +117,16 @@ data is fully rendered in the keys and values.
 ##### Example (storing data on IPFS)
 Name | Description
 -----|------------
+`nft.asset.encoding` | `ipfshash`
+`ipfshash` | `QmYyamp4LUZc3vPFN5ohUH2gChQHsbciN89iXbLEeDLQ22`
+`nft.asset.sha256` | `2171267fe329525d63780e8cfeeee9c9e00d0ceb9417ab402b62e10f5c98085f`
+`nft.meta.url[0]` | `ipfs://QmXmjeRNV8dDkGRcXqyaFydaM2NYwvYqwpmbnQUnxCsDbQ`
+`nft.meta.sha256` | `c917791b24df003ba347caf2a7259b21d78e7c236115f285cc2b08c30c16b1d9`
+
+##### Example (storing data at a URL)
+Name | Description
+-----|------------
+`nft.asset.encoding` | `url`
 `nft.asset.url[0]` | `ipfs://QmYyamp4LUZc3vPFN5ohUH2gChQHsbciN89iXbLEeDLQ22`
 `nft.asset.sha256` | `2171267fe329525d63780e8cfeeee9c9e00d0ceb9417ab402b62e10f5c98085f`
 `nft.meta.url[0]` | `ipfs://QmXmjeRNV8dDkGRcXqyaFydaM2NYwvYqwpmbnQUnxCsDbQ`
@@ -125,6 +135,7 @@ Name | Description
 ##### Example (storing data on Stellar inside a data URL)
 Name | Description
 -----|------------
+`nft.asset.encoding` | `url`
 `nft.asset.url[0]` | `data:image/gif;base64,R0lGODlhAQABAIcAAP8AAAAAAAAAAAAAAAAAAAAAAA`
 `nft.asset.url[1]` | `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`
 `nft.asset.url[2]` | `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`
@@ -152,7 +163,7 @@ Name | Description
 ##### Example (storing data on Stellar inside data entries using the compact v1 format)
 Name | Description
 -----|------------
-`nft.asset.url[0]` | `-:compactv1`
+`nft.asset.encoding` | `compactv1`
 `00iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEI0lEQVRYR8WXS0` | `aVVVUlRILzJQalRLTmozNHlWcGtsamowVkU3MVpDbGowbXpiQWlpRnBWVkx0SUtJS2lSVkRRb29paUlCZEYwWA==`
 `01MRtVCTmikriRBa9CApWvQmNYXRmRzNGW2+OHe8M/d7zmcR3o1+d84953f+59z7` | `M2M5V0x0ZktEMUdOc1JoKzNJTk5EbFRMT1ZYdnhpSStCZ0p6a2dEU2xtK21BS3VMZktqT0hXWTJ1N3pqVEcwdg==`
 `029f5mv9/rt6O586upbXf4FGyDckAu8Bxgho0P67Hev1Gx6PSsqZYCqyNxkP0f2g` | `MGhOQUJxU3dwZW1SVk5UWmRJa3FWU2ZZOUVVbmJCaEJzaWhKaWtLWUE2dUtYSUJrWnFDRzVtQ0dBbCtHQlhOOA==`
