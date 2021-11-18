@@ -75,12 +75,8 @@ creating the NFT.
 Name | Type | Description
 -----|------|------------
 `nft.asset.encoding` | string | A value indicating how the asset is encoded. Valid values: `url`, `ipfshash`, `compactv1`.
-`nft.asset.url[n]` | string | Present if encoding is `url`. One or more data
-entries where `n` starts at `0`, where the combined value of all the data
-entries is a URL to the asset tokenized by the NFT. URLs may be any URL, such as
-a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
-`ipfshash`* | string | Present if encoding is `ipfshash`. A single data entry
-containing an IPFS CID. Equivalent to `nft.asset.url[0]` with a value of
+`nft.asset.url[n]` | string | Present if encoding is `url`. One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to the asset tokenized by the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
+`ipfshash`* | string | Present if encoding is `ipfshash`. A single data entry containing an IPFS CID. Equivalent to `nft.asset.url[0]` with a value of
 `ipfs://<CID>`.
 `nft.asset.sha256` | string | A SHA-256 hash of the asset referenced by the `nft.asset.url[n]` data entries.
 `nft.meta.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to a JSON document containing any meta data about the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
