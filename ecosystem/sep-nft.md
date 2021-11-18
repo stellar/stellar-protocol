@@ -6,8 +6,8 @@ Title: NFT Data Entries
 Author: Leigh McCulloch (@leighmcculloch)
 Status: Draft
 Created: 2021-04-07
-Updated: 2021-04-07
-Version: 0.1.0
+Updated: 2021-11-17
+Version: 0.2.0
 ```
 
 ## Simple Summary
@@ -74,10 +74,32 @@ creating the NFT.
 #### Keys
 Name | Type | Description
 -----|------|------------
-`nft.asset.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to the asset tokenized by the NFT.
+`nft.asset.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to the asset tokenized by the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
 `nft.asset.sha256` | string | A SHA-256 hash of the asset referenced by the `nft.asset.url[n]` data entries.
-`nft.meta.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to a JSON document containing any meta data about the NFT.
+`nft.asset.content_type` | string | (Optional) A [mime-type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types) describing the content-type of the asset referenced by the `nft.asset.url[n]` data entries. e.g. `image/gif`
+`nft.meta.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to a JSON document containing any meta data about the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may
+use some schemes noted in this document.
 `nft.meta.sha256` | string | A SHA-256 hash of the meta data referenced by the `nft.meta.url[n]` data entries.
+
+#### URL Types
+
+URL Scheme | Description
+-----|------------
+`http://` | A regular insecure HTTP URL.
+`https://` | A regular secure HTTP URL.
+`ipfs://` | An IPFS CID referencing a document, object, image, etc stored in IPFS.
+`data:image/gif;base64,...` | A data URL containing the asset embedded inside the base64 URL.
+`-:compactv1` | The asset is stored inside data entries of this account using the compact format.
+
+##### URL Type: Compact v1
+
+When an asset is compact encoded it's data is encoded into the key and value
+fields of data entries inside the Stellar account.
+
+The first 2 bytes of the key are an indexing value from 0 to 999. The last 46
+bytes are the first/next chunk of the data. The value is a slice of 64 bytes of
+the next chunk of the data buffer. A data entry is added repeatedly until the
+data is fully rendered in the keys and values.
 
 #### Examples
 
@@ -89,7 +111,7 @@ Name | Description
 `nft.meta.url[0]` | `ipfs://QmXmjeRNV8dDkGRcXqyaFydaM2NYwvYqwpmbnQUnxCsDbQ`
 `nft.meta.sha256` | `c917791b24df003ba347caf2a7259b21d78e7c236115f285cc2b08c30c16b1d9`
 
-##### Example (storing data on Stellar)
+##### Example (storing data on Stellar inside a data URL)
 Name | Description
 -----|------------
 `nft.asset.url[0]` | `data:image/gif;base64,R0lGODlhAQABAIcAAP8AAAAAAAAAAAAAAAAAAAAAAA`
@@ -110,6 +132,21 @@ Name | Description
 `nft.asset.url[15]` | `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`
 `nft.asset.url[16]` | `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAA`
 `nft.asset.url[17]` | `Ah+QQEAAAAACwAAAAAAQABAAAIBAABBAQAOw==`
+`nft.asset.sha256` | `0355d1adbb1acc92b8886081145bad232e99188255c19b27e9ef4c6f5118914f`
+`nft.meta.url[0]` | `data:application/json;base64,ewogICJuYW1lIjogIkZhbGwiLAogICJkZXN`
+`nft.meta.url[1]` | `jcmlwdGlvbiI6ICJQaG90byBvZiBsZWF2ZXMg7aC87b2BIGFuZCBza3kg4puF77i`
+`nft.meta.url[2]` | `PIGluIFNhbiBGcmFuY2lzY28uIgp9`
+`nft.meta.sha256` | `5a3c6f43d394aa971260d1690b9b200e83c67c5afa8c6c2ae2872e8bcde040af`
+
+##### Example (storing data on Stellar inside data entries using the compact v1 format)
+Name | Description
+-----|------------
+`nft.asset.url[0]` | `-:compactv1`
+`` | ``
+`00iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEI0lEQVRYR8WXS0` | `aVVVUlRILzJQalRLTmozNHlWcGtsamowVkU3MVpDbGowbXpiQWlpRnBWVkx0SUtJS2lSVkRRb29paUlCZEYwWA==`
+`01MRtVCTmikriRBa9CApWvQmNYXRmRzNGW2+OHe8M/d7zmcR3o1+d84953f+59z7` | `M2M5V0x0ZktEMUdOc1JoKzNJTk5EbFRMT1ZYdnhpSStCZ0p6a2dEU2xtK21BS3VMZktqT0hXWTJ1N3pqVEcwdg==`
+`029f5mv9/rt6O586upbXf4FGyDckAu8Bxgho0P67Hev1Gx6PSsqZYCqyNxkP0f2g` | `MGhOQUJxU3dwZW1SVk5UWmRJa3FWU2ZZOUVVbmJCaEJzaWhKaWtLWUE2dUtYSUJrWnFDRzVtQ0dBbCtHQlhOOA==`
+`03...` | `...`
 `nft.asset.sha256` | `0355d1adbb1acc92b8886081145bad232e99188255c19b27e9ef4c6f5118914f`
 `nft.meta.url[0]` | `data:application/json;base64,ewogICJuYW1lIjogIkZhbGwiLAogICJkZXN`
 `nft.meta.url[1]` | `jcmlwdGlvbiI6ICJQaG90byBvZiBsZWF2ZXMg7aC87b2BIGFuZCBza3kg4puF77i`
