@@ -78,7 +78,7 @@ The following keys are common to all encoding types.
 Name | Type | Description
 -----|------|------------
 `nft.asset.encoding` | string | A value indicating how the asset is encoded. Valid values: `url`, `ipfshash`, `compactv1`.
-`nft.asset.sha256` | string | A SHA-256 hash of the asset referenced by the `nft.asset.url[n]` data entries.
+`nft.asset.sha256` | string | A SHA-256 hash of the asset data.
 `nft.meta.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to a JSON document containing any meta data about the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
 `nft.meta.sha256` | string | A SHA-256 hash of the meta data referenced by the `nft.meta.url[n]` data entries.
 
