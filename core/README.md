@@ -40,17 +40,18 @@
 | [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Final |
 | [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
 | [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
-| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Implemented |
+| [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Final |
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
 | [CAP-0025](cap-0025.md) | Remove Bucket Shadowing | Marta Lokhava | Final |
 | [CAP-0026](cap-0026.md) | Disable Inflation Mechanism | OrbitLens | Final |
 | [CAP-0027](cap-0027.md) | First-class multiplexed accounts | David Mazières and Tomer Weller | Final |
 | [CAP-0028](cap-0028.md) | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Final |
-| [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Accepted |
+| [CAP-0029](cap-0029.md) | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Final |
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
-| [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Implemented |
-| [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Implemented |
-| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Accepted |
+| [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Final |
+| [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
+| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Implemented |
+| [CAP-0038](cap-0038.md) | Automated Market Makers | Jonathan Jove | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -62,9 +63,12 @@
 | [CAP-0011](cap-0011.md) | Relative Account Freeze | Jeremy Rubin | Draft |
 | [CAP-0012](cap-0012.md) | Deterministic accounts and creatorTxID | David Mazières | Draft |
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
-| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Draft |
+| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Awaiting Decision |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
+| [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
+| [CAP-0040](cap-0040.md) | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Awaiting Decision |
+| [CAP-0041](cap-0041.md) | Concurrent Transactions | Leigh McCulloch, David Mazières | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -73,6 +77,7 @@
 | [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG | David Mazières | Rejected |
 | [CAP-0031](cap-0031.md) | Sponsored Reserve | Jonathan Jove | Rejected |
 | [CAP-0036](cap-0036.md) | Claimable Balance Clawback | Leigh McCulloch | Rejected |
+| [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines | Leigh McCulloch | Rejected |
 
 # Contribution Process
 
