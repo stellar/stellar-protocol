@@ -77,8 +77,7 @@ Name | Type | Description
 `nft.asset.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to the asset tokenized by the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
 `nft.asset.sha256` | string | A SHA-256 hash of the asset referenced by the `nft.asset.url[n]` data entries.
 `nft.asset.content_type` | string | (Optional) A [mime-type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types) describing the content-type of the asset referenced by the `nft.asset.url[n]` data entries. e.g. `image/gif`
-`nft.meta.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to a JSON document containing any meta data about the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may
-use some schemes noted in this document.
+`nft.meta.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to a JSON document containing any meta data about the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
 `nft.meta.sha256` | string | A SHA-256 hash of the meta data referenced by the `nft.meta.url[n]` data entries.
 
 #### URL Types
