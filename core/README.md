@@ -38,7 +38,7 @@
 | [CAP-0015](cap-0015.md) | Fee Bump Transactions | OrbitLens | Final |
 | [CAP-0017](cap-0017.md) | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
 | [CAP-0018](cap-0018.md) | Fine-Grained Control of Authorization | Jonathan Jove | Final |
-| [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Accepted |
+| [CAP-0019](cap-0019.md) | Future-upgradable TransactionEnvelope type | David Mazières | Final |
 | [CAP-0020](cap-0020.md) | Bucket Initial Entries | Graydon Hoare | Final |
 | [CAP-0023](cap-0023.md) | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Final |
 | [CAP-0024](cap-0024.md) | Make PathPayment Symmetrical | Jed McCaleb | Final |
@@ -50,8 +50,8 @@
 | [CAP-0030](cap-0030.md) | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
 | [CAP-0033](cap-0033.md) | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Final |
 | [CAP-0034](cap-0034.md) | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
-| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Implemented |
-| [CAP-0038](cap-0038.md) | Automated Market Makers | Jonathan Jove | Accepted |
+| [CAP-0035](cap-0035.md) | Asset Clawback | Dan Doney | Final |
+| [CAP-0038](cap-0038.md) | Automated Market Makers | Jonathan Jove | Final |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
