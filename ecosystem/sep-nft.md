@@ -3,7 +3,7 @@
 ```
 SEP: ????
 Title: NFT Data Entries
-Author: Leigh McCulloch (@leighmcculloch)
+Author: Leigh McCulloch <@leighmcculloch>, Tyler van der Hoeven <@tyvdh>
 Status: Draft
 Created: 2021-04-07
 Updated: 2021-11-17
