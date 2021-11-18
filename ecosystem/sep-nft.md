@@ -74,25 +74,33 @@ creating the NFT.
 #### Keys
 Name | Type | Description
 -----|------|------------
-`nft.asset.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to the asset tokenized by the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
-`ipfshash`* | string | A single data entry containing an IPFS CID. Equivalent to `nft.asset.url[0]` with a value of `ipfs://<CID>`.
+`nft.asset.encoding` | string | A value indicating how the asset is encoded. Valid values: `url`, `ipfshash`, `compactv1`.
+`nft.asset.url[n]` | string | Present if encoding is `url`. One or more data
+entries where `n` starts at `0`, where the combined value of all the data
+entries is a URL to the asset tokenized by the NFT. URLs may be any URL, such as
+a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
+`ipfshash`* | string | Present if encoding is `ipfshash`. A single data entry
+containing an IPFS CID. Equivalent to `nft.asset.url[0]` with a value of
+`ipfs://<CID>`.
 `nft.asset.sha256` | string | A SHA-256 hash of the asset referenced by the `nft.asset.url[n]` data entries.
 `nft.meta.url[n]` | string | One or more data entries where `n` starts at `0`, where the combined value of all the data entries is a URL to a JSON document containing any meta data about the NFT. URLs may be any URL, such as a `https://` or `ipfs://` URL, but may use some schemes noted in this document.
 `nft.meta.sha256` | string | A SHA-256 hash of the meta data referenced by the `nft.meta.url[n]` data entries.
 
-\* `ipfshash` is included for compatibility with [Litemint.io].
+\* `ipfshash` is compatible with [Litemint.io].
 
-#### URL Types
+#### Encoding: `url`
 
-URL Scheme | Description
------|------------
-`http://` | A regular insecure HTTP URL.
-`https://` | A regular secure HTTP URL.
-`ipfs://` | An IPFS CID referencing a document, object, image, etc stored in IPFS.
-`data:image/gif;base64,...` | A data URL containing the asset embedded inside the base64 URL.
-`-:compactv1` | The asset is stored inside data entries of this account using the compact format.
+When an asset is URL encoded it is either referenced by a URL such as a
+`https://` or `ipfs://` URL, or embedded using a data URL such as
+`data:image/gif;base64,...`. The URL is encoded in `nft.asset.url[n]` fields
+where `n` starts at `0`, where the combined value of all the data entries is the
+URL of the asset tokenized by the NFT.
 
-##### URL Type: Compact v1
+#### Encoding: `ipfshash`
+
+When an asset is IPFS hash encoded it is stored in IPFS and the CID hash of the document or object is stored as the value.
+
+#### Encoding: `compactv1`
 
 When an asset is compact encoded it's data is encoded into the key and value
 fields of data entries inside the Stellar account.
