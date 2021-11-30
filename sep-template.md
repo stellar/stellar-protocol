@@ -7,6 +7,8 @@ Author: <list of authors' names, GitHub handles, and optionally, email addresses
 Track: <Informational or Standard>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
+Updated: <date last updated, in ISO 8601 (yyyy-mm-dd) format>
+Version: 0.1.0
 Discussion: <link to where discussion for this SEP is taking place, typically the mailing list>
 ```
 
