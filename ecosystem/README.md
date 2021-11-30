@@ -195,7 +195,6 @@ During draft a SEP should have a major version of `0` to indicate that anything 
 - Jake Urban <@JakeUrban> (SDF)
 - Alex Cordeiro <@accordeiro> (SDF)
 - Marcelo Salloum <@marcelosalloum> (SDF)
-- 
 - Orbit Lens <@orbitlens>
 - David Mazières <@stanford-scs> (SDF)
 - Jed McCaleb <@jedmccaleb> (SDF)
