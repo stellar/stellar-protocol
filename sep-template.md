@@ -40,3 +40,8 @@ objections or concerns raised during discussion.
 ## Security Concerns
 All SEPs should carefully consider areas where security may be a concern, and document them
 accordingly. If a change does not have security implications, write "N/A".
+
+## Changelog
+- `v0.1.0`: Initial draft.
+- `v0.2.0`: Redesigned the API.
+- `v1.0.0`: Updated status to Active.
