@@ -46,8 +46,8 @@ All SEPs should contain a changelog that succinctly lists its versions and what 
 
 Example:
 
-- `v0.1.0`: Initial draft. [#1000](https://github.com/stellar/stellar-protocol/pulls/1000)
-- `v0.2.0`: Redesigned the API. [#1004](https://github.com/stellar/stellar-protocol/pulls/1004)
-- `v1.0.0`: Updated status to Active. [#1234](https://github.com/stellar/stellar-protocol/pulls/1234)
-- `v1.1.0`: Add new paremeters to the X endpoint. [#3498](https://github.com/stellar/stellar-protocol/pulls/3498)
 - `v1.1.1`: Fix misleading statements about the P parameter. [#3499](https://github.com/stellar/stellar-protocol/pulls/3499)
+- `v1.1.0`: Add new paremeters to the X endpoint. [#3498](https://github.com/stellar/stellar-protocol/pulls/3498)
+- `v1.0.0`: Updated status to Active. [#1234](https://github.com/stellar/stellar-protocol/pulls/1234)
+- `v0.2.0`: Redesigned the API. [#1004](https://github.com/stellar/stellar-protocol/pulls/1004)
+- `v0.1.0`: Initial draft. [#1000](https://github.com/stellar/stellar-protocol/pulls/1000)
