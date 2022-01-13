@@ -42,6 +42,12 @@ All SEPs should carefully consider areas where security may be a concern, and do
 accordingly. If a change does not have security implications, write "N/A".
 
 ## Changelog
+All SEPs should contain a changelog that succinctly lists its versions and what change was introduced in each version. Information included should contain a succinct by complete description of what has changed. Succinct is important so that over time a large changelog is easily digested.
+
+Example:
+
 - `v0.1.0`: Initial draft.
 - `v0.2.0`: Redesigned the API.
 - `v1.0.0`: Updated status to Active.
+- `v1.1.0`: Add new paremeters to the X endpoint.
+- `v1.1.1`: Fix misleading statements about the P parameter.
