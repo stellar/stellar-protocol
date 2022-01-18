@@ -42,7 +42,7 @@ All SEPs should carefully consider areas where security may be a concern, and do
 accordingly. If a change does not have security implications, write "N/A".
 
 ## Changelog
-All SEPs should contain a changelog that succinctly lists its versions and what change was introduced in each version. Information included should contain a succinct by complete description of what has changed. Succinct is important so that over time a large changelog is easily digested.
+All SEPs should contain a changelog that succinctly lists its versions and what changes were introduced in each version. A complete description of what has changed should be included, but it should be as succinct as possible. Succinct is important so that over time a large changelog is easily digested.
 
 Example:
 
