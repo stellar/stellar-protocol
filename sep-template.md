@@ -40,3 +40,14 @@ objections or concerns raised during discussion.
 ## Security Concerns
 All SEPs should carefully consider areas where security may be a concern, and document them
 accordingly. If a change does not have security implications, write "N/A".
+
+## Changelog
+All SEPs should contain a changelog that succinctly lists its versions and what changes were introduced in each version. A complete description of what has changed should be included, but it should be as succinct as possible. Succinct is important so that over time a large changelog is easily digested.
+
+Example:
+
+- `v1.1.1`: Fix misleading statements about the P parameter. [#3499](https://github.com/stellar/stellar-protocol/pulls/3499)
+- `v1.1.0`: Add new paremeters to the X endpoint. [#3498](https://github.com/stellar/stellar-protocol/pulls/3498)
+- `v1.0.0`: Updated status to Active. [#1234](https://github.com/stellar/stellar-protocol/pulls/1234)
+- `v0.2.0`: Redesigned the API. [#1004](https://github.com/stellar/stellar-protocol/pulls/1004)
+- `v0.1.0`: Initial draft. [#1000](https://github.com/stellar/stellar-protocol/pulls/1000)
