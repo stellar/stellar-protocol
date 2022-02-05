@@ -39,9 +39,9 @@ governments.
 
 Cloud hosted HSMs have made HSMs accessible and they have become popular for
 generating and storing keys securely. Cloud HSMs typically support a small
-subset of FIPS algorithms along with ECDSA secp256k1 which isn’t FIPS approved,
-but popular due to Bitcoin’s and Ethereum's use and broad use in other
-blockchains.
+subset of FIPS approved algorithm implementations along with ECDSA secp256k1
+which isn’t FIPS approved, but popular due to Bitcoin’s and Ethereum's use and
+broad use in other blockchains.
 
 Stellar supports a single assymetric key type and signing algorithm for
 controlling accounts, ed255519. Ed25519 is not included in approved lists of
