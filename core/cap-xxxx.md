@@ -144,23 +144,24 @@ index 8f7d5c20..9394ada7 100644
 
 #### SignerKey
 
-SignerKey is modified to include arms for ECDSA P-256 and secp2561k1 public
-keys. The x and y points are stored in transactions and in the ledger
+`SignerKey` is modified to include arms for ECDSA P-256 and secp2561k1 public
+keys. The `x` and `y` points are stored in transactions and in the ledger
 uncompressed which requires 64 bytes of space for both key types.
 
 #### PublicKey
 
-PublicKey is not modified because the proposal does not change the keys intended
-for use in identification on the network. Specifically the keys available for
-identifying accounts and nodes on the network are unchanged and will continue to
-be limited to ed25519.
+`PublicKey` is not modified because the proposal does not change the keys
+intended for use in identification on the network. Specifically the keys
+available for identifying accounts and nodes on the network are unchanged and
+will continue to be limited to ed25519.
 
 #### Signature
 
-Signature is unchanged and remains to have a maximum length of 64 bytes.
+`Signature` is unchanged and remains to have a maximum length of 64 bytes.
 
-EcdsaP256Signature and EcdsaSecp256k1Signature are added to define the structure
-of the opaque Signature for the new key types.
+`EcdsaP256Signature` and `EcdsaSecp256k1Signature` are added to define the
+structure of the opaque `Signature` for the new key types. Both contain the `r`
+and `s` points of the ECDSA signature for their respective key types.
 
 ## Design Rationale
 
@@ -194,6 +195,12 @@ The raw r and s points that form the ECDSA signature are stored as is, as this
 is the most raw and convenient format. Some standard libraries may prefer to
 encode the signature as ASN.1, however this increases the size of the signature
 to 71 bytes, which would require changing the size of the Signature type.
+
+There is some repetition in the protocol change as both signer key structs and
+the signature structures contain the same fields. It is a coincidence in this
+proposal that both ECDSA curves use points of the same byte length. Their
+appearance of sameness is not a general abstraction to solidify. If other ECDSA
+curves are added in the future their points lengths may be different.
 
 ## Protocol Upgrade Transition
 
