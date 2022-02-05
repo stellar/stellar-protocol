@@ -24,9 +24,11 @@ TBD
 
 ## Motivation
 
-This proposal is motivated by financial institutions requirements with FIPS
-approved security modules, and making it possible for Stellar account holders to
-use cloud hosted HSMs (Hardware Security Modules) to store account keys.
+This proposal has two motivatons:
+1. The common requirement in financial institutions to use security modules that
+are FIPS approved.
+2. The inability that Stellar account holders have today to use cloud hosted
+HSMs (Hardware Security Modules) to store account keys.
 
 Financial institutions typically require cryptographic algorithms and modules
 they use to appear in approved lists of the latest relevant FIPS standard, at
