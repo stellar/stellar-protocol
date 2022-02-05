@@ -210,6 +210,9 @@ of accounts may encounter the new types. Any application that performs analysis
 on transactions signed by the new types, or transactions that use a SetOptionsOp
 with the new types, may encounter the new types.
 
+An accompanying change will be required to [SEP-23 Strkeys] to add new algorithm
+discrimants.
+
 ### Backwards Incompatibilities
 
 This proposal is backwards compatible.
@@ -247,3 +250,5 @@ TBD
 ## Implementation
 
 TBD
+
+[SEP-23 Strkeys]: ../ecosystem/SEP-0023.md
