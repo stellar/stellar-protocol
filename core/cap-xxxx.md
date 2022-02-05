@@ -138,6 +138,10 @@ for use in identification on the network. Specifically the keys available for
 identifying accounts and nodes on the network are unchanged and will continue to
 be limited to ed25519.
 
+#### Signature
+
+TODO: Update signature max length.
+
 ## Design Rationale
 
 The proposal is intentionally surgical, introducing the new signers into only
