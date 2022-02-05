@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-CAP: xxxx
+CAP: 0043
 Title: ECDSA Signers with P-256 and secp256k1 Curves
 Working Group:
     Owner: Leigh McCulloch <@leighmcculloch>
