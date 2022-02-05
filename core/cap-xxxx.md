@@ -30,11 +30,11 @@ are FIPS approved.
 2. The inability that Stellar account holders have today to use cloud hosted
 HSMs (Hardware Security Modules) to store account keys.
 
-Financial institutions typically require cryptographic algorithms and modules
-they use to appear in approved lists of the latest relevant FIPS standard, at
-this time FIPS 140-3 and FIPS 140-2 and their relevant annexes and related
-standards. The US and Canadian governments require FIPS for systems they run,
-operate, or buy. This makes FIPS relevant to corporations that work with
+Financial institutions typically require the cryptographic algorithms and
+modules they use to appear in approved lists of the latest relevant FIPS
+standard, at this time FIPS 140-3 and FIPS 140-2 and their relevant annexes and
+related standards. The US and Canadian governments require FIPS for systems they
+run, operate, or buy. This makes FIPS relevant to corporations that work with
 governments.
 
 Cloud hosted HSMs have made HSMs accessible and they have become popular for
@@ -59,6 +59,11 @@ support the use of off-the-shelf security products.
 
 The proposal adds ECDSA keys as an option to use as signers of accounts. The
 proposal adds includes support for the NIST P-256 curve and the secp256k1 curve.
+
+Nothing in this proposal makes Stellar, or the reference implementation of a
+Stellar validator, stellar-core, FIPS certified. This proposal makes it possible
+for a Stellar account holder to store their account key in FIPS certified
+modules, or in cloud hosted HSMs.
 
 ## Specification
 
