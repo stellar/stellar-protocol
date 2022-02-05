@@ -251,4 +251,4 @@ TBD
 
 TBD
 
-[SEP-23 Strkeys]: ../ecosystem/SEP-0023.md
+[SEP-23 Strkeys]: ../ecosystem/sep-0023.md
