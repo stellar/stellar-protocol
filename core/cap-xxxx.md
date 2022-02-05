@@ -65,7 +65,7 @@ The proposal adds ECDSA keys as an option to use as signers of accounts. The
 proposal adds includes support for the NIST P-256 curve and the secp256k1 curve.
 
 This proposal makes it possible for a Stellar account holder to store their
-account key in FIPS certified modules, or in cloud hosted HSMs.
+account key in FIPS certified modules, and/or in cloud hosted HSMs.
 
 Nothing in this proposal makes Stellar, or the reference implementation of a
 Stellar validator, stellar-core, FIPS certified. Nothing in this proposal
