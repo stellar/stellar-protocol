@@ -50,6 +50,10 @@ compliant. While ed25519 is mentioned in drafts of FIPS 186-5 there is no
 evidence that FIPS approved security modules will arise in the immediate future.
 Ed25519 is not supported by any cloud hosted HSMs today.
 
+There may be other benefits to supporting secp256k1 signing keys for
+compatibility with some other blockchains in certain cross-chain protocols, but
+that motivation is not driving this proposal.
+
 ### Goals Alignment
 
 The Stellar network aims to integrate with existing financial systems and
