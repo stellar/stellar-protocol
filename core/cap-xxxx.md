@@ -79,7 +79,7 @@ utilize a HSM.
 This patch of XDR changes is based on the XDR files in commit (`394b9413180969e2035e19742194d9c04c5bf5d9`) of stellar-core.
 ```diff mddiffcheck.base=394b9413180969e2035e19742194d9c04c5bf5d9
 diff --git a/src/xdr/Stellar-types.x b/src/xdr/Stellar-types.x
-index 8f7d5c20..740aa15c 100644
+index 8f7d5c20..9394ada7 100644
 --- a/src/xdr/Stellar-types.x
 +++ b/src/xdr/Stellar-types.x
 @@ -19,6 +19,9 @@ enum CryptoKeyType
@@ -120,6 +120,23 @@ index 8f7d5c20..740aa15c 100644
  };
  
  // variable size as the size depends on the signature scheme used
+@@ -80,4 +95,16 @@ struct HmacSha256Mac
+ {
+     opaque mac[32];
+ };
++
++struct EcdsaP256Signature
++{
++    opaque r[32];
++    opaque s[32];
++};
++
++struct EcdsaSecp256k1Signature
++{
++    opaque r[32];
++    opaque s[32];
++};
+ }
 
 ```
 
@@ -128,7 +145,7 @@ index 8f7d5c20..740aa15c 100644
 #### SignerKey
 
 SignerKey is modified to include arms for ECDSA P-256 and secp2561k1 public
-keys. The X and Y points are stored in transactions and in the ledger
+keys. The x and y points are stored in transactions and in the ledger
 uncompressed which requires 64 bytes of space for both key types.
 
 #### PublicKey
@@ -140,7 +157,10 @@ be limited to ed25519.
 
 #### Signature
 
-TODO: Update signature max length.
+Signature is unchanged and remains to have a maximum length of 64 bytes.
+
+EcdsaP256Signature and EcdsaSecp256k1Signature are added to define the structure
+of the opaque Signature for the new key types.
 
 ## Design Rationale
 
@@ -169,6 +189,11 @@ signatures, and so would have no impact on the largest dimension of scale that
 the network has, transactions. The choice to use uncompressed form in the XDR
 does not limit whether the strkey definition uses compressed form, and so the
 use of uncompressed form in the protocol does not impact the UX.
+
+The raw r and s points that form the ECDSA signature are stored as is, as this
+is the most raw and convenient format. Some standard libraries may prefer to
+encode the signature as ASN.1, however this increases the size of the signature
+to 71 bytes, which would require changing the size of the Signature type.
 
 ## Protocol Upgrade Transition
 
