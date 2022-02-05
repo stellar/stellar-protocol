@@ -160,11 +160,11 @@ per key, because decompressing the key requires solving y^2 = x^3 - 3x + b and
 finding the square-root of a value. This is a trade-off between ledger storage
 space and the CPU time a validator must expend to verify a signature. It would
 not be ideal for validators, as part of verifying signatures, to need to
-decompress the key each time. If it is practical to cache decompress keys in
-memory, or the CPU time of decompression is not meaningful, this rationale
-should be revisited. The choice to use uncompressed form in the XDR does not
-limit whether the strkey definition uses compressed form, and so the use of
-uncompressed form in the protocol does not impact the UX.
+decompress the key each time. Compressed form would not reduce the size of ECDSA
+signatures, and so would have no impact on the largest dimension of scale that
+the network has, transactions. The choice to use uncompressed form in the XDR
+does not limit whether the strkey definition uses compressed form, and so the
+use of uncompressed form in the protocol does not impact the UX.
 
 ## Protocol Upgrade Transition
 
