@@ -70,6 +70,7 @@
 | [CAP-0040](cap-0040.md) | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Awaiting Decision |
 | [CAP-0041](cap-0041.md) | Concurrent Transactions | Leigh McCulloch, David Mazières | Draft |
 | [CAP-0042](cap-0042.md) | Multi-Part Transaction Sets | Nicolas Barry | Draft |
+| [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
