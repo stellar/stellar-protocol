@@ -63,11 +63,11 @@
 | [CAP-0011](cap-0011.md) | Relative Account Freeze | Jeremy Rubin | Draft |
 | [CAP-0012](cap-0012.md) | Deterministic accounts and creatorTxID | David Mazières | Draft |
 | [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
-| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | Awaiting Decision |
+| [CAP-0021](cap-0021.md) | Generalized transaction preconditions | David Mazières | FCP: Acceptance |
 | [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
-| [CAP-0040](cap-0040.md) | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Awaiting Decision |
+| [CAP-0040](cap-0040.md) | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | FCP: Acceptance |
 | [CAP-0041](cap-0041.md) | Concurrent Transactions | Leigh McCulloch, David Mazières | Draft |
 | [CAP-0042](cap-0042.md) | Multi-Part Transaction Sets | Nicolas Barry | Draft |
 | [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
