@@ -118,8 +118,7 @@ It's worth noting that the idea of "ownership" described throughout the SEP--- o
 
 
 ## Security Concerns
-While there are no security concerns in this informational SEP pertaining to the Stellar network itself, it is important to discuss 
-
+This informational SEP does not introduce security concerns pertaining to the Stellar network itself.
 
 
 ## Changelog
