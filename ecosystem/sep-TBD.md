@@ -10,7 +10,7 @@ Status: Draft
 Created: 02-22-2022
 Updated: 02-22-2022
 Version: 0.1.0
-Discussion: https://github.com/stellar/stellar-protocol/pull/1139
+Discussion: https://github.com/stellar/stellar-protocol/pull/1140
 ```
 
 ## Simple Summary
@@ -122,7 +122,7 @@ This informational SEP does not introduce security concerns pertaining to the St
 
 
 ## Changelog
-- `v0.1.0`: Initial draft. [#1139](https://github.com/stellar/stellar-protocol/pull/1139)
+- `v0.1.0`: Initial draft. [#1140](https://github.com/stellar/stellar-protocol/pull/1140)
 
 
 [sep1]: https://stellar.org/protocol/sep-1
