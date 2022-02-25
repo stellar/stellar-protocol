@@ -63,14 +63,25 @@ There is a common naming convention within the Ethereum ecosystem and other APIs
 
 Note that this model has some fundamental limitations: for example, the data entry can only reference the CID describing a single digital good, but you may want the account to issue many different digital goods. You may want to adopt a different model if this one doesn't fit your use case. For example, you could use a `<asset-code>.url` data entry or just rely on your [SEP-1][sep1] file's [currency description][sep1-currency]. Fundamentally, though, it's important to create relationships between your issuing accounts and the digital goods they issue.
 
+#### Ensuring digital good immutability
+If you plan never to increase the supply or modify your digital good, it is best practice to "commit" to this by locking the issuing account. Freezing the account representing your digital good is key to providing immutability for the above steps:
+
+  1. It prevents the account from issuing additional units of the good.
+  2. It prevents data entries from being modified.
+  3. It prevents the [`AccountMerge`](https://developers.stellar.org/docs/start/list-of-operations/#account-merge) operation so the issuing account persists.
+  4. It prevents revocation of ownership (the Authorization Immutable flag could also be used, but alone, it would not prevent the other points above).
+
+By default (i.e. without a [multisig](https://developers.stellar.org/docs/glossary/multisig/) setup), to freeze an account you would set its `masterWeight` to zero via the [`SetOptions`][set-options] operation.
+
+Freezing is an irreversible process once complete (by design), so take extra care when freezing your digital good issuing account. Some use cases _may_ require the option to unfreeze an account at a future date and this is possible if done in advance, prior to the freeze. This can be done on Stellar via a [pre-authorized transaction](https://developers.stellar.org/docs/glossary/multisig/#pre-authorized-transaction) submitted containing a [`SetOptions`][set-options] operation that sets the `masterWeight` back to 1.
 
 ### Representing Digital Goods
 This section provides interoperability guidance around _representing_ digital goods. 
 
-Since digital goods are represented by Stellar assets and are thus "first-class citizens" in the ecosystem, they should leverage existing interoperability layers. Setting up a [SEP-1 `stellar.toml`][sep1] file provides immediate interoperability with all services and wallets on the Stellar ecosystem. It is highly recommended that all assets you issue on Stellar, digital goods or not, follow the [SEP-1][sep1] standard to provide a valid `stellar.toml` file. This grants your digital good a degree of legitimacy, because most Stellar ecosystem services and wallets tend to discard TOML-less assets and/or flag them as spam. 
+Since digital goods are represented by Stellar assets and are thus "first-class citizens" in the ecosystem, they should leverage existing interoperability layers. Setting up a [SEP-1 `stellar.toml`][sep1] file provides immediate interoperability with all services and wallets on the Stellar ecosystem. It is highly recommended that all assets you issue on Stellar, digital goods or not, follow the [SEP-1][sep1] standard to provide a valid `stellar.toml` file. This grants your digital good a degree of legitimacy, because most Stellar ecosystem services and wallets tend to discard TOML-less assets and/or flag them as spam. There is detailed documentation about how to do that on [this page](https://developers.stellar.org/docs/issuing-assets/publishing-asset-info/).
 
 #### Using SEP-1
-Many of the SEP-1 are highly relevant to digital goods. You should include as many of them as is appropriate for your use case:
+Many of the [SEP-1][sep1] are highly relevant to digital goods. You should include as many of them as is appropriate for your use case:
 
   * the `code` and `issuer` fields are essential to describe the Stellar asset that represents your digital good
   * the `name` and `desc` fields provide human-readable information about your digital good
@@ -96,7 +107,7 @@ fixed_number=1
 display_decimals=7
 ```
 
-Once you have a `stellar.toml` file under your domain, you should also configure the issuing account's `homedomain` to point to it via the [`SetOptions` operation](https://developers.stellar.org/docs/start/list-of-operations/#set-options). This unifies the three separate components: the account issuing the digital good, the metadata describing the digital good, and the digital good itself.
+Once you have a `stellar.toml` file under your domain, you should also configure the issuing account's `homedomain` to point to it via the [`SetOptions` operation][set-options]. This unifies the three separate components: the account issuing the digital good, the metadata describing the digital good, and the digital good itself.
 
 #### SEP-1 Extensions
 Since digital goods can represent anything, but the SEP-1 currency specification does not have a generic way to refer to an "anything." There is an `image` key, but it is generally used
@@ -114,7 +125,7 @@ The `urlhash` is optional and provided here as a way to verify the integrity of 
 ## Design Rationale
 A key component of a flourishing digital goods marketplace is interoperability. That drives all of the design decisions in this SEP, especially the fact that it's an informational SEP rather than a standard. The [first section](#minting-digital-goods) is a set of best practices for a _particular_ set of needs in creating digital goods. There is no "one size fits all" way to do this. The [second section](#representing-digital-goods) adds some extremely flexible fields to SEP-1 to accomodate the fact that digital goods can be anything.
 
-It's worth noting that the idea of "ownership" described throughout the SEP--- ownership of an asset and its relationship to owning the respective digital good---is a little diluted: neither the network nor a standard can make any claims about _legitimacy_ of the digital good itself. Owning a unit of the Stellar asset representing your digital good is a way to establish a _relationship_ between buyer and seller that is _linked_ to the digital good, nothing more.
+It's worth noting that the idea of "ownership" described throughout the SEP—ownership of an asset and its relationship to owning the respective digital good—is a little diluted: neither the network nor a standard can make any claims about _legitimacy_ of the digital good itself. Owning a unit of the Stellar asset representing your digital good is a way to establish a _relationship_ between buyer and seller that is _linked_ to the digital good, nothing more.
 
 
 ## Security Concerns
@@ -133,3 +144,4 @@ This informational SEP does not introduce security concerns pertaining to the St
 [cid]: https://github.com/multiformats/cid
 [url]: https://url.spec.whatwg.org/
 [sha2]: https://datatracker.ietf.org/doc/html/rfc6234#section-6
+[set-options]: https://developers.stellar.org/docs/start/list-of-operations/#set-options
