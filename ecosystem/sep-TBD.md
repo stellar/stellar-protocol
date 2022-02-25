@@ -87,8 +87,8 @@ Here is an example stellar.toml file describing an asset representing a unique d
 ORG_URL="<https://ink.litemint.store>"
 
 [[CURRENCIES]]
-issuer=GAKZGD5BFXZ7P7P45WHTM6DODMOEWWJUSCAIPGYIVIPYQSVR6MM6YR7M
-code=DEMOASSET
+issuer="GAKZGD5BFXZ7P7P45WHTM6DODMOEWWJUSCAIPGYIVIPYQSVR6MM6YR7M"
+code="DEMOASSET"
 name="A demonstration of digital good metadata"
 desc="This is a description of the cool digital good used in this demo."
 image="https://cloudflare-ipfs.com/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco/I/m/RickAstleyNeverGonnaGiveYouUp7InchSingleCover.jpg"
