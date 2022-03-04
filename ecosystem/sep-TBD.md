@@ -18,7 +18,7 @@ This SEP provides informational guidelines on how digital goods can be managed o
 
 
 ## Dependencies
-The guidelines around digital good representation are an extension to [SEP-1][sep1-currency], specifically around the way currencies are represented. It also has a dependence on [SEP-14][sep14] which also extends [SEP-1][sep1] to scale asset metadata storage.
+The guidelines around digital good representation are an extension to [SEP-1][sep1-currency], specifically around the way currencies are represented.
 
 
 ## Motivation
@@ -123,13 +123,15 @@ The `urlhash` is optional and provided here as a way to verify the integrity of 
 
 
 ## Design Rationale
-A key component of a flourishing digital goods marketplace is interoperability. That drives all of the design decisions in this SEP, especially the fact that it's an informational SEP rather than a standard. The [first section](#minting-digital-goods) is a set of best practices for a _particular_ set of needs in creating digital goods. There is no "one size fits all" way to do this. The [second section](#representing-digital-goods) adds some extremely flexible fields to SEP-1 to accomodate the fact that digital goods can be anything.
+A key component of a flourishing digital goods marketplace is _interoperability_: that drives all of the design decisions in this informational SEP. The [first section](#minting-digital-goods) is a set of best practices for a _particular_ set of needs in creating digital goods. There is no "one size fits all" way to do this, so creators should feel free to deviate from the recommendations to fulfill their needs. The [second section](#representing-digital-goods) adds some extremely flexible fields to SEP-1 to accomodate the fact that digital goods can be anything.
 
 It's worth noting that the idea of "ownership" described throughout the SEP—ownership of an asset and its relationship to owning the respective digital good—is a little diluted: neither the network nor a standard can make any claims about _legitimacy_ of the digital good itself. Owning a unit of the Stellar asset representing your digital good is a way to establish a _relationship_ between buyer and seller that is _linked_ to the digital good, nothing more.
 
 
 ## Security Concerns
 This informational SEP does not introduce security concerns pertaining to the Stellar network itself.
+
+However, it does introduce concerns around data integrity (i.e. changes to data should be detectable) that digital good issuers (and purchasers) should be aware of. Digital goods can be changed after purchase of their representative token, since the `stellar.toml` file can be arbitrarily changed by its owner and is not explicitly tied to the token/good. If this "triangle of integrity" across the issuing account, the digital good metadata, and the corresponding TOML entry is important to you, you should take extra steps to ensure data integrity.
 
 
 ## Changelog
