@@ -63,6 +63,11 @@ There is a common naming convention within the Ethereum ecosystem and other APIs
 
 Note that this model has some fundamental limitations: for example, the data entry can only reference the CID describing a single NFT, but you may want the account to issue many different NFTs. You may want to adopt a different model if this one doesn't fit your use case. For example, you could use a `<asset-code>.url` data entry or just rely on your [SEP-1][sep1] file's [currency description][sep1-currency]. Fundamentally, though, it's important to create relationships between your issuing accounts and the NFTs they issue.
 
+#### Issuing your NFT
+To implement non-fractional assets it is necessary to use Stellar's indivisible unit: the stroop. This is the smallest quantity in which a Stellar asset can be sent, received, or traded, and it's equal to one ten-millionth or 0.0000001 of a Stellar lumen (XLM). Therefore, to issue one NFT, you would send 0.0000001 of your asset.
+
+**Note**: Such small amounts may cause issues on the decentralized exchange because of Stellar Core's internal representation of order prices. There are ways to bypass these limitations, such as the one [described by Litemint](https://blog.litemint.com/nft-sdex-pricing/).
+
 #### Ensuring NFT immutability
 If you plan never to increase the supply or modify your NFT, it is best practice to "commit" to this by locking the issuing account. Freezing the account representing your NFT is key to providing immutability for the above steps:
 
