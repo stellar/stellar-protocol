@@ -56,7 +56,7 @@ Since your NFT can be anything, another best practice is storing metadata that d
 }
 ```
 
-There are a few key elements here: a way to describe the NFT, a reference what it represents, and a "back-reference" to the Stellar asset that represents NFT ownership. Again, this isn't a standard but rather a set of common best practices: your metadata file (should you decide to use one) may need different fields. You could even publish a JSON schema to help clients validate the NFT's metadata structure.
+There are a few key elements here: a way to describe the NFT, a reference to what the NFT represents, and a "back-reference" to the Stellar asset that represents NFT ownership. Again, this isn't a standard but rather a set of common best practices: your metadata file (should you decide to use one) may need different fields. You could even publish a JSON schema to help clients validate the NFT's metadata structure.
 
 #### Referencing your NFT
 There is a common naming convention within the Ethereum ecosystem and other APIs to associate NFTs with their [content identifiers][cid]. You can use the [`ManageData` operation](https://developers.stellar.org/docs/start/list-of-operations/#manage-data) to store a data entry on your issuing account with `ipfshash` as the key and the IPFS [content identifier][cid] as the value to benefit from parts of the ecosystem that also follow the convention. For example, NFT marketplaces like [Litemint][litemint.io] use the naming convention and look up the CID to discover images, video, audio, full descriptions, and other properties about the NFT seamlessly.
@@ -69,7 +69,7 @@ If you plan never to increase the supply or modify your NFT, it is best practice
   1. It prevents the account from issuing additional units of the good.
   2. It prevents data entries from being modified.
   3. It prevents the [`AccountMerge`](https://developers.stellar.org/docs/start/list-of-operations/#account-merge) operation so the issuing account persists.
-  4. It prevents revocation of ownership (the AuthImmutable flag could also be used, but it would not prevent the other points above on its own).
+  4. It prevents revocation of ownership (the "Authorization Immutable" flag could also be used, but it would not prevent the other points above on its own).
 
 By default (i.e. without a [multisig](https://developers.stellar.org/docs/glossary/multisig/) setup), to freeze an account you would set its `masterWeight` to zero via the [`SetOptions`][set-options] operation.
 
@@ -131,7 +131,7 @@ It's worth noting that the idea of "ownership" described throughout the SEP—ow
 ## Security Concerns
 This informational SEP does not introduce security concerns pertaining to the Stellar network itself.
 
-However, it does introduce concerns around data integrity (i.e. changes to data should be detectable) that NFT issuers (and purchasers) should be aware of. Digital goods can be changed after purchase of their representative token, since the `stellar.toml` file can be arbitrarily changed by its owner and is not explicitly tied to the token/good. If this "triangle of integrity" across the issuing account, the NFT metadata, and the corresponding TOML entry is important to you, you should take extra steps to ensure data integrity.
+However, it does introduce concerns around data integrity (i.e. changes to data should be detectable) that NFT issuers (and purchasers) should be aware of. NFTs can be changed after purchase of their representative token, since the `stellar.toml` file can be arbitrarily changed by its owner and is not explicitly tied to the token/good. If this "triangle of integrity" across the issuing account, the NFT metadata, and the corresponding TOML entry is important to you, you should take extra steps to ensure data integrity.
 
 
 ## Changelog
