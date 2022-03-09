@@ -37,7 +37,7 @@ The minting best practices are merely one way to create NFTs on Stellar and shou
 ### Minting NFTs
 This section presents a guide on _best practices_ (rather than a _standard_) for minting some types of NFTs. It's based heavily on [this community guide][litemint]. Your NFT may or may not need certain elements of this guide, or you may need additional components on top of it. These diversions are noted where appropriate.
 
-At a high level, your NFT is represented by an asset on the Stellar network. Owning the asset _represents_ owning the NFT. This makes your good a "first-class citizen" on the network: it immediately benefits from all of Stellar's native features for assets like [path payments](https://developers.stellar.org/docs/start/list-of-operations/#path-payment-strict-send) and the [decentralized exchange](https://developers.stellar.org/docs/glossary/decentralized-exchange/).
+At a high level, your NFT is represented by an asset on the Stellar network. Owning the asset _represents_ owning the NFT. This makes your NFT a "first-class citizen" on the network: it immediately benefits from all of Stellar's native features for assets like [path payments](https://developers.stellar.org/docs/start/list-of-operations/#path-payment-strict-send) and the [decentralized exchange](https://developers.stellar.org/docs/glossary/decentralized-exchange/).
 
 #### Storing your NFT
 Regardless of what your NFT represents (artwork, legal contracts, friendship), you need a way to store it. Using decentralized storage such as the [InterPlanetary File System][ipfs] (IPFS) is a recommended best-practice for future-proofing your NFTs. IPFS uses [content identifiers][cid] (CIDs) to address data. These provide **data integrity** and **immutability**: if the underlying NFT changes in any way, its content identifier will also change.
@@ -71,7 +71,7 @@ To implement non-fractional assets it is necessary to use Stellar's indivisible 
 #### Ensuring NFT immutability
 If you plan never to increase the supply or modify your NFT, it is best practice to "commit" to this by locking the issuing account. Freezing the account representing your NFT is key to providing immutability for the above steps:
 
-  1. It prevents the account from issuing additional units of the good.
+  1. It prevents the account from issuing additional units of the NFT.
   2. It prevents data entries from being modified.
   3. It prevents the [`AccountMerge`](https://developers.stellar.org/docs/start/list-of-operations/#account-merge) operation so the issuing account persists.
   4. It prevents revocation of ownership (the "Authorization Immutable" flag could also be used, but it would not prevent the other points above on its own).
@@ -96,7 +96,7 @@ Many of the [SEP-1][sep1] are highly relevant to NFTs. You should include as man
 
 Note that even if your NFT isn't an image, you may still want to provide a way to represent it as one (like a logo or symbol) to make it stand out. It's good practice to provide an optimized version of the art to allow fast-loading from services and wallets on Stellar.
 
-Here is an example stellar.toml file describing an asset representing a unique digital image, mimicking the JSON metadata file we described [earlier](#describing-your-digital-good):
+Here is an example stellar.toml file describing an asset representing a unique digital image, mimicking the JSON metadata file we described [earlier](#describing-your-nft):
 
 ```toml
 [DOCUMENTATION]
@@ -136,7 +136,7 @@ It's worth noting that the idea of "ownership" described throughout the SEP—ow
 ## Security Concerns
 This informational SEP does not introduce security concerns pertaining to the Stellar network itself.
 
-However, it does introduce concerns around data integrity (i.e. changes to data should be detectable) that NFT issuers (and purchasers) should be aware of. NFTs can be changed after purchase of their representative token, since the `stellar.toml` file can be arbitrarily changed by its owner and is not explicitly tied to the token/good. If this "triangle of integrity" across the issuing account, the NFT metadata, and the corresponding TOML entry is important to you, you should take extra steps to ensure data integrity.
+However, it does introduce concerns around data integrity (i.e. changes to data should be detectable) that NFT issuers (and purchasers) should be aware of. NFTs can be changed after purchase of their representative token, since the `stellar.toml` file can be arbitrarily changed by its owner and is not explicitly tied to the NFT. If this "triangle of integrity" across the issuing account, the NFT metadata, and the corresponding TOML entry is important to you, you should take extra steps to ensure data integrity.
 
 
 ## Changelog
