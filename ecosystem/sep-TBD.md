@@ -8,7 +8,7 @@ Authors: Tomer Weller <tomer@stellar.org>, Frederic Rezeau <frederic.rezeau@gmai
 Track: Informational
 Status: Draft
 Created: 02-22-2022
-Updated: 02-22-2022
+Updated: 03-08-2022
 Version: 0.1.0
 Discussion: https://github.com/stellar/stellar-protocol/pull/1140
 ```
