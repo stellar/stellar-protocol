@@ -186,6 +186,11 @@ Unlike CAPs, SEPs are assigned versions because they are dynamic and change over
 
 During draft a SEP should have a major version of `0` to indicate that anything in the SEP may change at anytime. Once a SEP moves to Active it should be changed to `v1.0.0` and the rules of semantic versioning apply.
 
+All changes to a SEP should be accompanied by an update to its version, no matter how small even typographical corrections. The exceptions that do not require version updates:
+- Correcting metadata in the `Pragma` section.
+- Updating broken links.
+- Updating links to implementations.
+
 ## SEP Team Members
 
 - Justin Rice <@rice2000> (SDF)
@@ -195,7 +200,6 @@ During draft a SEP should have a major version of `0` to indicate that anything 
 - Jake Urban <@JakeUrban> (SDF)
 - Alex Cordeiro <@accordeiro> (SDF)
 - Marcelo Salloum <@marcelosalloum> (SDF)
-- 
 - Orbit Lens <@orbitlens>
 - David Mazières <@stanford-scs> (SDF)
 - Jed McCaleb <@jedmccaleb> (SDF)
