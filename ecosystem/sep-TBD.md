@@ -86,7 +86,7 @@ This section provides interoperability guidance around _representing_ NFTs.
 Since NFTs are represented by Stellar assets and are thus "first-class citizens" in the ecosystem, they should leverage existing interoperability layers. Setting up a [SEP-1 `stellar.toml`][sep1] file provides immediate interoperability with all services and wallets on the Stellar ecosystem. It is highly recommended that all assets you issue on Stellar, NFTs or not, follow the [SEP-1][sep1] standard to provide a valid `stellar.toml` file. This grants your NFT a degree of legitimacy, because most Stellar ecosystem services and wallets tend to discard TOML-less assets and/or flag them as spam. There is detailed documentation about how to do that on [this page](https://developers.stellar.org/docs/issuing-assets/publishing-asset-info/).
 
 #### Using SEP-1
-Many of the [SEP-1][sep1] are highly relevant to NFTs. You should include as many of them as is appropriate for your use case:
+Many of the [SEP-1][sep1] fields are highly relevant to NFTs. You should include as many of them as is appropriate for your use case:
 
   * the `code` and `issuer` fields are essential to describe the Stellar asset that represents your NFT
   * the `name` and `desc` fields provide human-readable information about your NFT
