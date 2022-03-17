@@ -113,7 +113,7 @@ fixed_number=1
 display_decimals=7
 ```
 
-Once you have a `stellar.toml` file under your domain, you should also configure the issuing account's `homedomain` to point to it via the [`SetOptions` operation][set-options]. This unifies the three separate components: the account issuing the NFT, the metadata describing the NFT, and the NFT itself.
+Once you have a `stellar.toml` file under your domain, you should also configure the issuing account's `homedomain` to point to it via the [`SetOptions` operation][set-options]. This unifies the three separate components: the account issuing the NFT, the metadata describing the NFT, and the NFT itself. Note that this value can't be changed if the account gets locked (see [Immutability](ensuring-nft-immutability), above).
 
 #### SEP-1 Extensions
 Since NFTs can represent anything, but the SEP-1 currency specification does not have a generic way to refer to an "anything." There is an `image` key, but it is generally used for something like a currency logo.
