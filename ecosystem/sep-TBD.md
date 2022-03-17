@@ -71,7 +71,7 @@ To implement non-fractional assets it is necessary to use Stellar's indivisible 
 **Note**: Such small amounts may cause issues on the decentralized exchange because of Stellar Core's internal representation of order prices. There are ways to bypass these limitations, such as the one [described by Litemint](https://blog.litemint.com/nft-sdex-pricing/).
 
 #### Ensuring NFT immutability
-If you plan never to increase the supply or modify your NFT, it is best practice to "commit" to this by locking the issuing account. Freezing the account representing your NFT is key to providing immutability for the above steps:
+If you plan never to increase the supply or modify your NFT, it is best practice to commit to this by locking the issuing account. Freezing the account representing your NFT is key to providing immutability for the above steps:
 
   1. It prevents the account from issuing additional units of the NFT.
   2. It prevents data entries from being modified.
