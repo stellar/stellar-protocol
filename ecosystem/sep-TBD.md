@@ -8,7 +8,7 @@ Authors: Tomer Weller <tomer@stellar.org>, Frederic Rezeau <frederic.rezeau@gmai
 Track: Informational
 Status: Draft
 Created: 02-22-2022
-Updated: 03-08-2022
+Updated: 03-17-2022
 Version: 0.1.0
 Discussion: https://github.com/stellar/stellar-protocol/pull/1140
 ```
@@ -59,9 +59,11 @@ Since your NFT can be anything, another best practice is storing metadata that d
 There are a few key elements here: a way to describe the NFT, a reference to what the NFT represents, and a "back-reference" to the Stellar asset that represents NFT ownership. Again, this isn't a standard but rather a set of common best practices: your metadata file (should you decide to use one) may need different fields. You could even publish a JSON schema to help clients validate the NFT's metadata structure.
 
 #### Referencing your NFT
-There is a common naming convention within the Ethereum ecosystem and other APIs to associate NFTs with their [content identifiers][cid]. You can use the [`ManageData` operation](https://developers.stellar.org/docs/start/list-of-operations/#manage-data) to store a data entry on your issuing account with `ipfshash` as the key and the IPFS [content identifier][cid] as the value to benefit from parts of the ecosystem that also follow the convention. For example, NFT marketplaces like [Litemint][litemint.io] use the naming convention and look up the CID to discover images, video, audio, full descriptions, and other properties about the NFT seamlessly.
+There is a common naming convention within the Ethereum ecosystem and other APIs to associate NFTs with their [content identifiers][cid]. You can use the [`ManageData` operation](https://developers.stellar.org/docs/start/list-of-operations/#manage-data) to store a data entry on your issuing account with `ipfshash` as the key and the IPFS [content identifier][cid] as the value to benefit from parts of the ecosystem that also follow the convention. For example, NFT marketplaces like [Litemint][litemint] use the naming convention and look up the CID to discover images, video, audio, full descriptions, and other properties about the NFT seamlessly.
 
-Note that this model has some fundamental limitations: for example, the data entry can only reference the CID describing a single NFT, but you may want the account to issue many different NFTs. You may want to adopt a different model if this one doesn't fit your use case. For example, you could use a `<asset-code>.url` data entry or just rely on your [SEP-1][sep1] file's [currency description][sep1-currency]. Fundamentally, though, it's important to create relationships between your issuing accounts and the NFTs they issue.
+Some marketplaces may do additional lookups. For example, if the `ipfshash` data entry is not found, [Litemint][litemint] also looks up the entry named `ipfshash-<ASSET CODE>`, allowing issuers to reference multiple assets per issuing account.
+
+You may want to adopt a different model if this one doesn't fit your use case. For example, you could use a `url.<asset-code>` data entry or just rely on your [SEP-1][sep1] file's [currency description][sep1-currency]. Fundamentally, though, it's important to create relationships between your issuing accounts and the NFTs they issue.
 
 #### Issuing your NFT
 To implement non-fractional assets it is necessary to use Stellar's indivisible unit: the stroop. This is the smallest quantity in which a Stellar asset can be sent, received, or traded, and it's equal to one ten-millionth or 0.0000001 of a Stellar lumen (XLM). Therefore, to issue one NFT, you would send 0.0000001 of your asset.
@@ -91,7 +93,6 @@ Many of the [SEP-1][sep1] fields are highly relevant to NFTs. You should include
   * the `code` and `issuer` fields are essential to describe the Stellar asset that represents your NFT
   * the `name` and `desc` fields provide human-readable information about your NFT
   * the `fixed_number`, `max_number`, and `is_unlimited` fields are mutually exclusive ways to describe the supply of your NFT
-  * the `display_decimals` field helps render the right quantity of your NFT, since a single unit of it is likely to be represented by one stroop (i.e. "0.0000001") but you'd want to see "1"
   * the `image` field is how the ecosystem will "draw" your NFT
 
 Note that even if your NFT isn't an image, you may still want to provide a way to represent it as one (like a logo or symbol) to make it stand out. It's good practice to provide an optimized version of the art to allow fast-loading from services and wallets on Stellar.
@@ -119,12 +120,12 @@ Since NFTs can represent anything, but the SEP-1 currency specification does not
 
 Thus, this SEP adds additional supported fields to the SEP-1 currency specification to faciliate this need:
 
-| Field Name | Description and purpose |
-|------------|-------------------------|
-| `url`      | A [valid URL][url] pointing to a NFT that this asset represents |
-| `urlhash`  | A [SHA-256][sha2] hash of the data pointed to by `url` |
+| Field Name   | Description and purpose |
+|--------------|-------------------------|
+| `url`        | A [valid URL][url] pointing to the NFT this asset represents |
+| `url_sha256` | A [SHA-256][sha2] hash of the data pointed to by `url` |
 
-The `urlhash` is optional and provided here as a way to verify the integrity of the NFT. It's particularly useful if the NFT lives on a different server relative to the `stellar.toml` file. Some URLs (like IPFS CIDs) have integrity "batteries included" and won't need this field.
+The `url_sha256` is optional and provided here as a way to verify the integrity of the NFT. It's particularly useful if the NFT lives on a different server relative to the `stellar.toml` file. Some URLs (like IPFS CIDs) have integrity "batteries included" and won't need this field.
 
 
 ## Design Rationale
