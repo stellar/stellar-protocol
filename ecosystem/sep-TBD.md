@@ -2,14 +2,14 @@
 ## Preamble
 
 ```
-SEP: To Be Assigned
+SEP: 0039
 Title: Interoperability Recommendations for NFTs
 Authors: Tomer Weller <tomer@stellar.org>, Frederic Rezeau <frederic.rezeau@gmail.com>
 Track: Informational
-Status: Draft
+Status: Active
 Created: 02-22-2022
 Updated: 03-17-2022
-Version: 0.1.0
+Version: 1.0.0
 Discussion: https://github.com/stellar/stellar-protocol/pull/1140
 ```
 
@@ -141,7 +141,7 @@ However, it does introduce concerns around data integrity (i.e. changes to data 
 
 
 ## Changelog
-- `v0.1.0`: Initial draft. [#1140](https://github.com/stellar/stellar-protocol/pull/1140)
+- `v1.0.0`: Initial release. [#1140](https://github.com/stellar/stellar-protocol/pull/1140)
 
 
 [sep1]: https://stellar.org/protocol/sep-1

@@ -50,6 +50,7 @@
 | [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
 | [SEP-0031](sep-0031.md) | Cross-Border Payments API | SDF | Standard | Active |
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Active |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs | SDF, Litemint.io | Informational | Active |
 
 ### Draft Proposals
 
