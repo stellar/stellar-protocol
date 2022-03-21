@@ -68,6 +68,7 @@
 | [SEP-0035](sep-0035.md) | Operation IDs | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard | Draft |
 | [SEP-0037](sep-0037.md) | Address Directory API | OrbitLens | Informational | Draft |
 | [SEP-0038](sep-0038.md) | Anchor RFQ API | Jake Urban and Leigh McCulloch | Standard | Draft |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs | SDF, Litemint.io | Informational | Active |
 
 
 
