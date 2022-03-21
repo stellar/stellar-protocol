@@ -50,7 +50,6 @@
 | [SEP-0029](sep-0029.md) | Account Memo Requirements | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières | Standard | Active |
 | [SEP-0031](sep-0031.md) | Cross-Border Payments API | SDF | Standard | Active |
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts | Lobstr.co, Gleb Pitsevich | Standard | Active |
-| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs | SDF, Litemint.io | Informational | Active |
 
 ### Draft Proposals
 
@@ -69,6 +68,7 @@
 | [SEP-0035](sep-0035.md) | Operation IDs | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard | Draft |
 | [SEP-0037](sep-0037.md) | Address Directory API | OrbitLens | Informational | Draft |
 | [SEP-0038](sep-0038.md) | Anchor RFQ API | Jake Urban and Leigh McCulloch | Standard | Draft |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs | SDF, Litemint.io | Informational | Active |
 
 
 
