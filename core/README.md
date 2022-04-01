@@ -69,7 +69,7 @@
 | [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
 | [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
 | [CAP-0041](cap-0041.md) | Concurrent Transactions | Leigh McCulloch, David Mazières | Draft |
-| [CAP-0042](cap-0042.md) | Multi-Part Transaction Sets | Nicolas Barry | Draft |
+| [CAP-0042](cap-0042.md) | Multi-Part Transaction Sets | Nicolas Barry | FCP: Acceptance |
 | [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 
