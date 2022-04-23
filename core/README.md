@@ -72,6 +72,7 @@
 | [CAP-0041](cap-0041.md) | Concurrent Transactions | Leigh McCulloch, David Mazières | Draft |
 | [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
+| [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0046](cap-0046.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Draft |
 
 ### Rejected Proposals
