@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-CAP: To Be Assigned
+CAP: 0046
 Title: WebAssembly Smart Contract Runtime Environment
 Working Group:
     Owner: Graydon Hoare <graydon@stellar.org>
