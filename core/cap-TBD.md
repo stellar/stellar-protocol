@@ -9,7 +9,7 @@ Working Group:
     Consulted: Leigh McCulloch <leigh@stellar.org>, Tomer Weller <tomer@stellar.org>, Jon Jove <jon@stellar.org>, Nicolas Barry <nicolas@stellar.org>
 Status: Draft
 Created: 2022-04-18
-Discussion: 
+Discussion: https://groups.google.com/g/stellar-dev/c/X0oRzJoIr10
 Protocol version: TBD
 ```
 
