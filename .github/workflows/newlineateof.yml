@@ -1,0 +1,14 @@
+name: 'Check New Line at EOF'
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+
+jobs:
+  lineendings:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: (ls **/*.md | xargs -I '{}' sh -c '[ -z "$(tail -c 1 {})" ] || (echo {}; exit 1)' ;) || (echo 'Documents listed above are missing new lines at their end of file, please add a new line to the end of the file.'; exit 1)
