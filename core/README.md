@@ -74,6 +74,7 @@
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0046](cap-0046.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Draft |
+| [CAP-0047](cap-0047.md) | Smart Contract Lifecycle | Siddharth Suresh | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
