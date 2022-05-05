@@ -76,6 +76,7 @@
 | [CAP-0046](cap-0046.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Draft |
 | [CAP-0047](cap-0047.md) | Smart Contract Lifecycle | Siddharth Suresh | Draft |
 | [CAP-0048](cap-0048.md) | Smart Contract Asset Interoperability | Jonathan Jove | Draft |
+| [CAP-0049](cap-0049.md) | Smart Contract Asset Interoperability with Wrapper | Jonathan Jove | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
