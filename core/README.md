@@ -78,6 +78,7 @@
 | [CAP-0048](cap-0048.md) | Smart Contract Asset Interoperability | Jonathan Jove | Draft |
 | [CAP-0049](cap-0049.md) | Smart Contract Asset Interoperability with Wrapper | Jonathan Jove | Draft |
 | [CAP-0050](cap-0050.md) | Smart Contract Interactions | Jonathan Jove | Draft |
+| [CAP-0051](cap-0051.md) | Smart Contract Host Functons | Jay Geng | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
