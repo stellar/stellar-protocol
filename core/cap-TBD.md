@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-CAP: To Be Assigned
+CAP: CAP-0053
 Title: Contract data
 Working Group:
     Owner: Graydon Hoare <@graydon>
