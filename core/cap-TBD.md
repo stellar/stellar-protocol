@@ -72,7 +72,7 @@ Any call to a host function to interact with a _full key_ that is not permitted 
 The footprint of a transaction is static for the duration of the transaction: it is established before transaction execution begins and does not change during execution. The exact mechanism of defining the footprint of a transaction will be provided in a later CAP that deals with transaction invocation. 
 
 ### XDR changes
-```diff mddiffcheck.base=8e484c533ea9737127bd9a940b410e18943ee519
+```diff mddiffcheck.fetch=pull/3439/head mddiffcheck.base=8e484c533ea9737127bd9a940b410e18943ee519
 diff --git a/src/protocol-next/xdr/Stellar-ledger-entries.x b/src/protocol-next/xdr/Stellar-ledger-entries.x
 index d2b303ba6..4c9877103 100644
 --- a/src/protocol-next/xdr/Stellar-ledger-entries.x
