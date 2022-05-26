@@ -2,7 +2,7 @@
 
 ```
 CAP: CAP-0053
-Title: Contract data
+Title: Smart Contract Data
 Working Group:
     Owner: Graydon Hoare <@graydon>
     Authors: Graydon Hoare <@graydon> 
