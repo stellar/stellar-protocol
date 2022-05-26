@@ -80,6 +80,7 @@
 | [CAP-0050](cap-0050.md) | Smart Contract Interactions | Jonathan Jove | Draft |
 | [CAP-0051](cap-0051.md) | Smart Contract Host Functons | Jay Geng | Draft |
 | [CAP-0052](cap-0052.md) | Smart Contract Interactions (Minimal) | Jonathan Jove | Draft |
+| [CAP-0053](cap-0053.md) | Smart Contract Data | Graydon Hoare | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
