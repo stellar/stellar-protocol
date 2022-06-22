@@ -42,6 +42,7 @@
 | [SEP-0010](sep-0010.md) | Stellar Authentication | Sergey Nebolsin, Tom Quisel | Standard | Active |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières | Standard | Active |
 | [SEP-0012](sep-0012.md) | KYC API | Interstellar | Standard | Active |
+| [SEP-0014](sep-0014.md) | Dynamic Asset Metadata | OrbitLens, Paul Tiplady | Standard | Draft |
 | [SEP-0018](sep-0018.md) | Data Entry Namespaces | Mister.Ticot | Standard | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes | Johan Stén | Standard | Active |
 | [SEP-0023](sep-0023.md) | Muxed Account Strkeys | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Standard | Active |
@@ -55,7 +56,6 @@
 
 | Number | Title | Author | Track | Status |
 | --- | --- | --- | --- | --- |
-| [SEP-0014](sep-0014.md) | Dynamic Asset Metadata | OrbitLens, Paul Tiplady | Standard | Draft |
 | [SEP-0015](sep-0015.md) | Attachment Convention | Interstellar | Standard | Draft |
 | [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p) | Jeremy Rubin | Standard | Draft |
 | [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based) | Tom Quisel | Standard | Draft |
