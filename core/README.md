@@ -83,6 +83,7 @@
 | [CAP-0053](cap-0053.md) | Smart Contract Data | Graydon Hoare | Draft |
 | [CAP-0054](cap-0054.md) | Smart Contract Standardized Asset | Jonathan Jove | Draft |
 | [CAP-0055](cap-0055.md) | Fee model in smart contracts | Nicolas Barry | Draft |
+| [CAP-0056](cap-0056.md) | Smart Contract Logging | Siddharth Suresh | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
