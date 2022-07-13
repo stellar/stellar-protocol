@@ -40,7 +40,7 @@
 | [CAP-0018](cap-0018.md) | 13 | Fine-Grained Control of Authorization | Jonathan Jove | Final |
 | [CAP-0019](cap-0019.md) | 13 | Future-upgradable TransactionEnvelope type | David Mazières | Final |
 | [CAP-0020](cap-0020.md) | 11 | Bucket Initial Entries | Graydon Hoare | Final |
-| [CAP-0021](cap-0021.md) | 19 | Generalized transaction preconditions | David Mazières | Accepted |
+| [CAP-0021](cap-0021.md) | 19 | Generalized transaction preconditions | David Mazières | Final |
 | [CAP-0023](cap-0023.md) | 14 | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Final |
 | [CAP-0024](cap-0024.md) | 12 | Make PathPayment Symmetrical | Jed McCaleb | Final |
 | [CAP-0025](cap-0025.md) | 12 | Remove Bucket Shadowing | Marta Lokhava | Final |
@@ -53,7 +53,7 @@
 | [CAP-0034](cap-0034.md) | 14 | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
 | [CAP-0035](cap-0035.md) | 17 | Asset Clawback | Dan Doney | Final |
 | [CAP-0038](cap-0038.md) | 18 | Automated Market Makers | Jonathan Jove | Final |
-| [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Accepted |
+| [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Final |
 | [CAP-0042](cap-0042.md) | - | Multi-Part Transaction Sets | Nicolas Barry | Accepted |
 
 ### Draft Proposals
