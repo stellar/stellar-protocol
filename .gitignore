@@ -1,5 +1,5 @@
 *.html
-*~
+ *~
 
-# vscode
-.vscode/
+ # vscode
+ .vscode/
