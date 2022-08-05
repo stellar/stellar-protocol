@@ -1,7 +1,5 @@
 # Core Advancement Proposals (CAPs)
-
 ## CAP Status Terms
-
 ### Primary Workflow
 * **Draft** — A CAP that is currently open for consideration and actively being discussed.
 * **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
@@ -18,44 +16,59 @@
   **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
 * **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
   final CAP should only be updated to correct errata.
-
 ### Additional Statuses
 * **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
   implemented.
 * **Superseded: [New Final CAP]** - A CAP that which was previously final but has been superseded
   by a new, final CAP. Both CAPs should reference each other.
 
-## List of Proposals
+ ## List of Proposals
 
-| Number | Protocol Version | Title | Author | Status |
-| ---- | --- | --- | --- | --- |
-| [CAP-0001](cap-0001.md) | 10 | Bump Sequence | Nicolas Barry | Final |
-| [CAP-0002](cap-0002.md) | 10 | Transaction level signature verification | Nicolas Barry | Final |
-| [CAP-0003](cap-0003.md) | 10 | Asset-backed offers | Jonathan Jove | Final |
-| [CAP-0004](cap-0004.md) | 10 | Improved Rounding for Cross Offer | Jonathan Jove | Final |
-| [CAP-0005](cap-0005.md) | 11 | Throttling and transaction pricing improvements | Nicolas Barry | Final |
-| [CAP-0006](cap-0006.md) | 11 | Add ManageBuyOffer Operation | Jonathan Jove | Final |
-| [CAP-0015](cap-0015.md) | 13 | Fee Bump Transactions | OrbitLens | Final |
-| [CAP-0017](cap-0017.md) | - | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
-| [CAP-0018](cap-0018.md) | 13 | Fine-Grained Control of Authorization | Jonathan Jove | Final |
-| [CAP-0019](cap-0019.md) | 13 | Future-upgradable TransactionEnvelope type | David Mazières | Final |
-| [CAP-0020](cap-0020.md) | 11 | Bucket Initial Entries | Graydon Hoare | Final |
-| [CAP-0021](cap-0021.md) | 19 | Generalized transaction preconditions | David Mazières | Final |
-| [CAP-0023](cap-0023.md) | 14 | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Final |
-| [CAP-0024](cap-0024.md) | 12 | Make PathPayment Symmetrical | Jed McCaleb | Final |
-| [CAP-0025](cap-0025.md) | 12 | Remove Bucket Shadowing | Marta Lokhava | Final |
-| [CAP-0026](cap-0026.md) | 12 | Disable Inflation Mechanism | OrbitLens | Final |
-| [CAP-0027](cap-0027.md) | 13 | First-class multiplexed accounts | David Mazières and Tomer Weller | Final |
-| [CAP-0028](cap-0028.md) | 13 | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Final |
-| [CAP-0029](cap-0029.md) | 16 | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Final |
-| [CAP-0030](cap-0030.md) | 13 | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
-| [CAP-0033](cap-0033.md) | 14/15 | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Final |
-| [CAP-0034](cap-0034.md) | 14 | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
-| [CAP-0035](cap-0035.md) | 17 | Asset Clawback | Dan Doney | Final |
-| [CAP-0038](cap-0038.md) | 18 | Automated Market Makers | Jonathan Jove | Final |
-| [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Final |
-| [CAP-0042](cap-0042.md) | - | Multi-Part Transaction Sets | Nicolas Barry | Accepted |
+ | Number | Protocol Version | Title | Author | Status |
+ | ---- | --- | --- | --- | --- |
+ | [CAP-0001](cap-0001.md) | 10 | Bump Sequence | Nicolas Barry | Final |
+ | [CAP-0002](cap-0002.md) | 10 | Transaction level signature verification | Nicolas Barry | Final |
+ | [CAP-0003](cap-0003.md) | 10 | Asset-backed offers | Jonathan Jove | Final |
+ | [CAP-0004](cap-0004.md) | 10 | Improved Rounding for Cross Offer | Jonathan Jove | Final |
+ | [CAP-0005](cap-0005.md) | 11 | Throttling and transaction pricing improvements | Nicolas Barry | Final |
+ | [CAP-0006](cap-0006.md) | 11 | Add ManageBuyOffer Operation | Jonathan Jove | Final |
+ | [CAP-0015](cap-0015.md) | 13 | Fee Bump Transactions | OrbitLens | Final |
+ | [CAP-0017](cap-0017.md) | - | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
+ | [CAP-0018](cap-0018.md) | 13 | Fine-Grained Control of Authorization | Jonathan Jove | Final |
+ | [CAP-0019](cap-0019.md) | 13 | Future-upgradable TransactionEnvelope type | David Mazières | Final |
+ | [CAP-0020](cap-0020.md) | 11 | Bucket Initial Entries | Graydon Hoare | Final |
+ | [CAP-0021](cap-0021.md) | 19 | Generalized transaction preconditions | David Mazières | Final |
+ | [CAP-0023](cap-0023.md) | 14 | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Final |
+ | [CAP-0024](cap-0024.md) | 12 | Make PathPayment Symmetrical | Jed McCaleb | Final |
+ | [CAP-0025](cap-0025.md) | 12 | Remove Bucket Shadowing | Marta Lokhava | Final |
+ | [CAP-0026](cap-0026.md) | 12 | Disable Inflation Mechanism | OrbitLens | Final |
+ | [CAP-0027](cap-0027.md) | 13 | First-class multiplexed accounts | David Mazières and Tomer Weller | Final |
+ | [CAP-0028](cap-0028.md) | 13 | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Final |
+ | [CAP-0029](cap-0029.md) | 16 | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Final |
+ | [CAP-0030](cap-0030.md) | 13 | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
+ | [CAP-0033](cap-0033.md) | 14/15 | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Final |
+ | [CAP-0034](cap-0034.md) | 14 | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
+ | [CAP-0035](cap-0035.md) | 17 | Asset Clawback | Dan Doney | Final |
+ | [CAP-0038](cap-0038.md) | 18 | Automated Market Makers | Jonathan Jove | Final |
+ | [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Final |
+ | [CAP-0042](cap-0042.md) | - | Multi-Part Transaction Sets | Nicolas Barry | Accepted |
 
+ ### Draft Proposals
+ | Number | Title | Author | Status |
+ @@ -77,6 +77,13 @@
+ | [CAP-0047](cap-0047.md) | Smart Contract Lifecycle | Siddharth Suresh | Draft |
+ | [CAP-0048](cap-0048.md) | Smart Contract Asset Interoperability | Jonathan Jove | Draft |
+ | [CAP-0049](cap-0049.md) | Smart Contract Asset Interoperability with Wrapper | Jonathan Jove | Draft |
+ | [CAP-0050](cap-0050.md) | Smart Contract Interactions | Jonathan Jove | Draft |
+ | [CAP-0051](cap-0051.md) | Smart Contract Host Functons | Jay Geng | Draft |
+ | [CAP-0052](cap-0052.md) | Smart Contract Interactions (Minimal) | Jonathan Jove | Draft |
+ | [CAP-0053](cap-0053.md) | Smart Contract Data | Graydon Hoare | Draft |
+ | [CAP-0054](cap-0054.md) | Smart Contract Standardized Asset | Jonathan Jove | Draft |
+ | [CAP-0055](cap-0055.md) | Fee model in smart contracts | Nicolas Barry | Draft |
+ | [CAP-0056](cap-0056.md) | Smart Contract Logging | Siddharth Suresh | Draft |
+
+ ### Rejected Proposals
+ | Number | Title | Author | Status |
 ### Draft Proposals
 | Number | Title | Author | Status |
 | --- | --- | --- | --- |
