@@ -250,14 +250,14 @@ case NEGATIVE:
 
 enum SCContractCodeType
 {
-    SCCONTRACT_CODE_WASM = 0,
+    SCCONTRACT_CODE_WASM_REF = 0,
     SCCONTRACT_CODE_TOKEN = 1
 };
 
 union SCContractCode switch (SCContractCodeType type)
 {
-case SCCONTRACT_CODE_WASM:
-    opaque wasm<SCVAL_LIMIT>;
+case SCCONTRACT_CODE_WASM_REF:
+    Hash wasm_id;
 case SCCONTRACT_CODE_TOKEN:
     void;
 };
