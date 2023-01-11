@@ -86,8 +86,10 @@ enum ContractCostType {
     ChargeBudget = 37,
 };
 
-const CONTRACT_COST_COUNT_LIMIT = 1000; // limits the ContractCostParamEntry size to 16kB
+const CONTRACT_COST_PARAM_ENTRY_MAX_TERMS = 2; 
 
-typedef uint32 ContractCostParamEntry[2]; // 0 - constant term, 1 - linear term
+typedef uint32 ContractCostParamEntry<CONTRACT_COST_PARAM_ENTRY_MAX_TERMS>; // 0 - constant term, 1 - linear term
+
+const CONTRACT_COST_COUNT_LIMIT = 1024; // limits the ContractCostParams size to 8kB
 
 typedef ContractCostParamEntry ContractCostParams<CONTRACT_COST_COUNT_LIMIT>;
