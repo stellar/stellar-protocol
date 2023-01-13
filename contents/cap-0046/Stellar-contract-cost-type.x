@@ -89,8 +89,8 @@ enum ContractCostType {
 };
 
 struct ContractCostParamEntry {
-    uint32 constTerm;
-    uint32 linearTerm;
+    int32 constTerm;
+    int32 linearTerm;
     // use `ext` to add more terms (e.g. higher order polynomials) in the future
     ExtensionPoint ext;
 };
