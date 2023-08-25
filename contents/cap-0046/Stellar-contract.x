@@ -5,220 +5,272 @@
 % #include "xdr/Stellar-types.h"
 namespace stellar
 {
-/*
- * Smart Contracts deal in SCVals. These are a (dynamic) disjoint union
- * between several possible variants, to allow storing generic SCVals in
- * generic data structures and passing them in and out of languages that
- * have simple or dynamic type systems.
- *
- * SCVals are (in WASM's case) stored in a tagged 64-bit word encoding. Most
- * signed 64-bit values in Stellar are actually signed positive values
- * (sequence numbers, timestamps, amounts), so we don't need the high bit
- * and can get away with 1-bit tagging and store them as "unsigned 63bit",
- * (u63) separate from everything else.
- *
- * We actually reserve the low _four_ bits, leaving 3 bits for 8 cases of
- * "non-u63 values", some of which have substructure of their own.
- *
- *    0x_NNNN_NNNN_NNNN_NNNX  - u63, for any even X
- *    0x_0000_000N_NNNN_NNN1  - u32
- *    0x_0000_000N_NNNN_NNN3  - i32
- *    0x_NNNN_NNNN_NNNN_NNN5  - static: void, true, false, ... (SCS_*)
- *    0x_IIII_IIII_TTTT_TTT7  - object: 32-bit index I, 28-bit type code T
- *    0x_NNNN_NNNN_NNNN_NNN9  - symbol: up to 10 6-bit identifier characters
- *    0x_NNNN_NNNN_NNNN_NNNb  - bitset: up to 60 bits
- *    0x_CCCC_CCCC_TTTT_TTTd  - status: 32-bit code C, 28-bit type code T
- *    0x_NNNN_NNNN_NNNN_NNNf  - reserved
- *
- * Up here in XDR we have variable-length tagged disjoint unions but no
- * bit-level packing, so we can be more explicit in their structure, at the
- * cost of spending more than 64 bits to encode many cases, and also having
- * to convert. It's a little non-obvious at the XDR level why there's a
- * split between SCVal and SCObject given that they are both immutable types
- * with value semantics; but the split reflects the split that happens in
- * the implementation, and marks a place where different implementations of
- * immutability (CoW, structural sharing, etc.) will likely occur.
- */
 
-// A symbol is up to 10 chars drawn from [a-zA-Z0-9_], which can be packed
-// into 60 bits with a 6-bit-per-character code, usable as a small key type
-// to specify function, argument, tx-local environment and map entries
-// efficiently.
-typedef string SCSymbol<10>;
+// We fix a maximum of 128 value types in the system for two reasons: we want to
+// keep the codes relatively small (<= 8 bits) when bit-packing values into a
+// u64 at the environment interface level, so that we keep many bits for
+// payloads (small strings, small numeric values, object handles); and then we
+// actually want to go one step further and ensure (for code-size) that our
+// codes fit in a single ULEB128-code byte, which means we can only use 7 bits.
+//
+// We also reserve several type codes from this space because we want to _reuse_
+// the SCValType codes at the environment interface level (or at least not
+// exceed its number-space) but there are more types at that level, assigned to
+// optimizations/special case representations of values abstract at this level.
 
 enum SCValType
 {
-    SCV_U63 = 0,
-    SCV_U32 = 1,
-    SCV_I32 = 2,
-    SCV_STATIC = 3,
-    SCV_OBJECT = 4,
-    SCV_SYMBOL = 5,
-    SCV_BITSET = 6,
-    SCV_STATUS = 7
+    SCV_BOOL = 0,
+    SCV_VOID = 1,
+    SCV_ERROR = 2,
+
+    // 32 bits is the smallest type in WASM or XDR; no need for u8/u16.
+    SCV_U32 = 3,
+    SCV_I32 = 4,
+
+    // 64 bits is naturally supported by both WASM and XDR also.
+    SCV_U64 = 5,
+    SCV_I64 = 6,
+
+    // Time-related u64 subtypes with their own functions and formatting.
+    SCV_TIMEPOINT = 7,
+    SCV_DURATION = 8,
+
+    // 128 bits is naturally supported by Rust and we use it for Soroban
+    // fixed-point arithmetic prices / balances / similar "quantities". These
+    // are represented in XDR as a pair of 2 u64s.
+    SCV_U128 = 9,
+    SCV_I128 = 10,
+
+    // 256 bits is the size of sha256 output, ed25519 keys, and the EVM machine
+    // word, so for interop use we include this even though it requires a small
+    // amount of Rust guest and/or host library code.
+    SCV_U256 = 11,
+    SCV_I256 = 12,
+
+    // Bytes come in 3 flavors, 2 of which have meaningfully different
+    // formatting and validity-checking / domain-restriction.
+    SCV_BYTES = 13,
+    SCV_STRING = 14,
+    SCV_SYMBOL = 15,
+
+    // Vecs and maps are just polymorphic containers of other ScVals.
+    SCV_VEC = 16,
+    SCV_MAP = 17,
+
+    // Address is the universal identifier for contracts and classic
+    // accounts.
+    SCV_ADDRESS = 18,
+
+    // The following are the internal SCVal variants that are not
+    // exposed to the contracts. 
+    SCV_CONTRACT_INSTANCE = 19,
+
+    // SCV_LEDGER_KEY_CONTRACT_INSTANCE and SCV_LEDGER_KEY_NONCE are unique
+    // symbolic SCVals used as the key for ledger entries for a contract's
+    // instance and an address' nonce, respectively.
+    SCV_LEDGER_KEY_CONTRACT_INSTANCE = 20,
+    SCV_LEDGER_KEY_NONCE = 21
 };
 
-% struct SCObject;
-
-enum SCStatic
+enum SCErrorType
 {
-    SCS_VOID = 0,
-    SCS_TRUE = 1,
-    SCS_FALSE = 2,
-    SCS_LEDGER_KEY_CONTRACT_CODE = 3
+    SCE_CONTRACT = 0,          // Contract-specific, user-defined codes.
+    SCE_WASM_VM = 1,           // Errors while interpreting WASM bytecode.
+    SCE_CONTEXT = 2,           // Errors in the contract's host context.
+    SCE_STORAGE = 3,           // Errors accessing host storage.
+    SCE_OBJECT = 4,            // Errors working with host objects.
+    SCE_CRYPTO = 5,            // Errors in cryptographic operations.
+    SCE_EVENTS = 6,            // Errors while emitting events.
+    SCE_BUDGET = 7,            // Errors relating to budget limits.
+    SCE_VALUE = 8,             // Errors working with host values or SCVals.
+    SCE_AUTH = 9               // Errors from the authentication subsystem.
 };
 
-enum SCStatusType
+enum SCErrorCode
 {
-    SST_OK = 0,
-    SST_UNKNOWN_ERROR = 1,
-    SST_HOST_VALUE_ERROR = 2,
-    SST_HOST_OBJECT_ERROR = 3,
-    SST_HOST_FUNCTION_ERROR = 4,
-    SST_HOST_STORAGE_ERROR = 5,
-    SST_HOST_CONTEXT_ERROR = 6,
-    SST_VM_ERROR = 7,
-    SST_CONTRACT_ERROR = 8
-    // TODO: add more
+    SCEC_ARITH_DOMAIN = 0,      // Some arithmetic was undefined (overflow, divide-by-zero).
+    SCEC_INDEX_BOUNDS = 1,      // Something was indexed beyond its bounds.
+    SCEC_INVALID_INPUT = 2,     // User provided some otherwise-bad data.
+    SCEC_MISSING_VALUE = 3,     // Some value was required but not provided.
+    SCEC_EXISTING_VALUE = 4,    // Some value was provided where not allowed.
+    SCEC_EXCEEDED_LIMIT = 5,    // Some arbitrary limit -- gas or otherwise -- was hit.
+    SCEC_INVALID_ACTION = 6,    // Data was valid but action requested was not.
+    SCEC_INTERNAL_ERROR = 7,    // The host detected an error in its own logic.
+    SCEC_UNEXPECTED_TYPE = 8,   // Some type wasn't as expected.
+    SCEC_UNEXPECTED_SIZE = 9    // Something's size wasn't as expected.
 };
 
-enum SCHostValErrorCode
+// Smart contract errors are split into a type (SCErrorType) and a code. When an
+// error is of type SCE_CONTRACT it carries a user-defined uint32 code that
+// Soroban assigns no specific meaning to. In all other cases, the type
+// specifies a subsystem of the Soroban host where the error originated, and the
+// accompanying code is an SCErrorCode, each of which specifies a slightly more
+// precise class of errors within that subsystem.
+//
+// Error types and codes are not maximally precise; there is a tradeoff between
+// precision and flexibility in the implementation, and the granularity here is
+// chosen to be adequate for most purposes while not placing a burden on future
+// system evolution and maintenance. When additional precision is needed for
+// debugging, Soroban can be run with diagnostic events enabled.
+
+union SCError switch (SCErrorType type)
 {
-    HOST_VALUE_UNKNOWN_ERROR = 0,
-    HOST_VALUE_RESERVED_TAG_VALUE = 1,
-    HOST_VALUE_UNEXPECTED_VAL_TYPE = 2,
-    HOST_VALUE_U63_OUT_OF_RANGE = 3,
-    HOST_VALUE_U32_OUT_OF_RANGE = 4,
-    HOST_VALUE_STATIC_UNKNOWN = 5,
-    HOST_VALUE_MISSING_OBJECT = 6,
-    HOST_VALUE_SYMBOL_TOO_LONG = 7,
-    HOST_VALUE_SYMBOL_BAD_CHAR = 8,
-    HOST_VALUE_SYMBOL_CONTAINS_NON_UTF8 = 9,
-    HOST_VALUE_BITSET_TOO_MANY_BITS = 10,
-    HOST_VALUE_STATUS_UNKNOWN = 11
-};
-
-enum SCHostObjErrorCode
-{
-    HOST_OBJECT_UNKNOWN_ERROR = 0,
-    HOST_OBJECT_UNKNOWN_REFERENCE = 1,
-    HOST_OBJECT_UNEXPECTED_TYPE = 2,
-    HOST_OBJECT_OBJECT_COUNT_EXCEEDS_U32_MAX = 3,
-    HOST_OBJECT_OBJECT_NOT_EXIST = 4,
-    HOST_OBJECT_VEC_INDEX_OUT_OF_BOUND = 5,
-    HOST_OBJECT_CONTRACT_HASH_WRONG_LENGTH = 6
-};
-
-enum SCHostFnErrorCode
-{
-    HOST_FN_UNKNOWN_ERROR = 0,
-    HOST_FN_UNEXPECTED_HOST_FUNCTION_ACTION = 1,
-    HOST_FN_INPUT_ARGS_WRONG_LENGTH = 2,
-    HOST_FN_INPUT_ARGS_WRONG_TYPE = 3,
-    HOST_FN_INPUT_ARGS_INVALID = 4
-};
-
-enum SCHostStorageErrorCode
-{
-    HOST_STORAGE_UNKNOWN_ERROR = 0,
-    HOST_STORAGE_EXPECT_CONTRACT_DATA = 1,
-    HOST_STORAGE_READWRITE_ACCESS_TO_READONLY_ENTRY = 2,
-    HOST_STORAGE_ACCESS_TO_UNKNOWN_ENTRY = 3,
-    HOST_STORAGE_MISSING_KEY_IN_GET = 4,
-    HOST_STORAGE_GET_ON_DELETED_KEY = 5
-};
-
-enum SCHostContextErrorCode
-{
-    HOST_CONTEXT_UNKNOWN_ERROR = 0,
-    HOST_CONTEXT_NO_CONTRACT_RUNNING = 1
-};
-
-enum SCVmErrorCode {
-    VM_UNKNOWN = 0,
-    VM_VALIDATION = 1,
-    VM_INSTANTIATION = 2,
-    VM_FUNCTION = 3,
-    VM_TABLE = 4,
-    VM_MEMORY = 5,
-    VM_GLOBAL = 6,
-    VM_VALUE = 7,
-    VM_TRAP_UNREACHABLE = 8,
-    VM_TRAP_MEMORY_ACCESS_OUT_OF_BOUNDS = 9,
-    VM_TRAP_TABLE_ACCESS_OUT_OF_BOUNDS = 10,
-    VM_TRAP_ELEM_UNINITIALIZED = 11,
-    VM_TRAP_DIVISION_BY_ZERO = 12,
-    VM_TRAP_INTEGER_OVERFLOW = 13,
-    VM_TRAP_INVALID_CONVERSION_TO_INT = 14,
-    VM_TRAP_STACK_OVERFLOW = 15,
-    VM_TRAP_UNEXPECTED_SIGNATURE = 16,
-    VM_TRAP_MEM_LIMIT_EXCEEDED = 17,
-    VM_TRAP_CPU_LIMIT_EXCEEDED = 18
-};
-
-enum SCUnknownErrorCode
-{
-    UNKNOWN_ERROR_GENERAL = 0,
-    UNKNOWN_ERROR_XDR = 1
-};
-
-union SCStatus switch (SCStatusType type)
-{
-case SST_OK:
-    void;
-case SST_UNKNOWN_ERROR:
-    SCUnknownErrorCode unknownCode;
-case SST_HOST_VALUE_ERROR:
-    SCHostValErrorCode valCode;
-case SST_HOST_OBJECT_ERROR:
-    SCHostObjErrorCode objCode;
-case SST_HOST_FUNCTION_ERROR:
-    SCHostFnErrorCode fnCode;
-case SST_HOST_STORAGE_ERROR:
-    SCHostStorageErrorCode storageCode;
-case SST_HOST_CONTEXT_ERROR:
-    SCHostContextErrorCode contextCode;
-case SST_VM_ERROR:
-    SCVmErrorCode vmCode;
-case SST_CONTRACT_ERROR:
+case SCE_CONTRACT:
     uint32 contractCode;
+case SCE_WASM_VM:
+case SCE_CONTEXT:
+case SCE_STORAGE:
+case SCE_OBJECT:
+case SCE_CRYPTO:
+case SCE_EVENTS:
+case SCE_BUDGET:
+case SCE_VALUE:
+case SCE_AUTH:
+    SCErrorCode code;
+};
+
+struct UInt128Parts {
+    uint64 hi;
+    uint64 lo;
+};
+
+// A signed int128 has a high sign bit and 127 value bits. We break it into a
+// signed high int64 (that carries the sign bit and the high 63 value bits) and
+// a low unsigned uint64 that carries the low 64 bits. This will sort in
+// generated code in the same order the underlying int128 sorts.
+struct Int128Parts {
+    int64 hi;
+    uint64 lo;
+};
+
+struct UInt256Parts {
+    uint64 hi_hi;
+    uint64 hi_lo;
+    uint64 lo_hi;
+    uint64 lo_lo;
+};
+
+// A signed int256 has a high sign bit and 255 value bits. We break it into a
+// signed high int64 (that carries the sign bit and the high 63 value bits) and
+// three low unsigned `uint64`s that carry the lower bits. This will sort in
+// generated code in the same order the underlying int256 sorts.
+struct Int256Parts {
+    int64 hi_hi;
+    uint64 hi_lo;
+    uint64 lo_hi;
+    uint64 lo_lo;
+};
+
+enum ContractExecutableType
+{
+    CONTRACT_EXECUTABLE_WASM = 0,
+    CONTRACT_EXECUTABLE_TOKEN = 1
+};
+
+union ContractExecutable switch (ContractExecutableType type)
+{
+case CONTRACT_EXECUTABLE_WASM:
+    Hash wasm_hash;
+case CONTRACT_EXECUTABLE_TOKEN:
+    void;
+};
+
+enum SCAddressType
+{
+    SC_ADDRESS_TYPE_ACCOUNT = 0,
+    SC_ADDRESS_TYPE_CONTRACT = 1
+};
+
+union SCAddress switch (SCAddressType type)
+{
+case SC_ADDRESS_TYPE_ACCOUNT:
+    AccountID accountId;
+case SC_ADDRESS_TYPE_CONTRACT:
+    Hash contractId;
+};
+
+%struct SCVal;
+%struct SCMapEntry;
+
+const SCSYMBOL_LIMIT = 32;
+
+typedef SCVal SCVec<>;
+typedef SCMapEntry SCMap<>;
+
+typedef opaque SCBytes<>;
+typedef string SCString<>;
+typedef string SCSymbol<SCSYMBOL_LIMIT>;
+
+struct SCNonceKey {
+    int64 nonce;
+};
+
+struct SCContractInstance {
+    ContractExecutable executable;
+    SCMap* storage;
 };
 
 union SCVal switch (SCValType type)
 {
-case SCV_U63:
-    int64 u63;
+
+case SCV_BOOL:
+    bool b;
+case SCV_VOID:
+    void;
+case SCV_ERROR:
+    SCError error;
+
 case SCV_U32:
     uint32 u32;
 case SCV_I32:
     int32 i32;
-case SCV_STATIC:
-    SCStatic ic;
-case SCV_OBJECT:
-    SCObject* obj;
+
+case SCV_U64:
+    uint64 u64;
+case SCV_I64:
+    int64 i64;
+case SCV_TIMEPOINT:
+    TimePoint timepoint;
+case SCV_DURATION:
+    Duration duration;
+
+case SCV_U128:
+    UInt128Parts u128;
+case SCV_I128:
+    Int128Parts i128;
+
+case SCV_U256:
+    UInt256Parts u256;
+case SCV_I256:
+    Int256Parts i256;
+
+case SCV_BYTES:
+    SCBytes bytes;
+case SCV_STRING:
+    SCString str;
 case SCV_SYMBOL:
     SCSymbol sym;
-case SCV_BITSET:
-    uint64 bits;
-case SCV_STATUS:
-    SCStatus status;
-};
 
-enum SCObjectType
-{
-    // We have a few objects that represent non-stellar-specific concepts
-    // like general-purpose maps, vectors, numbers, blobs.
+// Vec and Map are recursive so need to live
+// behind an option, due to xdrpp limitations.
+case SCV_VEC:
+    SCVec *vec;
+case SCV_MAP:
+    SCMap *map;
 
-    SCO_VEC = 0,
-    SCO_MAP = 1,
-    SCO_U64 = 2,
-    SCO_I64 = 3,
-    SCO_BYTES = 4,
-    SCO_BIG_INT = 5,
-    SCO_CONTRACT_CODE = 6,
-    SCO_ACCOUNT_ID = 7
+case SCV_ADDRESS:
+    SCAddress address;
 
-    // TODO: add more
+// Special SCVals reserved for system-constructed contract-data
+// ledger keys, not generally usable elsewhere.
+case SCV_LEDGER_KEY_CONTRACT_INSTANCE:
+    void;
+case SCV_LEDGER_KEY_NONCE:
+    SCNonceKey nonce_key;
+
+case SCV_CONTRACT_INSTANCE:
+    SCContractInstance instance;
 };
 
 struct SCMapEntry
@@ -227,58 +279,4 @@ struct SCMapEntry
     SCVal val;
 };
 
-const SCVAL_LIMIT = 256000;
-
-typedef SCVal SCVec<SCVAL_LIMIT>;
-typedef SCMapEntry SCMap<SCVAL_LIMIT>;
-
-enum SCNumSign
-{
-    NEGATIVE = -1,
-    ZERO = 0,
-    POSITIVE = 1
-};
-
-union SCBigInt switch (SCNumSign sign)
-{
-case ZERO:
-    void;
-case POSITIVE:
-case NEGATIVE:
-    opaque magnitude<256000>;
-};
-
-enum SCContractCodeType
-{
-    SCCONTRACT_CODE_WASM_REF = 0,
-    SCCONTRACT_CODE_TOKEN = 1
-};
-
-union SCContractCode switch (SCContractCodeType type)
-{
-case SCCONTRACT_CODE_WASM_REF:
-    Hash wasm_id;
-case SCCONTRACT_CODE_TOKEN:
-    void;
-};
-
-union SCObject switch (SCObjectType type)
-{
-case SCO_VEC:
-    SCVec vec;
-case SCO_MAP:
-    SCMap map;
-case SCO_U64:
-    uint64 u64;
-case SCO_I64:
-    int64 i64;
-case SCO_BYTES:
-    opaque bin<SCVAL_LIMIT>;
-case SCO_BIG_INT:
-    SCBigInt bigInt;
-case SCO_CONTRACT_CODE:
-    SCContractCode contractCode;
-case SCO_ACCOUNT_ID:
-    AccountID accountID;
-};
 }

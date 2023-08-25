@@ -164,7 +164,6 @@ struct StateExpirationSettings {
     uint32 maxEntryExpiration;
     uint32 minTempEntryExpiration;
     uint32 minPersistentEntryExpiration;
-    uint32 autoBumpLedgers;
 
     // rent_fee = wfee_rate_average / rent_rate_denominator_for_type
     int64 persistentRentRateDenominator;
