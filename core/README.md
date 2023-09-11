@@ -77,11 +77,13 @@
 | [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Draft |
 | [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | Smart Contract Lifecycle | Siddharth Suresh | Draft |
 | [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | Smart Contract Host Functons | Jay Geng | Draft |
-| [CAP-0046-04 (formerly 0052)](cap-0046-04.md) | Smart Contract Interactions (Minimal) | Jonathan Jove | Draft |
 | [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | Smart Contract Data | Graydon Hoare | Draft |
 | [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | Smart Contract Standardized Asset | Jonathan Jove | Draft |
 | [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | Fee model in smart contracts | Nicolas Barry | Draft |
 | [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | Smart Contract Logging | Siddharth Suresh | Draft |
+| [CAP-0046-09](cap-0046-09.md) | Network Configuration Ledger Entries | Dmytro Kozhevin | Draft |
+| [CAP-0046-10](cap-0046-10.md) | Smart Contract Budget Metering | Jay Geng | Draft |
+| [CAP-0046-11](cap-0046-11.md) | Soroban Authorization Framework | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -94,6 +96,7 @@
 | [CAP-0048](cap-0048.md) | Smart Contract Asset Interoperability | Jonathan Jove | Rejected |
 | [CAP-0049](cap-0049.md) | Smart Contract Asset Interoperability with Wrapper | Jonathan Jove | Rejected |
 | [CAP-0050](cap-0050.md) | Smart Contract Interactions | Jonathan Jove | Rejected |
+| [CAP-0046-04 (formerly 0052)](cap-0046-04.md) | Smart Contract Interactions (Minimal) | Jonathan Jove | Rejected |
 
 # Contribution Process
 
