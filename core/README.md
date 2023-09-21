@@ -84,6 +84,7 @@
 | [CAP-0046-09](cap-0046-09.md) | Network Configuration Ledger Entries | Dmytro Kozhevin | Draft |
 | [CAP-0046-10](cap-0046-10.md) | Smart Contract Budget Metering | Jay Geng | Draft |
 | [CAP-0046-11](cap-0046-11.md) | Soroban Authorization Framework | Dmytro Kozhevin | Draft |
+| [CAP-0046-12](cap-0046-12.md) | Soroban State Expiration Interface | Garand Tyson | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
