@@ -12,7 +12,7 @@
 ## SEP Status Terms
 * **Draft** - A SEP that is currently open for consideration and actively being discussed.
 * **Awaiting Decision** — A mature and ready SEP that is ready for approval by the SEP
-  Team. If enough the approval requirements are met by SEP team members, the SEP will move towards 
+  Team. If enough the approval requirements are met by SEP team members, the SEP will move towards
   `FCP`. Otherwise, it'll regress to a `Draft`.
 * **FCP** — A SEP that has entered a Final Comment Period (FCP). After one week has passed, during
   which any new concerns should be addressed, the SEP's status will become `Active`.
@@ -69,7 +69,7 @@
 | [SEP-0037](sep-0037.md) | Address Directory API | OrbitLens | Informational | Draft |
 | [SEP-0038](sep-0038.md) | Anchor RFQ API | Jake Urban and Leigh McCulloch | Standard | Draft |
 | [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs | SDF, Litemint.io | Informational | Active |
-| [SEP-0040](sep-oracle-consumer-interface.md) | Oracle Consumer Interface | Alex Mootz, OrbitLens, Markus Paulson-Luna | Standard | Draft |
+| [SEP-0040](sep-0040.md) | Oracle Consumer Interface | Alex Mootz, OrbitLens, Markus Paulson-Luna | Standard | Draft |
 
 
 
@@ -177,7 +177,7 @@ From there, the following process will happen:
 * No changes will be made to a finalized SEP aside from fixing errata.
 * Changes should increment the patch version number only.
 * Much consideration should be given before moving to Final status, it is OK for SEPs to live in Active status for a long time.
-  
+
 ### Regression
 * It is possible for a SEP to move from `Active` to `Draft` or `Deprecated` if it is never adopted, or is abandoned by the community.
 * Regression of an active SEP occurs via the same process as a proposal (`Draft` -> `Awaiting Decision` -> `FCP` -> `Deprecated`)
