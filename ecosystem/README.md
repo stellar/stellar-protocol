@@ -70,6 +70,7 @@
 | [SEP-0038](sep-0038.md) | Anchor RFQ API | Jake Urban and Leigh McCulloch | Standard | Draft |
 | [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs | SDF, Litemint.io | Informational | Active |
 | [SEP-0040](sep-oracle-consumer-interface.md) | Oracle Consumer Interface | Alex Mootz, OrbitLens, Markus Paulson-Luna | Standard | Draft |
+| [SEP-0041](sep-0041.md) | Token Interface | Stellar Development Foundation | Standard | Draft |
 
 
 
