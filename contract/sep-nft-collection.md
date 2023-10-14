@@ -1,5 +1,5 @@
 ## Preamble
-
+```
 CIP: TBD
 Title: Token Collections (ERC-1155 like)
 Author: Stellar Development Foundation <@stellar>
@@ -7,7 +7,7 @@ Status: Draft
 Discussion: TBD
 Created: 2023-10-13
 Version 0.1.0
-
+```
 ## Summary
 
 This proposal introduces a standard interface for creating and managing NFT collections on Soroban, ensuring compatibility and interoperability within the Stellar ecosystem, and aligning with the previously defined NFT interface and the ERC-1155 standard.
