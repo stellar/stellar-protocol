@@ -1,4 +1,5 @@
-Preamble
+## Preamble
+
 CIP: TBD
 Title: Token Collections (ERC-1155 like)
 Author: Stellar Development Foundation <@stellar>
