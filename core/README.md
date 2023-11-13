@@ -73,18 +73,18 @@
 | [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
-| [CAP-0046](cap-0046.md) | Soroban smart contract system overview | Graydon Hoare | Awaiting Decision |
-| [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Awaiting Decision |
-| [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | Smart Contract Lifecycle | Siddharth Suresh | Awaiting Decision |
-| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | Smart Contract Host Functons | Jay Geng | Awaiting Decision |
-| [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | Smart Contract Data | Graydon Hoare | Awaiting Decision |
-| [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | Smart Contract Standardized Asset | Jonathan Jove | Awaiting Decision |
-| [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | Fee model in smart contracts | Nicolas Barry | Awaiting Decision |
-| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | Smart Contract Logging | Siddharth Suresh | Awaiting Decision |
-| [CAP-0046-09](cap-0046-09.md) | Network Configuration Ledger Entries | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0046-10](cap-0046-10.md) | Smart Contract Budget Metering | Jay Geng | Awaiting Decision |
-| [CAP-0046-11](cap-0046-11.md) | Soroban Authorization Framework | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0046-12](cap-0046-12.md) | Soroban State Archival Interface | Garand Tyson | Awaiting Decision |
+| [CAP-0046](cap-0046.md) | Soroban smart contract system overview | Graydon Hoare | FCP: Accepted |
+| [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | FCP: Accepted |
+| [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | Smart Contract Lifecycle | Siddharth Suresh | FCP: Accepted |
+| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | Smart Contract Host Functons | Jay Geng | FCP: Accepted |
+| [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | Smart Contract Data | Graydon Hoare | FCP: Accepted |
+| [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | Smart Contract Standardized Asset | Jonathan Jove | FCP: Accepted |
+| [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | Fee model in smart contracts | Nicolas Barry | FCP: Accepted |
+| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | Smart Contract Logging | Siddharth Suresh | FCP: Accepted |
+| [CAP-0046-09](cap-0046-09.md) | Network Configuration Ledger Entries | Dmytro Kozhevin | FCP: Accepted |
+| [CAP-0046-10](cap-0046-10.md) | Smart Contract Budget Metering | Jay Geng | FCP: Accepted |
+| [CAP-0046-11](cap-0046-11.md) | Soroban Authorization Framework | Dmytro Kozhevin | FCP: Accepted |
+| [CAP-0046-12](cap-0046-12.md) | Soroban State Archival Interface | Garand Tyson | FCP: Accepted |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
