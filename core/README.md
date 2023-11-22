@@ -55,6 +55,7 @@
 | [CAP-0038](cap-0038.md) | 18 | Automated Market Makers | Jonathan Jove | Final |
 | [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Final |
 | [CAP-0042](cap-0042.md) | - | Multi-Part Transaction Sets | Nicolas Barry | Accepted |
+| [CAP-0046](cap-0046.md) | Soroban smart contract system overview | Graydon Hoare | Accepted |
 | [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Accepted |
 | [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | Smart Contract Lifecycle | Siddharth Suresh | Accepted |
 | [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | Smart Contract Host Functons | Jay Geng | Accepted |
