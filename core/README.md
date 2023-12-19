@@ -55,18 +55,18 @@
 | [CAP-0038](cap-0038.md) | 18 | Automated Market Makers | Jonathan Jove | Final |
 | [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Final |
 | [CAP-0042](cap-0042.md) | - | Multi-Part Transaction Sets | Nicolas Barry | Accepted |
-| [CAP-0046](cap-0046.md) | Soroban smart contract system overview | Graydon Hoare | Accepted |
-| [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Accepted |
-| [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | Smart Contract Lifecycle | Siddharth Suresh | Accepted |
-| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | Smart Contract Host Functons | Jay Geng | Accepted |
-| [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | Smart Contract Data | Graydon Hoare | Accepted |
-| [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | Smart Contract Standardized Asset | Jonathan Jove | Accepted |
-| [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | Fee model in smart contracts | Nicolas Barry | Accepted |
-| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | Smart Contract Logging | Siddharth Suresh | Accepted |
-| [CAP-0046-09](cap-0046-09.md) | Network Configuration Ledger Entries | Dmytro Kozhevin | Accepted |
-| [CAP-0046-10](cap-0046-10.md) | Smart Contract Budget Metering | Jay Geng | Accepted |
-| [CAP-0046-11](cap-0046-11.md) | Soroban Authorization Framework | Dmytro Kozhevin | Accepted |
-| [CAP-0046-12](cap-0046-12.md) | Soroban State Archival Interface | Garand Tyson | Accepted |
+| [CAP-0046](cap-0046.md) | 20 |Soroban smart contract system overview | Graydon Hoare | Implemented |
+| [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | 20 | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Implemented |
+| [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | 20 | Smart Contract Lifecycle | Siddharth Suresh | Implemented |
+| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20 | Smart Contract Host Functons | Jay Geng | Implemented |
+| [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | 20 | Smart Contract Data | Graydon Hoare | Implemented |
+| [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | 20 | Smart Contract Standardized Asset | Jonathan Jove | Implemented |
+| [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | 20 | Fee model in smart contracts | Nicolas Barry | Implemented |
+| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | 20 |Smart Contract Logging | Siddharth Suresh | Implemented |
+| [CAP-0046-09](cap-0046-09.md) | 20 | Network Configuration Ledger Entries | Dmytro Kozhevin | Implemented |
+| [CAP-0046-10](cap-0046-10.md) | 20 | Smart Contract Budget Metering | Jay Geng | Implemented |
+| [CAP-0046-11](cap-0046-11.md) | 20 | Soroban Authorization Framework | Dmytro Kozhevin | Implemented |
+| [CAP-0046-12](cap-0046-12.md) | 20 | Soroban State Archival Interface | Garand Tyson | Implemented |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
