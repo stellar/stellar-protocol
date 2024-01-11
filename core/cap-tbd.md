@@ -39,9 +39,37 @@ Add host functions that enable arithmetic, pairing, and mapping operations for p
 TBD
 
 ### Semantics
-This section includes subsections, one for each logical change included in the XDR changes,
-that describes how each new or changed type functions and is used, and for new operations
-a step-by-step description of what happens when the operation is executed.
+Eleven host functions are added to enable the BLS12-381 curve, which is fully defined in the supporting docs. G1 and G2 are two sets of points on the curve. The mathematical relationship between G1 and G2 enables advanced cryptographic systems.
+
+#### Encoding Rules
+
+Inputs to the specificed functions need to be encoded as specified.
+
+##### Encoding of Field elements
+Base field element (Fp) is encoded as 64 bytes by performing BigEndian encoding of the corresponding (unsigned) integer (top 16 bytes are always zeroes). 64 bytes are chosen to have 32 byte aligned ABI (representable as e.g. bytes32[2] or uint256[2]). Corresponding integer must be less than field modulus.
+For elements of the quadratic extension field (Fp2) encoding is byte concatenation of individual encoding of the coefficients totaling in 128 bytes for a total encoding. 
+
+
+##### Encoding of points in G1 and G2
+Points in either G1 (in base field) or in G2 (in extension field) are encoded as byte concatenation of encodings of the x and y affine coordinates. Total encoding length for G1 point is thus 128 bytes and for G2 point is 256 bytes.
+
+##### Encoding of scalars for multiplication operation
+Scalar for multiplication operation is encoded as 32 bytes by performing BigEndian encoding of the corresponding (unsigned) integer. Corresponding integer is not required to be less than or equal than main subgroup size.
+
+
+### Data Types
+Following types are used throughout this proposal.
+
+```rust
+/******************************************************************************\
+*
+* Data Structures
+* const BLST_G1_POINT: usize = 96; (rename after adding decoding functions)
+* const BLST_G2_POINT: usize = 192;
+* const BLST_SCALAR_SIZE: usize = 255;
+*
+\******************************************************************************/
+```
 
 ## Design Rationale
 The rationale fleshes out the specification by describing what motivated the design and why
