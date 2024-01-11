@@ -47,7 +47,7 @@ Certain operations have variable length input, such as multiexponentiations (tak
 
 
 ### Field Element to Curve Mapping
-See linked document.
+See linked [document](https://github.com/namankumar/stellar-protocol/blob/master/contents/cap-tbd/field_element_to_curve_point_mapping.md).
 
 
 
