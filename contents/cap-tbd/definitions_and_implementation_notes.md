@@ -46,12 +46,12 @@ Also referred to as “zero point”. For BLS12 curves point with coordinates (0
 Certain operations have variable length input, such as multiexponentiations (takes a list of pairs (point, scalar)), or pairing (takes a list of (G1, G2) points). While their behavior is well-defined (from arithmetic perspective) on empty inputs, this proposal discourages such use cases and variable input length operations must return an error if input is empty.
 
 
-### Field Element to Curve Mapping
+## Field Element to Curve Mapping
 See linked [document](https://github.com/namankumar/stellar-protocol/blob/master/contents/cap-tbd/field_element_to_curve_point_mapping.md).
 
 
 
-### Test Cases
+## Test Cases
 Due to the large test parameters space we first provide properties that various operations must satisfy. We use additive notation for point operations, capital letters (P, Q) for points, small letters (a, b) for scalars. Generator for G1 is labeled as G, generator for G2 is labeled as H, otherwise we assume random point on a curve in a correct subgroup. 0 means either scalar zero or point of infinity. 1 means either scalar one or multiplicative identity. group_order is a main subgroup order. e(P, Q) means pairing operation where P is in G1, Q is in G2.
 
 Required properties for basic ops (add/multiply):
