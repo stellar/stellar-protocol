@@ -45,15 +45,15 @@ Eleven host functions are added to enable the BLS12-381 curve, which is fully de
 
 Inputs to the specificed functions need to be encoded as specified.
 
-##### Encoding of Field elements
+#### Encoding Rules: Field elements
 Base field element (Fp) is encoded as 64 bytes by performing BigEndian encoding of the corresponding (unsigned) integer (top 16 bytes are always zeroes). 64 bytes are chosen to have 32 byte aligned ABI (representable as e.g. bytes32[2] or uint256[2]). Corresponding integer must be less than field modulus.
 For elements of the quadratic extension field (Fp2) encoding is byte concatenation of individual encoding of the coefficients totaling in 128 bytes for a total encoding. 
 
 
-##### Encoding of points in G1 and G2
+#### Encoding Rules: Points in G1 and G2
 Points in either G1 (in base field) or in G2 (in extension field) are encoded as byte concatenation of encodings of the x and y affine coordinates. Total encoding length for G1 point is thus 128 bytes and for G2 point is 256 bytes.
 
-##### Encoding of scalars for multiplication operation
+#### Encoding Rules: Scalars for Multiplication Pperations
 Scalar for multiplication operation is encoded as 32 bytes by performing BigEndian encoding of the corresponding (unsigned) integer. Corresponding integer is not required to be less than or equal than main subgroup size.
 
 
