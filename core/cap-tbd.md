@@ -39,7 +39,7 @@ Add host functions that enable arithmetic, pairing, and mapping operations for p
 TBD
 
 ### Semantics
-Eleven host functions are added to enable the BLS12-381 curve, which is fully defined in the supporting docs. G1 and G2 are two sets of points on the curve. The mathematical relationship between G1 and G2 enables advanced cryptographic systems.
+Eleven host functions are added to enable the BLS12-381 curve, which is fully defined in the [supporting docs](https://github.com/namankumar/stellar-protocol/blob/master/contents/cap-tbd/definitions_and_implementation_notes.md). G1 and G2 are two sets of points on the curve. The mathematical relationship between G1 and G2 enables advanced cryptographic systems.
 
 #### Encoding Rules
 
