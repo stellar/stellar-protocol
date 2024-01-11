@@ -23,16 +23,11 @@ This section describes the composition of the working group.
 ## Motivation
 BLS12-381 host functions allow for cryptographic operations in the Soroban execution environment that are otherwise prohibitively expensive. It enables a variety of applications including confidentiality preserving systems, BLS signature schemes, and multiple types of scaling solutions. Pairing-friendly elliptic curves are needed for such systems and BLS12-381 is the state of the art in secure elliptical curves. 
 
-### Goals Alignment
-You should reference the Stellar Network goal(s) that this proposal advances, such as:
-* The Stellar Network should run at scale and at low cost to all participants of the network.
-* The Stellar Network should enable cross-border payments.
 
 ## Abstract
 Add host functions that enable arithmetic, pairing, and mapping operations for points on the BLS12-381 curve. 
 
 ## Specification
-
 
 ### XDR changes
 
