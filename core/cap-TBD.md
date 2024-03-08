@@ -2,7 +2,7 @@
 
 ```
 CAP: TBD
-Title: Separate TTL host functions for contract instance and contract code
+Title: Separate host functions to extend the TTL for contract instance and contract code
 Working Group:
     Owner: Anup Pani <@anupsdf>
     Authors: Tommaso De Ponti <@heytdep>
