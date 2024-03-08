@@ -5,7 +5,7 @@ CAP: TBD
 Title: Separate TTL host functions for contract instance and contract code
 Working Group:
     Owner: Anup Pani <@anupsdf>
-    Authors: Tommaso De Ponti @heytdep
+    Authors: Tommaso De Ponti <@heytdep>
     Consulted: Leigh McCulloch <@leighmcculloch>, Dmytro Kozhevin <@dmkozh>
 Status: Draft
 Created: 2023-03-06
@@ -27,7 +27,7 @@ Adding two Soroban smart contract host functions.
 
 ## Motivation
 
-Currently, Soroban smart contract system has a host function, extend_contract_instance_and_code_ttl_from_contract_id, that extends the [TTL](cap-0046-12.md) of both contract instance and contract code ledger entries by the same amount. In decentralized contracts, the contract can extend its own lifetime from within the code with certain thresholds with the idea that the cost is distributed among users. 
+Currently, Soroban smart contract system has a host function, extend_contract_instance_and_code_ttl_from_contract_id, that extends the [TTL](cap-0046-12.md) of both contract instance and contract code ledger entries by the same value. In decentralized contracts, the contract can extend its own lifetime from within the code with certain thresholds with the idea that the cost is distributed among its users. 
 
 Extending the TTL for contract code entries are very expensive due to the large binary sizes that occupy the ledger. There are numerous situations where a contract code entry is referenced by multiple contract instances. Thus allowing to extend them separately would enable implementing a more efficient lifetime extension logic. 
 
@@ -118,7 +118,7 @@ The `env.json` in `rs-soroban-env` will be modified as so:
 
 ## Test Cases
 
-Unit tests will have to be written to test the extension of TTL for contract code and instance.
+Unit tests will have to be written to test the extension of TTL separately for contract code and contract instance.
 
 ## Implementation
 
