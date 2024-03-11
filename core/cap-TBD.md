@@ -48,7 +48,7 @@ This CAP introduces these two new Soroban smart contract host functions to bump 
 
 ## Specification
 
-Two new functions, `extend_contract_instance_ttl` and `extend_contract_code_ttl`, with export names `c` and `d` in module `l` are added to the Soroban environment's exported interface.
+Two new functions, `extend_contract_instance_ttl` and `extend_contract_code_ttl`, with export names `10` and `11` in module `l` are added to the Soroban environment's exported interface.
 
 They both accept a contract, threshold, and extend_to as input arguments. The 
 functions extend the TTL and don't return anything.
