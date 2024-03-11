@@ -86,6 +86,7 @@
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0051](cap-0051.md) | Smart Contract Host Functionality: Secp256r1 Verification | Leigh McCulloch | Draft |
+| [CAP-0053](cap-0053.md) | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
