@@ -9,7 +9,7 @@ Working Group:
     Consulted: Leigh McCulloch <@leighmcculloch>, Dmytro Kozhevin <@dmkozh>
 Status: Draft
 Created: 2023-03-06
-Discussion: TBD
+Discussion: https://github.com/stellar/stellar-protocol/discussions/1447
 Protocol version: TBD
 ```
 
