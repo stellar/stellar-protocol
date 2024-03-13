@@ -9,7 +9,7 @@ Working Group:
     Consulted: Jay Geng <@jayz22>, Dmytro Kozhevin <@dmkozh>
 Status: Draft
 Created: 2024-03-11
-Discussion: https://github.com/stellar/stellar-protocol/discussions
+Discussion: https://github.com/stellar/stellar-protocol/discussions/1460
 Protocol version: TBD
 ```
 
