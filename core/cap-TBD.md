@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-CAP: To Be Assigned
+CAP: 0054
 Title: Soroban refined VM instantiation cost model
 Working Group:
     Owner: Graydon Hoare <@graydon>
