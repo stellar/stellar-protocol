@@ -87,6 +87,7 @@
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0051](cap-0051.md) | Smart Contract Host Functionality: Secp256r1 Verification | Leigh McCulloch | Draft |
 | [CAP-0053](cap-0053.md) | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti | Draft |
+| [CAP-0054](cap-0054.md) | Soroban refined VM instantiation cost model | Graydon Hoare | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
