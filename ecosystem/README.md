@@ -18,7 +18,7 @@
   which any new concerns should be addressed, the SEP's status will become `Active`.
 * **Active** - An actively maintained SEP that is intended for immediate adoption by the entire
   ecosystem. Additional updates may be made without changing the SEP number.
-* **Final** - A finalized SEP will not be changed aside from minor errata. For a proposal to be a candidate to be made Final it must be being used in live products.
+* **Final** - A finalized SEP will not be changed aside from minor errata. For a proposal to be a candidate to be made Final it must have been used in live products.
 
 ### Additional Statuses
 * **Deprecated** - A SEP that was previously on an active track but has been deprecated and is no longer suggested for use. There may be legacy usage of a deprecated SEP.
