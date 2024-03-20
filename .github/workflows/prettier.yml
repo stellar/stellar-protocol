@@ -20,3 +20,4 @@ jobs:
         with:
           prettier_options: --write ecosystem/*.md
           only_changed: True
+          same_commit: true

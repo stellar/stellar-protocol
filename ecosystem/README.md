@@ -105,6 +105,7 @@ Before contributing, consider the following:
   things forward, as well as feedback regarding feasibility and how the proposal does or does not
   align with the Stellar Network's goals.
 
+
 ## SEP Process
 ### Pre-SEP (Initial Discussion)
 Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev)
