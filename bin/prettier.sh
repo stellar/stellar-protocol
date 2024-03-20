@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-yarn prettier $1 --write
+yarn prettier ecosystem/*.md --write
