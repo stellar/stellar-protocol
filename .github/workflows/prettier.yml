@@ -1,0 +1,20 @@
+# https://github.com/marketplace/actions/prettier-action
+name: 'Prettier for SEP files'
+
+on:
+  pull_request:
+
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Check code
+        uses: creyD/prettier_action@v4.3
+        with:
+          prettier_options: --check ecosystem/*.md
