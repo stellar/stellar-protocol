@@ -19,5 +19,5 @@ network.
 
 Please see the contribution process outlined in [the ecosystem folder](ecosystem/README.md).
 
-Please run `./bin/prettier.sh` or `yarn prettier ecosystem/*.md --write` (if your OS doesn't have sh) before submitting
+Please run `./bin/prettier.sh` or `yarn sep-prettify` (if your OS doesn't have sh) before submitting
 your PR.
