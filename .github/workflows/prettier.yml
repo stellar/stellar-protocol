@@ -18,6 +18,5 @@ jobs:
       - name: Check code
         uses: creyD/prettier_action@v4.3
         with:
-          prettier_options: --write ecosystem/*.md
+          prettier_options: --check ecosystem/*.md
           only_changed: True
-          same_commit: true
