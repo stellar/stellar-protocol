@@ -15,6 +15,6 @@ jobs:
           ref: ${{ github.head_ref }}
 
       - name: Check code
-        uses: creyD/prettier_action@v4.3
+        uses: creyD/prettier_action@31355f8eef017f8aeba2e0bc09d8502b13dbbad1
         with:
           prettier_options: --check ecosystem/*.md
