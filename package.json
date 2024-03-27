@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "sep-prettify": "prettier ecosystem/*.md --write"
+  },
   "devDependencies": {
     "prettier": "2.8.8"
   }
