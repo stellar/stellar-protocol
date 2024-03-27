@@ -6,7 +6,7 @@
   "definitions": {
     "CleanString": {
       "type": "string",
-      "pattern": "^[\\w\\u0020]*$"
+      "pattern": "^[\\w\\u0020.,-@]*$"
     }
   },
   "properties": {
@@ -16,6 +16,10 @@
       "minLength": 5,
       "description": "Short descriptive title of the list"
     },
+    "network":{
+      "type": "string",
+      "enum": ["public", "testnet"]
+    },
     "provider": {
       "$ref": "#/definitions/CleanString",
       "maxLength": 50,
@@ -24,7 +28,7 @@
     },
     "description": {
       "type": "string",
-      "maxLength": 150,
+      "maxLength": 400,
       "description": "Text description of the list to display alongside with the name"
     },
     "version": {
@@ -59,7 +63,7 @@
           },
           "code": {
             "type": "string",
-            "pattern": "^[A-Z0-9]{1,12}$",
+            "pattern": "^[A-Za-z0-9]{1,12}$",
             "description": "Asset code (for Classic assets)"
           },
           "issuer": {
@@ -104,9 +108,7 @@
         },
         "required": [
           "name",
-          "org",
-          "domain",
-          "icon"
+          "org"
         ],
         "anyOf": [
           {
