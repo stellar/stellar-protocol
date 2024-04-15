@@ -85,11 +85,11 @@
 | [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
-| [CAP-0051](cap-0051.md) | Smart Contract Host Functionality: Secp256r1 Verification | Leigh McCulloch | Awaiting Decision |
-| [CAP-0053](cap-0053.md) | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti | Awaiting Decision |
-| [CAP-0054](cap-0054.md) | Soroban refined VM instantiation cost model | Graydon Hoare | Awaiting Decision |
-| [CAP-0055](cap-0055.md) | Soroban streamlined linking | Graydon Hoare | Awaiting Decision |
-| [CAP-0056](cap-0056.md) | Soroban intra-transaction module caching | Graydon Hoare | Awaiting Decision |
+| [CAP-0051](cap-0051.md) | Smart Contract Host Functionality: Secp256r1 Verification | Leigh McCulloch | Accepted |
+| [CAP-0053](cap-0053.md) | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti | Accepted |
+| [CAP-0054](cap-0054.md) | Soroban refined VM instantiation cost model | Graydon Hoare | Accepted |
+| [CAP-0055](cap-0055.md) | Soroban streamlined linking | Graydon Hoare | Accepted |
+| [CAP-0056](cap-0056.md) | Soroban intra-transaction module caching | Graydon Hoare | Accepted |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
