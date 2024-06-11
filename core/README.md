@@ -67,6 +67,11 @@
 | [CAP-0046-10](cap-0046-10.md) | 20 | Smart Contract Budget Metering | Jay Geng | Final |
 | [CAP-0046-11](cap-0046-11.md) | 20 | Soroban Authorization Framework | Dmytro Kozhevin | Final |
 | [CAP-0046-12](cap-0046-12.md) | 20 | Soroban State Archival Interface | Garand Tyson | Final |
+| [CAP-0051](cap-0051.md) | 21 | Smart Contract Host Functionality: Secp256r1 Verification | Leigh McCulloch | Implemented |
+| [CAP-0053](cap-0053.md) | 21 | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti | Implemented |
+| [CAP-0054](cap-0054.md) | 21 | Soroban refined VM instantiation cost model | Graydon Hoare | Implemented |
+| [CAP-0055](cap-0055.md) | 21 | Soroban streamlined linking | Graydon Hoare | Implemented |
+| [CAP-0056](cap-0056.md) | 21 | Soroban intra-transaction module caching | Graydon Hoare | Implemented |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -85,11 +90,6 @@
 | [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
-| [CAP-0051](cap-0051.md) | Smart Contract Host Functionality: Secp256r1 Verification | Leigh McCulloch | Accepted |
-| [CAP-0053](cap-0053.md) | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti | Accepted |
-| [CAP-0054](cap-0054.md) | Soroban refined VM instantiation cost model | Graydon Hoare | Accepted |
-| [CAP-0055](cap-0055.md) | Soroban streamlined linking | Graydon Hoare | Accepted |
-| [CAP-0056](cap-0056.md) | Soroban intra-transaction module caching | Graydon Hoare | Accepted |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
