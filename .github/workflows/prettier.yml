@@ -9,7 +9,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: sep-check
-        uses: DerYeger/yarn-setup-action@18fb87f9a712d8cc8ad1e7407a06470b397b4a7d
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+      - run: yarn install --frozen-lockfile
       - run: yarn sep-check
