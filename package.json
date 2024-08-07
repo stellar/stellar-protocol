@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "sep-prettify": "prettier ecosystem/*.md --write"
+    "sep-prettify": "prettier ecosystem/*.md --write",
+    "sep-check": "prettier ecosystem/*.md --check"
   },
   "devDependencies": {
     "prettier": "2.8.8"
