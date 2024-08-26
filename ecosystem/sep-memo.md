@@ -80,6 +80,14 @@ The memo is limited to the `u64` type because previous research on the topic
 when [CAP-27] was proposed found that most uses of memos were integers, or were
 compatible with integers.
 
+The [SEP-41] `transfer` event is reused and extended rather than a new event
+introduced because [SEP-41] uses the `transfer` event for all account to account
+transfers and while possible it seems best to continue emit the same event in
+the new case which is really only an annotation. One challenge of this is that
+the [CAP-46-6] implementation of [SEP-41] already extended the `transfer` event
+topic list, and so applications will need to distinguish between the `u64` memo
+and a [SEP-11] asset string in the context of the Stellar Asset Contract. Given the topics are typed this distinguishing is trivial.
+
 ## Changelog
 
 - `v0.1.0` - Initial draft.
@@ -89,5 +97,7 @@ compatible with integers.
 - None
 
 [Rust soroban-sdk]: https://github.com/stellar/rs-soroban-sdk
-[SEP-41]: SEP-0041.md
+[SEP-41]: sep-0041.md
 [CAP-27]: ../core/cap-0027.md
+[CAP-46-6]: ../core/cap-0046-6.md
+[SEP-11]: sep-0011.md
