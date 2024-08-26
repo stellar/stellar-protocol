@@ -14,15 +14,13 @@ Discussion: TBA
 
 ## Simple Summary
 
-This proposal defines a standard contract interface for tokens that support
-transfers to an address with an associated memo. The interface is an extension
-of the [SEP-41] token interface.
+This proposal defines a standard contract interface for tokens that support transfers to an address with an associated
+memo. The interface is an extension of the [SEP-41] token interface.
 
 ## Motivation
 
-To define an unambiguous method by which contract wallets can transfer to
-custodial wallets that require a memo to be associated with the transfer that is
-populated through to events used to track transfers.
+To define an unambiguous method by which contract wallets can transfer to custodial wallets that require a memo to be
+associated with the transfer that is populated through to events used to track transfers.
 
 ## Specification
 
@@ -55,9 +53,8 @@ pub trait TokenExtMemoInterface {
 
 #### Transfer Event
 
-The `transfer` event is emitted much the same as a [SEP-41] `transfer` event
-when an amount is transferred from one address to another, except that in the
-case that a `memo` is specified the invocation becomes an additional topic.
+The `transfer` event is emitted much the same as a [SEP-41] `transfer` event when an amount is transferred from one
+address to another, except that in the case that a `memo` is specified the invocation becomes an additional topic.
 
 The event has topics:
 
@@ -72,21 +69,23 @@ The event has data:
 
 ## Design Rationale
 
-There are a variety of ways that memos could be introduced into either the Stellar protocol or the contract transfer protocol. Adding a new function that accepts the memo parameter is the simplest and least ambiguous.
+There are a variety of ways that memos could be introduced into either the Stellar protocol or the contract transfer
+protocol. Adding a new function that accepts the memo parameter is the simplest and least ambiguous.
 
-Given that [CAP-27] introduced muxed accounts for non-contract operations it is worth noting why support for muxed accounts are not being proposed. Memos, and muxed IDs, primarily exist to support offchain protocols, but adding support for a muxed account or address type to Soroban would make it extremely easy for existing contracts to store balances against the muxed account instead of the underlying account.
+Given that [CAP-27] introduced muxed accounts for non-contract operations it is worth noting why support for muxed
+accounts are not being proposed. Memos, and muxed IDs, primarily exist to support offchain protocols, but adding support
+for a muxed account or address type to Soroban would make it extremely easy for existing contracts to store balances
+against the muxed account instead of the underlying account.
 
-The memo is limited to the `u64` type because previous research on the topic
-when [CAP-27] was proposed found that most uses of memos were integers, or were
-compatible with integers.
+The memo is limited to the `u64` type because previous research on the topic when [CAP-27] was proposed found that most
+uses of memos were integers, or were compatible with integers.
 
-The [SEP-41] `transfer` event is reused and extended rather than a new event
-introduced because [SEP-41] uses the `transfer` event for all account to account
-transfers and while possible it seems best to continue emit the same event in
-the new case which is really only an annotation. One challenge of this is that
-the [CAP-46-6] implementation of [SEP-41] already extended the `transfer` event
-topic list, and so applications will need to distinguish between the `u64` memo
-and a [SEP-11] asset string in the context of the Stellar Asset Contract. Given the topics are typed this distinguishing is trivial.
+The [SEP-41] `transfer` event is reused and extended rather than a new event introduced because [SEP-41] uses the
+`transfer` event for all account to account transfers and while possible it seems best to continue emit the same event
+in the new case which is really only an annotation. One challenge of this is that the [CAP-46-6] implementation of
+[SEP-41] already extended the `transfer` event topic list, and so applications will need to distinguish between the
+`u64` memo and a [SEP-11] asset string in the context of the Stellar Asset Contract. Given the topics are typed this
+distinguishing is trivial.
 
 ## Changelog
 

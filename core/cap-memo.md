@@ -16,27 +16,23 @@ Implement the [SEP-memo] for the Stellar Asset Contract.
 
 ## Motivation
 
-To support an unambiguous method by which contract wallets can transfer Stellar
-Assets to custodial wallets that require a memo to be associated with the
-transfer that is populated through to events used to track transfers.
+To support an unambiguous method by which contract wallets can transfer Stellar Assets to custodial wallets that require
+a memo to be associated with the transfer that is populated through to events used to track transfers.
 
 ### Goals Alignment
 
 This CAP is aligned with the following Stellar Network Goals:
 
-- The Stellar Network should make it easy for developers of Stellar projects to
-  create highly usable products
-- The Stellar Network should enable cross-border payments, i.e. payments via
-  exchange of assets, throughout the globe, enabling users to make payments
-  between assets in a manner that is fast, cheap, and highly usable.
+- The Stellar Network should make it easy for developers of Stellar projects to create highly usable products
+- The Stellar Network should enable cross-border payments, i.e. payments via exchange of assets, throughout the globe,
+  enabling users to make payments between assets in a manner that is fast, cheap, and highly usable.
 
 ## Abstract
 
-This proposal introduces a built-in implementation for Stellar Assets of the
-[SEP-memo] standard for transferring with an associated memo.
+This proposal introduces a built-in implementation for Stellar Assets of the [SEP-memo] standard for transferring with
+an associated memo.
 
-This proposal disallows the subsequent use of the transaction memo field on
-smart contract transactions.
+This proposal disallows the subsequent use of the transaction memo field on smart contract transactions.
 
 ## Specification
 
@@ -76,22 +72,20 @@ fn transfer_memo(env: Env, from: Address, to: Address, amount: i128, memo: u64);
 
 See [SEP-memo] for the design rationale of the `transfer_memo` interface.
 
-The `memo` field of transactions is disallowed on smart contract transactions to
-remove any ambiguity that arises by specifying different memos on the
-transaction vs within the smart contract invocation. An assessment of
-transaction memo usage today with smart contract transactions shows that their
-use are rare.
+The `memo` field of transactions is disallowed on smart contract transactions to remove any ambiguity that arises by
+specifying different memos on the transaction vs within the smart contract invocation. An assessment of transaction memo
+usage today with smart contract transactions shows that their use are rare.
 
 ## Protocol Upgrade Transition
 
 ### Backwards Incompatibilities
 
-This proposal introduces a breaking change into the Transaction structure where the memo cannot be set for transactions involving smart contracts.
+This proposal introduces a breaking change into the Transaction structure where the memo cannot be set for transactions
+involving smart contracts.
 
-This proposal is otherwise backwards compatible in regards to all existing
-functionality, however the introduction of the `transfer` event with the
-additional memo topic requires that existing applications be updated to handle
-the memo topic being present.
+This proposal is otherwise backwards compatible in regards to all existing functionality, however the introduction of
+the `transfer` event with the additional memo topic requires that existing applications be updated to handle the memo
+topic being present.
 
 ### Resource Utilization
 
