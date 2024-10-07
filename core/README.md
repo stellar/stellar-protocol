@@ -3,26 +3,26 @@
 ## CAP Status Terms
 
 ### Primary Workflow
-* **Draft** — A CAP that is currently open for consideration and actively being discussed.
-* **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
+- **Draft** — A CAP that is currently open for consideration and actively being discussed.
+- **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
   Core Team. After a maximum of three meetings, a vote will take place that will set the CAP's
   intended FCP disposition (**FCP: Acceptance/Rejection**) or go back into a **Draft** state.
-* **FCP: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period (FCP) with an
+- **FCP: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period (FCP) with an
   intended disposition. After one week has passed, during which any new concerns should be
   addressed, the CAP will head towards its intended disposition [**Acceptance/Rejection**] or go
   back into a Draft state.
-* **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
+- **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
   ready for implementation. It is still possible that the CAP may be rejected post-implementation
   due to the issues that may arise during an initial implementation.
-* **Implemented** - A CAP that has been implemented with the protocol version specified in the CAP. It will graduate to
+- **Implemented** - A CAP that has been implemented with the protocol version specified in the CAP. It will graduate to
   **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
-* **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
+- **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
   final CAP should only be updated to correct errata.
 
 ### Additional Statuses
-* **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
+- **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
   implemented.
-* **Superseded: [New Final CAP]** - A CAP that which was previously final but has been superseded
+- **Superseded: [New Final CAP]** - A CAP that which was previously final but has been superseded
   by a new, final CAP. Both CAPs should reference each other.
 
 ## List of Proposals
@@ -91,9 +91,9 @@
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
-| [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | Awaiting Decision |
-| [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Awaiting Decision |
+| [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | FCP: Accepted |
+| [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | FCP: Accepted |
+| [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | FCP: Accepted |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -123,60 +123,60 @@ towards pushing Stellar's protocol development forward adhere to the following:
 - Follow the proposal process listed below.
 
 ## Stellar Network Goals
-* **The Stellar Network should be secure and reliable, and should bias towards safety, simplicity,
+- **The Stellar Network should be secure and reliable, and should bias towards safety, simplicity,
   reliability, and performance over new functionality.**
-* **The Stellar Network should run at scale and at low cost to all participants of the network.**
+- **The Stellar Network should run at scale and at low cost to all participants of the network.**
   * In support of this, the Stellar Network should support off-chain transactions, e.g. Starlight.
   * An explicit non-goal is limiting the hardware requirements of stellar-core to a personal
     computer.
-* **The Stellar Network should facilitate simplicity and interoperability with other protocols and
+- **The Stellar Network should facilitate simplicity and interoperability with other protocols and
   networks.**
   * In support of this, the Stellar Network should facilitate side-chain transactions to enable
     sub-networks.
-* **The Stellar Network should enable cross-border payments, i.e. payments via exchange of assets,
+- **The Stellar Network should enable cross-border payments, i.e. payments via exchange of assets,
   throughout the globe, enabling users to make payments between assets in a manner that is fast,
   cheap, and highly usable.**
-    * In support of this, the Stellar Network should support an orderbook that values simplicity
+    - In support of this, the Stellar Network should support an orderbook that values simplicity
       over functionality, and one that primarily serves to enable cross-border payments.
-    * In support of this, the Stellar Network should facilitate liquidity as a means to enabling
-    * cross-border payments.
-    * In support of this, the Stellar Network should enable asset issuance, but as a means of
-    * enabling cross-border payments.
-* **The Stellar Network should support decentralization wherever possible, but not at the expense
+    - In support of this, the Stellar Network should facilitate liquidity as a means to enabling
+    - cross-border payments.
+    - In support of this, the Stellar Network should enable asset issuance, but as a means of
+    - enabling cross-border payments.
+- **The Stellar Network should support decentralization wherever possible, but not at the expense
   of the majority of its values.**
-  * There should be no privileged actors — we should support egalitarianism and everyone
+  - There should be no privileged actors — we should support egalitarianism and everyone
     participating on the same playing field.
-* **The Stellar Network should enable users to easily exchange their non-Stellar based assets to
+- **The Stellar Network should enable users to easily exchange their non-Stellar based assets to
   Stellar-based assets, and vice versa.**
-* **The Stellar Network should make it easy for developers of Stellar projects to create highly
+- **The Stellar Network should make it easy for developers of Stellar projects to create highly
   usable products.**
 
 ## Stellar Protocol Development Values
-* **The Stellar Protocol should serve the goals of the Stellar Network.**
-* **The Stellar Protocol should bias towards simplicity.**
-  * When possible, solutions should be considered outside of core protocol changes such as via
+- **The Stellar Protocol should serve the goals of the Stellar Network.**
+- **The Stellar Protocol should bias towards simplicity.**
+  - When possible, solutions should be considered outside of core protocol changes such as via
     [SEPs (Stellar Ecosystem Proposals)](../ecosystem/readme.md) to minimize complexity in the
     Stellar protocol.
-  * When possible, proposals should minimize the impact of changes to the smallest surface area and
+  - When possible, proposals should minimize the impact of changes to the smallest surface area and
     shallowest depth (i.e. sticking to the higher levels of the software) of the protocol
     architecture possible to make changes predictable and easier to test and reason about. Changes
     should be surgical, and minimal invasive. As a result, changes that affect lower levels of the
     implementation have a higher bar for acceptance.
-  * In order from the lowest level to the highest level systems, the systems are:
-    * Historical / Ledger XDR
-    * Observable Transaction Semantics
-    * Consensus XDR
-    * DB State
-    * Overlay XDR
-    * Unobservable tx semantics (eg. performance or bug fixes)
-    * Horizon semantics
-    * Public APIs, Client Libraries/SDKs.
-* **The Stellar Protocol should be clear, concise, and opinionated.**
-  * New operations and functionality should be opinionated, and straightforward to use.
-  * There should ideally be only one obvious way to accomplish a given task.
-* **The Stellar Protocol should bias towards broad use cases, and bias against niche
+  - In order from the lowest level to the highest level systems, the systems are:
+    - Historical / Ledger XDR
+    - Observable Transaction Semantics
+    - Consensus XDR
+    - DB State
+    - Overlay XDR
+    - Unobservable tx semantics (eg. performance or bug fixes)
+    - Horizon semantics
+    - Public APIs, Client Libraries/SDKs.
+- **The Stellar Protocol should be clear, concise, and opinionated.**
+  - New operations and functionality should be opinionated, and straightforward to use.
+  - There should ideally be only one obvious way to accomplish a given task.
+- **The Stellar Protocol should bias towards broad use cases, and bias against niche
     functionality.**
-* **The Stellar Protocol should bias towards user safety.**
+- **The Stellar Protocol should bias towards user safety.**
 
 ## CAP Process
 These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Otbml6WIQPo) on how
@@ -185,18 +185,18 @@ to create a Core Advancement Proposal (CAP).
 ### Pre-CAP (Initial Discussion)
 Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev).
 
-* Make sure to gather feedback and alternative ideas — it's useful before putting together a
+- Make sure to gather feedback and alternative ideas — it's useful before putting together a
   formal draft!
-* Consider contacting experts in a particular area for feedback while you're hashing out the
+- Consider contacting experts in a particular area for feedback while you're hashing out the
   details.
 
 ### Creating a CAP Draft
 Draft a formal proposal using the [CAP Template](../cap-template.md), and submit a PR to this
 repository. You should make sure to adhere to the following:
 
-* Make sure to place the draft in the `core/` folder.
-* Your CAP should be named `cap-TBD.md`
-* If your CAP requires images or other supporting files, they should be included in a sub-directory
+- Make sure to place the draft in the `core/` folder.
+- Your CAP should be named `cap-TBD.md`
+- If your CAP requires images or other supporting files, they should be included in a sub-directory
   of the `contents` folder for that CAP, such as `contents/cap-TBD/`. Links
   should be relative, for example a link to an image from your CAP would be
   `../contents/cap-TBD/image.png`.
@@ -204,7 +204,7 @@ repository. You should make sure to adhere to the following:
 Finally, submit a PR of your draft via your fork of this repository.
 
 #### Additional Tips
-* Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
+- Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
   established once the CAP has reached the state of *Final* and has been formally implemented.
 
 ### Draft: Merging & Further Iteration
@@ -229,11 +229,11 @@ You should continue the discussion of the draft CAP on the mailing list
 with an attempt at reaching consensus.
 
 When opening PRs to modify the draft:
-* changes have to either be submitted by one of the authors (Recommender or Owner) or
+- changes have to either be submitted by one of the authors (Recommender or Owner) or
 signed off by the authors
-* avoid discussions in the PR itself as it makes it more difficult for future contributors to understand the rational for changes.
-  * best is to always discuss in the mailing list.
-  * alternatively, a recap of the discussion that happened in the PR could be posted in the mailing list (but it's easy to forget to do this).
+- avoid discussions in the PR itself as it makes it more difficult for future contributors to understand the rational for changes.
+  - best is to always discuss in the mailing list.
+  - alternatively, a recap of the discussion that happened in the PR could be posted in the mailing list (but it's easy to forget to do this).
 
 ### Draft -> Awaiting Decision
 
@@ -250,22 +250,22 @@ and participate in discussion during the meeting.
 You may invite any other members of your working group.
 
 The protocol meetings will be used to decide on next step:
-  * If the CAP has received support and general consensus, it is moved to `Awaiting Decision` ;
-  * If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned ; 
-  * If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
+  - If the CAP has received support and general consensus, it is moved to `Awaiting Decision` ;
+  - If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned ; 
+  - If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
 
 ### Awaiting Decision -> Final Comment Period (FCP)
-* A vote will take place among the CAP Core Team.
-  * A unanimous approval from the CAP Core Team will put the CAP in a `FCP: Accepted` status.
-  * Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
+- A vote will take place among the CAP Core Team.
+  - A unanimous approval from the CAP Core Team will put the CAP in a `FCP: Accepted` status.
+  - Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
     majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
     raises concerns).
-  * It can take upwards of 3 meetings before a disposition is reached.
+  - It can take upwards of 3 meetings before a disposition is reached.
 
 ### FCP -> Accepted/Rejected
-* After a week of an Final Comment Period (FCP) where any major concerns that have not been
+- After a week of an Final Comment Period (FCP) where any major concerns that have not been
   previously addressed can be brought up, the CAP will head to its final disposition.
-  * Concerns will be addressed on a case by case basis, and only major concerns that were not
+  - Concerns will be addressed on a case by case basis, and only major concerns that were not
     addressed earlier will move the CAP back to a `Draft` state.
 
 ### CAP Implementation
