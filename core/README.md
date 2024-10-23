@@ -91,9 +91,9 @@
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
-| [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | FCP: Accepted |
-| [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | FCP: Accepted |
-| [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | FCP: Accepted |
+| [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | Implemented |
+| [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | Implemented |
+| [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
