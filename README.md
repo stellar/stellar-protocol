@@ -47,6 +47,8 @@ Example repository structure:
 │   ├── sep-0001.md
 │   ├── sep-0002.md
 │   ├── sep-0003.md
+├── limits
+│   ├── README.md
 └── sep-template.md
 ```
 
