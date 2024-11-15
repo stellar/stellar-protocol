@@ -183,7 +183,7 @@ These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Ot
 to create a Core Advancement Proposal (CAP).
 
 ### Pre-CAP (Initial Discussion)
-Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev).
+Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev) or GitHub Discussions.
 
 - Make sure to gather feedback and alternative ideas — it's useful before putting together a
   formal draft!
@@ -237,7 +237,7 @@ signed off by the authors
 
 ### Draft -> Awaiting Decision
 
-When your CAP received sufficient feedback from the community,
+When your CAP receives sufficient feedback from the community,
 you'll need to present it to a subset of the CAP Core Team for review.
 
 For that, when you're ready, you should submit a PR changing the status
