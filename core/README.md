@@ -183,7 +183,9 @@ These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Ot
 to create a Core Advancement Proposal (CAP).
 
 ### Pre-CAP (Initial Discussion)
-Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev) or GitHub Discussions.
+Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev) or [GitHub Discussions].
+
+[GitHub Discussions]: https://github.com/stellar/stellar-protocol/discussions
 
 - Make sure to gather feedback and alternative ideas — it's useful before putting together a
   formal draft!
