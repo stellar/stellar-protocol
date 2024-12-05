@@ -94,6 +94,8 @@
 | [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | Implemented |
 | [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | Implemented |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
+| [CAP-0057](cap-0057.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Draft |
+| [CAP-0057](cap-0057.md) | Soroban Live State Prioritization | Garand Tyson | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
