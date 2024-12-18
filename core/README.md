@@ -157,7 +157,7 @@ towards pushing Stellar's protocol development forward adhere to the following:
 - **The Stellar Protocol should serve the goals of the Stellar Network.**
 - **The Stellar Protocol should bias towards simplicity.**
   - When possible, solutions should be considered outside of core protocol changes such as via
-    [SEPs (Stellar Ecosystem Proposals)](../ecosystem/readme.md) to minimize complexity in the
+    [SEPs (Stellar Ecosystem Proposals)](../ecosystem/README.md) to minimize complexity in the
     Stellar protocol.
   - When possible, proposals should minimize the impact of changes to the smallest surface area and
     shallowest depth (i.e. sticking to the higher levels of the software) of the protocol
