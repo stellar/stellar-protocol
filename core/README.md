@@ -96,6 +96,7 @@
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Draft |
 | [CAP-0062](cap-0062.md) | Soroban Live State Prioritization | Garand Tyson | Draft |
+| [CAP-0063](cap-0063.md) | Parallelism-friendly Transaction Scheduling | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
