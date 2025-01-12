@@ -96,6 +96,7 @@
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Draft |
 | [CAP-0062](cap-0062.md) | Soroban Live State Prioritization | Garand Tyson | Draft |
+| [CAP-0063](cap-0063.md) | Parallelism-friendly Transaction Scheduling | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -157,7 +158,7 @@ towards pushing Stellar's protocol development forward adhere to the following:
 - **The Stellar Protocol should serve the goals of the Stellar Network.**
 - **The Stellar Protocol should bias towards simplicity.**
   - When possible, solutions should be considered outside of core protocol changes such as via
-    [SEPs (Stellar Ecosystem Proposals)](../ecosystem/readme.md) to minimize complexity in the
+    [SEPs (Stellar Ecosystem Proposals)](../ecosystem/README.md) to minimize complexity in the
     Stellar protocol.
   - When possible, proposals should minimize the impact of changes to the smallest surface area and
     shallowest depth (i.e. sticking to the higher levels of the software) of the protocol
