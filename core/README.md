@@ -97,6 +97,8 @@
 | [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Draft |
 | [CAP-0062](cap-0062.md) | Soroban Live State Prioritization | Garand Tyson | Draft |
 | [CAP-0063](cap-0063.md) | Parallelism-friendly Transaction Scheduling | Dmytro Kozhevin | Draft |
+| [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Draft |
+| [CAP-0065](cap-0065.md) | Unified Asset Events | Siddharth Suresh | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
