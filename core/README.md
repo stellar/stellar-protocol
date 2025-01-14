@@ -98,6 +98,7 @@
 | [CAP-0062](cap-0062.md) | Soroban Live State Prioritization | Garand Tyson | Draft |
 | [CAP-0063](cap-0063.md) | Parallelism-friendly Transaction Scheduling | Dmytro Kozhevin | Draft |
 | [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Draft |
+| [CAP-0065](cap-0065.md) | Reusable Module Cache | Graydon Hoare | Draft |
 | [CAP-0067](cap-0065.md) | Unified Asset Events | Siddharth Suresh | Draft |
 
 ### Rejected Proposals
