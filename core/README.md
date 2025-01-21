@@ -100,7 +100,8 @@
 | [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Draft |
 | [CAP-0065](cap-0065.md) | Reusable Module Cache | Graydon Hoare | Draft |
 | [CAP-0066](cap-0066.md) | Soroban In-memory Read Resource | Garand Tyson | Draft |
-| [CAP-0067](cap-0065.md) | Unified Asset Events | Siddharth Suresh | Draft |
+| [CAP-0067](cap-0067.md) | Unified Asset Events | Siddharth Suresh | Draft |
+| [CAP-0068](cap-0068.md) | New host functions for protocol 23 | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
