@@ -72,6 +72,8 @@
 | [CAP-0054](cap-0054.md) | 21 | Soroban refined VM instantiation cost model | Graydon Hoare | Final |
 | [CAP-0055](cap-0055.md) | 21 | Soroban streamlined linking | Graydon Hoare | Final |
 | [CAP-0056](cap-0056.md) | 21 | Soroban intra-transaction module caching | Graydon Hoare | Final |
+| [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | Final |
+| [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | Final |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -91,8 +93,6 @@
 | [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
-| [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | Implemented |
-| [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | Implemented |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Draft |
 | [CAP-0062](cap-0062.md) | Soroban Live State Prioritization | Garand Tyson | Draft |
@@ -100,7 +100,9 @@
 | [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Draft |
 | [CAP-0065](cap-0065.md) | Reusable Module Cache | Graydon Hoare | Draft |
 | [CAP-0066](cap-0066.md) | Soroban In-memory Read Resource | Garand Tyson | Draft |
-| [CAP-0067](cap-0065.md) | Unified Asset Events | Siddharth Suresh | Draft |
+| [CAP-0067](cap-0067.md) | Unified Asset Events | Siddharth Suresh | Draft |
+| [CAP-0068](cap-0068.md) | Host function for getting  executable for `Address` | Dmytro Kozhevin | Draft |
+| [CAP-0069](cap-0069.md) | String/Bytes conversion host functions | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
