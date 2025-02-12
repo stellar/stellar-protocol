@@ -72,8 +72,8 @@
 | [CAP-0054](cap-0054.md) | 21 | Soroban refined VM instantiation cost model | Graydon Hoare | Final |
 | [CAP-0055](cap-0055.md) | 21 | Soroban streamlined linking | Graydon Hoare | Final |
 | [CAP-0056](cap-0056.md) | 21 | Soroban intra-transaction module caching | Graydon Hoare | Final |
-| [CAP-0058](cap-0058.md) | Constructors for Soroban Contracts | Dmytro Kozhevin | Final |
-| [CAP-0059](cap-0059.md) | Host functions for BLS12-381 | Jay Geng | Final |
+| [CAP-0058](cap-0058.md) | 22 | Constructors for Soroban Contracts | Dmytro Kozhevin | Final |
+| [CAP-0059](cap-0059.md) | 22 | Host functions for BLS12-381 | Jay Geng | Final |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
