@@ -28,16 +28,6 @@ Contracts need to be able to declare information about themselves, such as their
 
 This SEP defines a way well-known location where contracts can communicate to off-chain systems metadata about the contract.
 
-## Limitations
-
-### Not Contract Deployments (Instances)
-
-This proposal does not provide a way for contract deployments (instances) to communicate metadata. There can exist many deployments of an uploaded contract and this proposal only defines a location for metadata that relates to the uploaded contract, not the individual deployments.
-
-### No Registry
-
-This proposal does not define any registry of meta keys. SEPs that have a use for defining meta keys should do so as part of their own SEPs. Some coordination should take place to avoid the unnecessary reuse of keys across SEPs.
-
 ## Specification
 
 ### Wasm Custom Section
@@ -99,6 +89,16 @@ $ stellar contract build --meta key1=val2 --meta key2=val2
 ```
 
 [`stellar contract build`]: https://developers.stellar.org/docs/tools/developer-tools/cli/stellar-cli#stellar-contract-build
+
+## Limitations
+
+### Not Contract Deployments (Instances)
+
+This proposal does not provide a way for contract deployments (instances) to communicate metadata. There can exist many deployments of an uploaded contract and this proposal only defines a location for metadata that relates to the uploaded contract, not the individual deployments.
+
+### No Registry
+
+This proposal does not define any registry of meta keys. SEPs that have a use for defining meta keys should do so as part of their own SEPs. Some coordination should take place to avoid the unnecessary reuse of keys across SEPs.
 
 ## Design Rationale
 
