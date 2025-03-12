@@ -9,7 +9,7 @@ Status: Draft
 Created: 2025-02-13
 Updated: 2025-02-13
 Version: 0.1.0
-Discussion: TBA
+Discussion: https://github.com/stellar/stellar-protocol/discussions/1656
 ```
 
 ## Simple Summary
