@@ -12,7 +12,7 @@ Version: 0.1.0
 ## Simple Summary
 
 A standard for how [`LedgerCloseMeta`](https://github.com/stellar/stellar-xdr/blob/v22.0/Stellar-ledger.x#L539-L545)
-objects should be stored so that ledgers can be easily and efficiently ingested by downstream systems.
+objects can be stored so that ledgers can be easily and efficiently ingested by downstream systems.
 
 ## Dependencies
 
@@ -44,7 +44,8 @@ Examples of compatible key-value stores include Google Cloud Storage (GCS) and A
 
 ### Value Format
 
-Each value in the key-value store is the compressed binary encoding of the following XDR structure:
+Each value in the key-value store is the [Zstandard]([https://facebook.github.io/zstd/) compressed binary encoding of
+the following XDR structure:
 
 ```c++
 // Batch of ledgers along with their transaction metadata
@@ -64,6 +65,9 @@ struct LedgerCloseMetaBatch
 - A LedgerCloseMetaBatch represents a contiguous range of one or more consecutive ledgers.
 
 - All batches in a data store instance contain the same number of ledgers.
+
+- Currently only [Zstandard]([https://facebook.github.io/zstd/) compression is supported but it is possible to extend
+  the SEP in the future to allow other compression algorithms.
 
 ---
 
