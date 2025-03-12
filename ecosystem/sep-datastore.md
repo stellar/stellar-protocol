@@ -77,13 +77,13 @@ Keys follow a hierarchical directory structure. The root directory is `/ledgers`
 partitions. Each partition contains a fixed number of batches:
 
 ```
-/ledgers/<partition>/<batch>.xdr
+/ledgers/<partition>/<batch>.xdr.zst
 ```
 
 If the partition size is 1, the partition is omitted, resulting in:
 
 ```
-/ledgers/<batch>.xdr
+/ledgers/<batch>.xdr.zst
 ```
 
 #### Partition Format:
@@ -95,14 +95,18 @@ fmt.Sprintf("%08X--%d-%d/", math.MaxUint32-partitionStartLedgerSequence, partiti
 #### Batch Format:
 
 ```go
- fmt.Sprintf("%08X--%d-%d.xdr", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence, batchEndLedgerSequence)
+ fmt.Sprintf("%08X--%d-%d.xdr.zst", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence, batchEndLedgerSequence)
 ```
 
 If the batch size is 1, the format simplifies to:
 
 ```go
- fmt.Sprintf("%08X--%d.xdr", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence)
+ fmt.Sprintf("%08X--%d.xdr.zst", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence)
 ```
+
+Note the `.zst` suffix is the filename extension defined in the [Zstandard]([https://facebook.github.io/zstd/)
+[RFC](https://datatracker.ietf.org/doc/html/rfc8478). If this SEP is extended to support another compression algorithm
+then the standard filename extension for the given compression algorithm will be used as a suffix in the batch name.
 
 ---
 
@@ -135,18 +139,18 @@ following properties:
 Below is an example list of keys for ledger batches based on the configuration above:
 
 ```
-/ledgers/FFFFFFEF--16-31/FFFFFFED--18-19.xdr
-/ledgers/FFFFFFEF--16-31/FFFFFFEF--16-17.xdr
-/ledgers/FFFFFFFF--0-15/FFFFFFF1--14-15.xdr
-/ledgers/FFFFFFFF--0-15/FFFFFFF3--12-13.xdr
-/ledgers/FFFFFFFF--0-15/FFFFFFF5--10-11.xdr
-/ledgers/FFFFFFFF--0-15/FFFFFFF7--8-9.xdr
-/ledgers/FFFFFFFF--0-15/FFFFFFF9--6-7.xdr
-/ledgers/FFFFFFFF--0-15/FFFFFFFB--4-5.xdr
-/ledgers/FFFFFFFF--0-15/FFFFFFFD--2-3.xdr
+/ledgers/FFFFFFEF--16-31/FFFFFFED--18-19.xdr.zst
+/ledgers/FFFFFFEF--16-31/FFFFFFEF--16-17.xdr.zst
+/ledgers/FFFFFFFF--0-15/FFFFFFF1--14-15.xdr.zst
+/ledgers/FFFFFFFF--0-15/FFFFFFF3--12-13.xdr.zst
+/ledgers/FFFFFFFF--0-15/FFFFFFF5--10-11.xdr.zst
+/ledgers/FFFFFFFF--0-15/FFFFFFF7--8-9.xdr.zst
+/ledgers/FFFFFFFF--0-15/FFFFFFF9--6-7.xdr.zst
+/ledgers/FFFFFFFF--0-15/FFFFFFFB--4-5.xdr.zst
+/ledgers/FFFFFFFF--0-15/FFFFFFFD--2-3.xdr.zst
 ```
 
-[![](https://mermaid.ink/img/pako:eNpl0U2LgzAQBuC_InPurJva1uphYa3rYb8_emr1EJpUC2okVdil9L_vrBpwSQ4h4X3IDJkLHJSQEEKueVM42zitHVr3e7eUIpf67GYO4p0T7ZN-PSSIbIUec7NR9vFmjBOKb5EtTTrsUW8ezRMxPbFGFtx8C51NxdP_IsyfiGHf9O7ZVGPkFlRu4gbxYoRHYo7Ms8SrEUsS1DKzxJsRPuIaAyt_N3mAuELfyj9MHiEu0O7x0-T0H3McOoQZVFJX_CRoJJc_nUJbyEqmENJRyCPvyjaFtL4S5V2rvn7qA4St7uQMtOryAsIjL8906xrBWxmfOI22MqTh9U6pakTXX0nQih8?type=png)](https://mermaid-js.github.io/mermaid-live-editor/edit#pako:eNpl0U2LgzAQBuC_InPurJva1uphYa3rYb8_emr1EJpUC2okVdil9L_vrBpwSQ4h4X3IDJkLHJSQEEKueVM42zitHVr3e7eUIpf67GYO4p0T7ZN-PSSIbIUec7NR9vFmjBOKb5EtTTrsUW8ezRMxPbFGFtx8C51NxdP_IsyfiGHf9O7ZVGPkFlRu4gbxYoRHYo7Ms8SrEUsS1DKzxJsRPuIaAyt_N3mAuELfyj9MHiEu0O7x0-T0H3McOoQZVFJX_CRoJJc_nUJbyEqmENJRyCPvyjaFtL4S5V2rvn7qA4St7uQMtOryAsIjL8906xrBWxmfOI22MqTh9U6pakTXX0nQih8)
+[![](https://mermaid.ink/img/pako:eNpt0clugzAQBuBXQXPOhDokIeFQqYRy6L6dGjhYsQOR2GSM1DbKu3dq4raJ8MHC_B8zNt7DphYSAsgUb3LnLUoqh8bV2i2kyKRq3dRBvHTCdWzGdYzI5ugxNz1KE6-OcUzxBbKZTfs5NObGloioxALZcvwh1Pir1el_dXvaiPlnqp9Xxt7ZrozslNqe2V7dW-WRmiDzBtWDVTNSdAQ2qB6t8hEXaE5wkj_ZfIk4R3-wxrM1IeIUh_f8Yg39qwn-7RhGUEpV8p2gK9v_fJGAzmUpEwjoUcgt7wqdQFIdiPJO16-f1QYCrTo5AlV3WQ7BlhctrbpGcC2jHaerL3_fNrx6r2u7PnwDAJ6W4g?type=png)](https://mermaid-js.github.io/mermaid-live-editor/edit#pako:eNpt0clugzAQBuBXQXPOhDokIeFQqYRy6L6dGjhYsQOR2GSM1DbKu3dq4raJ8MHC_B8zNt7DphYSAsgUb3LnLUoqh8bV2i2kyKRq3dRBvHTCdWzGdYzI5ugxNz1KE6-OcUzxBbKZTfs5NObGloioxALZcvwh1Pir1el_dXvaiPlnqp9Xxt7ZrozslNqe2V7dW-WRmiDzBtWDVTNSdAQ2qB6t8hEXaE5wkj_ZfIk4R3-wxrM1IeIUh_f8Yg39qwn-7RhGUEpV8p2gK9v_fJGAzmUpEwjoUcgt7wqdQFIdiPJO16-f1QYCrTo5AlV3WQ7BlhctrbpGcC2jHaerL3_fNrx6r2u7PnwDAJ6W4g)
 
 **Note:** The genesis ledger starts at sequence number 2, so the oldest batch must have a `batchStartLedgerSequence`
 of 2.
