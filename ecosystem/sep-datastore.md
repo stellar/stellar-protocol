@@ -35,7 +35,7 @@ The data store is a key-value store where:
 
 The key-value store must support:
 
-- Efficient point lookups for arbitrary keys.
+- Efficient random access lookups on arbitrary keys.
 - Listing keys in lexicographic order, optionally filtered by a prefix.
 
 Examples of compatible key-value stores include Google Cloud Storage (GCS) and Amazon S3.
