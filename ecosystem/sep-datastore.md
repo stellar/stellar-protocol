@@ -69,7 +69,7 @@ struct LedgerCloseMetaBatch
 
 ### Key Format
 
-Keys follow a hierarchical directory structure. The root directory is `/ledgers``, and subdirectories represent
+Keys follow a hierarchical directory structure. The root directory is `/ledgers`, and subdirectories represent
 partitions. Each partition contains a fixed number of batches:
 
 ```
