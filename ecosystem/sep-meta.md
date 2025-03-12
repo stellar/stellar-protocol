@@ -107,7 +107,9 @@ contract, not the individual deployments.
 ### No Registry
 
 This proposal does not define any registry of meta keys. SEPs that have a use for defining meta keys should do so as
-part of their own SEPs. Some coordination should take place to avoid the unnecessary reuse of keys across SEPs.
+part of their own SEPs. SDKs may also have a use for defining meta keys. Not all users of a meta key need open a SEP,
+but for some where interoperability is helpful may benefit from doing so. Some attempt should be made to avoid the reuse
+of keys across different use cases.
 
 ## Design Rationale
 
