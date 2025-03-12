@@ -104,7 +104,7 @@ If the batch size is 1, the format simplifies to:
 
 ### Configuration File
 
-The data store includes a configuration JSON object stored under the key `/config.json``. This file contains the
+The data store includes a configuration JSON object stored under the key `/config.json`. This file contains the
 following properties:
 
 - `networkPassphrase` - (string) the passphrase for the Stellar network associated with the ledgers.
