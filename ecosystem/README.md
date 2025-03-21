@@ -75,6 +75,7 @@
 | [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Standard      | Draft                |
 | [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Standard      | Draft                |
 | [SEP-0046](sep-0046.md) | Contract Meta                                                  | Leigh McCulloch                               | Standard      | Draft                |
+| [SEP-0047](sep-0047.md) | Standard Interface Claims                                      | Leigh McCulloch                               | Standard      | Draft                |
 
 ### Rejected and Deprecated Proposals
 
