@@ -364,6 +364,25 @@ impl MyContract {
 Which will be encoded to the following XDR:
 
 ```
+SCSpecEntry::FUNCTION_V0(SCSpecFunctionV0 {
+    doc: "",
+    name: "my_function",
+    inputs: [
+        SCSpecFunctionInputV0 {
+            doc: "",
+            name: "input",
+            type: SCSpecTypeDef::U64
+        }
+    ],
+    outputs: [
+        SCSpecTypeDef::RESULT(SCSpecTypeResult {
+            ok_type: SCSpecTypeDef::U64,
+            error_type: SCSpecTypeDef::UDT(SCSpecTypeUDT {
+                name: "Error"
+            })
+        })
+    ]
+})
 ```
 
 ##### `SC_SPEC_ENTRY_UDT_STRUCT_V0`
@@ -412,92 +431,459 @@ pub struct MyStruct {
 Which will be encoded to the following XDR:
 
 ```
+SCSpecEntry::UDT_STRUCT_V0(SCSpecUDTStructV0 {
+    doc: "",
+    lib: "",
+    name: "MyStruct",
+    fields: [
+        SCSpecUDTStructFieldV0 {
+            doc: "",
+            name: "field1",
+            type: SCSpecTypeDef::U64
+        },
+        SCSpecUDTStructFieldV0 {
+            doc: "",
+            name: "field2",
+            type: SCSpecTypeDef::STRING
+        }
+    ]
+})
 ```
 
 ##### `SC_SPEC_ENTRY_UDT_UNION_V0`
 
+A user-defined type union spec entry describes a user-defined type that has
+the properties of a Rust `enum` with data containing variants and that is used as a function parameter, or
+as a type within some other type that is a function parameter.
+
+The `cases` field is a list of union cases.
+
+```xdr
+struct SCSpecUDTUnionV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string lib<80>;
+    string name<60>;
+    SCSpecUDTUnionCaseV0 cases<50>;
+};
+```
+
+Each case can be either a void case (no data) or a tuple case (contains data).
+
+```xdr
+union SCSpecUDTUnionCaseV0 switch (SCSpecUDTUnionCaseV0Kind kind)
+{
+case SC_SPEC_UDT_UNION_CASE_VOID_V0:
+    SCSpecUDTUnionCaseVoidV0 voidCase;
+case SC_SPEC_UDT_UNION_CASE_TUPLE_V0:
+    SCSpecUDTUnionCaseTupleV0 tupleCase;
+};
+```
+
+###### Example
+
+In the Soroban Rust SDK the above structure describes a type such as:
+
+```rust
+#[contracttype]
+pub enum MyUnion {
+    NoData,
+    WithData(u64, String),
+}
+```
+
+Which will be encoded to the following XDR:
+
+```
+SCSpecEntry::UDT_UNION_V0(SCSpecUDTUnionV0 {
+    doc: "",
+    lib: "",
+    name: "MyUnion",
+    cases: [
+        SCSpecUDTUnionCaseV0::VOID(SCSpecUDTUnionCaseVoidV0 {
+            doc: "",
+            name: "NoData"
+        }),
+        SCSpecUDTUnionCaseV0::TUPLE(SCSpecUDTUnionCaseTupleV0 {
+            doc: "",
+            name: "WithData",
+            type: [
+                SCSpecTypeDef::U64,
+                SCSpecTypeDef::STRING
+            ]
+        })
+    ]
+})
+```
+
 ##### `SC_SPEC_ENTRY_UDT_ENUM_V0`
+
+A user-defined type enum spec entry describes a user-defined type that has the properties of a Rust
+`enum` with C-like integer values and that is used as a function parameter, or as a type within some other
+type that is a function parameter.
+
+The `cases` field is a list of enum cases.
+
+```xdr
+struct SCSpecUDTEnumV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string lib<80>;
+    string name<60>;
+    SCSpecUDTEnumCaseV0 cases<50>;
+};
+```
+
+Each case is described by the `SCSpecUDTEnumCaseV0` struct.
+
+```xdr
+struct SCSpecUDTEnumCaseV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string name<60>;
+    uint32 value;
+};
+```
+
+###### Example
+
+In the Soroban Rust SDK the above structure describes a type such as:
+
+```rust
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Color {
+    Red = 1,
+    Green = 2,
+    Blue = 3,
+}
+```
+
+Which will be encoded to the following XDR:
+
+```
+SCSpecEntry::UDT_ENUM_V0(SCSpecUDTEnumV0 {
+    doc: "",
+    lib: "",
+    name: "Color",
+    cases: [
+        SCSpecUDTEnumCaseV0 {
+            doc: "",
+            name: "Red",
+            value: 1
+        },
+        SCSpecUDTEnumCaseV0 {
+            doc: "",
+            name: "Green",
+            value: 2
+        },
+        SCSpecUDTEnumCaseV0 {
+            doc: "",
+            name: "Blue",
+            value: 3
+        }
+    ]
+})
+```
 
 ##### `SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`
 
+A user-defined type error enum spec entry describes a user-defined type that has the properties of a Rust
+`enum` with C-like integer values and is marked as being used for errors. It is used as a function 
+parameter, or as a type within some other type that is a function parameter.
+
+The `cases` field is a list of error enum cases.
+
+```xdr
+struct SCSpecUDTErrorEnumV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string lib<80>;
+    string name<60>;
+    SCSpecUDTErrorEnumCaseV0 cases<50>;
+};
+```
+
+Each case is described by the `SCSpecUDTErrorEnumCaseV0` struct.
+
+```xdr
+struct SCSpecUDTErrorEnumCaseV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string name<60>;
+    uint32 value;
+};
+```
+
+###### Example
+
+In the Soroban Rust SDK the above structure describes a type such as:
+
+```rust
+#[contracterror]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    InvalidInput = 1,
+    InsufficientFunds = 2,
+    Unauthorized = 3,
+}
+```
+
+Which will be encoded to the following XDR:
+
+```
+SCSpecEntry::UDT_ERROR_ENUM_V0(SCSpecUDTErrorEnumV0 {
+    doc: "",
+    lib: "",
+    name: "Error",
+    cases: [
+        SCSpecUDTErrorEnumCaseV0 {
+            doc: "",
+            name: "InvalidInput",
+            value: 1
+        },
+        SCSpecUDTErrorEnumCaseV0 {
+            doc: "",
+            name: "InsufficientFunds",
+            value: 2
+        },
+        SCSpecUDTErrorEnumCaseV0 {
+            doc: "",
+            name: "Unauthorized",
+            value: 3
+        }
+    ]
+})
+```
+
 #### XDR Spec Types
+
+This section describes all the types that can be used in function parameters, return values, and as fields in user-defined types.
 
 ##### `SC_SPEC_TYPE_VAL`
 
+A generic value type that could be any type. This is typically used when the contract needs to accept any type of value.
+
 ##### `SC_SPEC_TYPE_BOOL`
+
+A boolean type that can be either `true` or `false`.
 
 ##### `SC_SPEC_TYPE_VOID`
 
+A void type that represents the absence of a value. This is typically used for functions that do not return anything.
+
 ##### `SC_SPEC_TYPE_ERROR`
+
+A generic error type. This is typically used to indicate that a function can return an error without specifying the exact error type.
 
 ##### `SC_SPEC_TYPE_U32`
 
+An unsigned 32-bit integer.
+
 ##### `SC_SPEC_TYPE_I32`
+
+A signed 32-bit integer.
 
 ##### `SC_SPEC_TYPE_U64`
 
+An unsigned 64-bit integer.
+
 ##### `SC_SPEC_TYPE_I64`
+
+A signed 64-bit integer.
 
 ##### `SC_SPEC_TYPE_TIMEPOINT`
 
+A point in time represented as the number of seconds since the Unix epoch (January 1, 1970 00:00:00 UTC).
+
 ##### `SC_SPEC_TYPE_DURATION`
+
+A duration represented as the number of seconds.
 
 ##### `SC_SPEC_TYPE_U128`
 
+An unsigned 128-bit integer.
+
 ##### `SC_SPEC_TYPE_I128`
+
+A signed 128-bit integer.
 
 ##### `SC_SPEC_TYPE_U256`
 
+An unsigned 256-bit integer.
+
 ##### `SC_SPEC_TYPE_I256`
+
+A signed 256-bit integer.
 
 ##### `SC_SPEC_TYPE_BYTES`
 
+A variable-length array of bytes.
+
 ##### `SC_SPEC_TYPE_STRING`
+
+A UTF-8 encoded string.
 
 ##### `SC_SPEC_TYPE_SYMBOL`
 
+A symbol is a string-like type that is optimized for equality comparison rather than content manipulation.
+
 ##### `SC_SPEC_TYPE_ADDRESS`
+
+An address in the Stellar network. It can represent an account, a contract, or other addressable entity.
 
 ##### `SC_SPEC_TYPE_MUXED_ADDRESS`
 
+A muxed address in the Stellar network. It can represent an account with a memo id embedded in the address.
+
 ##### `SC_SPEC_TYPE_OPTION`
 
-    SCSpecTypeOption option;
+An option type that represents either a value of the specified type or no value (None/null).
+
+```xdr
+struct SCSpecTypeOption
+{
+    SCSpecTypeDef valueType;
+};
+```
+
+Example:
+```
+SCSpecTypeDef::OPTION(SCSpecTypeOption {
+    value_type: SCSpecTypeDef::U64
+})
+```
 
 ##### `SC_SPEC_TYPE_RESULT`
 
-    SCSpecTypeResult result;
+A result type that represents either a success value of one type or an error value of another type.
+
+```xdr
+struct SCSpecTypeResult
+{
+    SCSpecTypeDef okType;
+    SCSpecTypeDef errorType;
+};
+```
+
+Example:
+```
+SCSpecTypeDef::RESULT(SCSpecTypeResult {
+    ok_type: SCSpecTypeDef::U64,
+    error_type: SCSpecTypeDef::UDT(SCSpecTypeUDT {
+        name: "Error"
+    })
+})
+```
 
 ##### `SC_SPEC_TYPE_VEC`
 
-    SCSpecTypeVec vec;
+A vector type that represents a collection of elements of the same type.
+
+```xdr
+struct SCSpecTypeVec
+{
+    SCSpecTypeDef elementType;
+};
+```
+
+Example:
+```
+SCSpecTypeDef::VEC(SCSpecTypeVec {
+    element_type: SCSpecTypeDef::STRING
+})
+```
 
 ##### `SC_SPEC_TYPE_MAP`
 
-    SCSpecTypeMap map;
+A map type that represents a collection of key-value pairs where all keys have the same type and all values have the same type.
+
+```xdr
+struct SCSpecTypeMap
+{
+    SCSpecTypeDef keyType;
+    SCSpecTypeDef valueType;
+};
+```
+
+Example:
+```
+SCSpecTypeDef::MAP(SCSpecTypeMap {
+    key_type: SCSpecTypeDef::ADDRESS,
+    value_type: SCSpecTypeDef::U64
+})
+```
 
 ##### `SC_SPEC_TYPE_TUPLE`
 
-    SCSpecTypeTuple tuple;
+A tuple type that represents a fixed-size collection of elements of potentially different types.
+
+```xdr
+struct SCSpecTypeTuple
+{
+    SCSpecTypeDef valueTypes<12>;
+};
+```
+
+Example:
+```
+SCSpecTypeDef::TUPLE(SCSpecTypeTuple {
+    value_types: [
+        SCSpecTypeDef::U64,
+        SCSpecTypeDef::STRING,
+        SCSpecTypeDef::BOOL
+    ]
+})
+```
 
 ##### `SC_SPEC_TYPE_BYTES_N`
 
-    SCSpecTypeBytesN bytesN;
+A fixed-size array of bytes.
+
+```xdr
+struct SCSpecTypeBytesN
+{
+    uint32 n;
+};
+```
+
+Example:
+```
+SCSpecTypeDef::BYTES_N(SCSpecTypeBytesN {
+    n: 32
+})
+```
 
 ##### `SC_SPEC_TYPE_UDT`
 
-    SCSpecTypeUDT udt;
+A user-defined type. This is a reference to a type that is defined elsewhere in the contract spec.
+
+```xdr
+struct SCSpecTypeUDT
+{
+    string name<60>;
+};
+```
+
+Example:
+```
+SCSpecTypeDef::UDT(SCSpecTypeUDT {
+    name: "MyStruct"
+})
+```
 
 ## Example Usage
 
 ### Rust soroban-sdk
 
-Contract specs are automaticlaly inserted in code with the Rust `soroban-sdk` by using the [`contractimpl!`],
-[`contracttype`], [`contracterror`] macros.
+Contract specs are automatically inserted in code with the Rust `soroban-sdk` by using the [`contractimpl`],
+[`contracttype`], and [`contracterror`] macros.
 
-[`contractimpl!()`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contractmeta.html
-[`contracttype!()`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracttype.html
-[`contracterror!()`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracterror.html
+[`contractimpl`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contractimpl.html
+[`contracttype`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracttype.html
+[`contracterror`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracterror.html
 
 ## Limitations
 
@@ -505,6 +891,8 @@ Contract specs are automaticlaly inserted in code with the Rust `soroban-sdk` by
 
 This proposal does not support a contract claiming to implement any specific interface, or SEP describing an interface.
 [SEP-47] provides a way for off-chain systems for discover which SEPs a contract intends to implement.
+
+[SEP-47]: ../ecosystem/sep-0047.md
 
 ## Design Rationale
 
@@ -520,9 +908,11 @@ does not have access to the custom section and is not affected by it.
 
 ### XDR Encoding
 
-The XDR encoding is ...
+The XDR encoding is the format used to encode contract interface data. XDR (External Data Representation) is a standard data serialization format that ensures data compatibility across different computer architectures and systems. It is the same format used by the Stellar network for encoding transactions and other data structures.
 
-The XDR is extendable at multiple points and other types other than strings can be trivially added when required.
+The contract interface uses XDR to encode the structure of functions and types, allowing tools, SDKs, and clients to reliably decode and understand a contract's interface regardless of the implementation details or the platform used to build the contract.
+
+The XDR is extendable at multiple points and other types other than strings can be trivially added when required. The schema includes version tags in enum discriminants to support backward compatibility as the specification evolves.
 
 ### XDR Stream Encoding
 
