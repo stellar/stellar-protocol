@@ -666,77 +666,198 @@ This section describes all the types that can be used in function parameters, re
 
 A generic value type that could be any type. This is typically used when the contract needs to accept any type of value.
 
+ScVal mapping:
+```rust
+// Can be any ScVal
+ScVal::Bool(true)
+ScVal::U32(42)
+ScVal::String(String::from_str("hello"))
+// etc.
+```
+
 ##### `SC_SPEC_TYPE_BOOL`
 
 A boolean type that can be either `true` or `false`.
+
+ScVal mapping:
+```rust
+ScVal::Bool(true)
+ScVal::Bool(false)
+```
 
 ##### `SC_SPEC_TYPE_VOID`
 
 A void type that represents the absence of a value. This is typically used for functions that do not return anything.
 
+ScVal mapping:
+```rust
+ScVal::Void
+```
+
 ##### `SC_SPEC_TYPE_ERROR`
 
 A generic error type. This is typically used to indicate that a function can return an error without specifying the exact error type.
+
+ScVal mapping:
+```rust
+// Maps to the Error type in the ScVal::Error variant
+ScVal::Error(Error::Contract(...))
+```
 
 ##### `SC_SPEC_TYPE_U32`
 
 An unsigned 32-bit integer.
 
+ScVal mapping:
+```rust
+ScVal::U32(42)
+```
+
 ##### `SC_SPEC_TYPE_I32`
 
 A signed 32-bit integer.
+
+ScVal mapping:
+```rust
+ScVal::I32(-42)
+```
 
 ##### `SC_SPEC_TYPE_U64`
 
 An unsigned 64-bit integer.
 
+ScVal mapping:
+```rust
+ScVal::U64(1000000000)
+```
+
 ##### `SC_SPEC_TYPE_I64`
 
 A signed 64-bit integer.
+
+ScVal mapping:
+```rust
+ScVal::I64(-1000000000)
+```
 
 ##### `SC_SPEC_TYPE_TIMEPOINT`
 
 A point in time represented as the number of seconds since the Unix epoch (January 1, 1970 00:00:00 UTC).
 
+ScVal mapping:
+```rust
+ScVal::Timepoint(TimePoint::from_unix(1609459200)) // 2021-01-01 00:00:00 UTC
+```
+
 ##### `SC_SPEC_TYPE_DURATION`
 
 A duration represented as the number of seconds.
+
+ScVal mapping:
+```rust
+ScVal::Duration(Duration::from_seconds(86400)) // 1 day
+```
 
 ##### `SC_SPEC_TYPE_U128`
 
 An unsigned 128-bit integer.
 
+ScVal mapping:
+```rust
+ScVal::U128(U128Parts {
+    hi: 0,
+    lo: 340282366920938463463374607431768211455
+})
+```
+
 ##### `SC_SPEC_TYPE_I128`
 
 A signed 128-bit integer.
+
+ScVal mapping:
+```rust
+ScVal::I128(I128Parts {
+    hi: -1,
+    lo: 340282366920938463463374607431768211455
+})
+```
 
 ##### `SC_SPEC_TYPE_U256`
 
 An unsigned 256-bit integer.
 
+ScVal mapping:
+```rust
+ScVal::U256(U256Parts {
+    hi_hi: 0,
+    hi_lo: 0,
+    lo_hi: 0,
+    lo_lo: 115792089237316195423570985008687907853269984665640564039457584007913129639935
+})
+```
+
 ##### `SC_SPEC_TYPE_I256`
 
 A signed 256-bit integer.
+
+ScVal mapping:
+```rust
+ScVal::I256(I256Parts {
+    hi_hi: -1,
+    hi_lo: -1,
+    lo_hi: -1,
+    lo_lo: 115792089237316195423570985008687907853269984665640564039457584007913129639935
+})
+```
 
 ##### `SC_SPEC_TYPE_BYTES`
 
 A variable-length array of bytes.
 
+ScVal mapping:
+```rust
+ScVal::Bytes(Bytes::from_vec(vec![0x01, 0x02, 0x03, 0x04]))
+```
+
 ##### `SC_SPEC_TYPE_STRING`
 
 A UTF-8 encoded string.
+
+ScVal mapping:
+```rust
+ScVal::String(String::from_str("Hello, Soroban!"))
+```
 
 ##### `SC_SPEC_TYPE_SYMBOL`
 
 A symbol is a string-like type that is optimized for equality comparison rather than content manipulation.
 
+ScVal mapping:
+```rust
+ScVal::Symbol(Symbol::from_str("transfer"))
+```
+
 ##### `SC_SPEC_TYPE_ADDRESS`
 
 An address in the Stellar network. It can represent an account, a contract, or other addressable entity.
 
+ScVal mapping:
+```rust
+// Account address
+ScVal::Address(Address::Account(AccountId(...)))
+
+// Contract address
+ScVal::Address(Address::Contract(Hash(...)))
+```
+
 ##### `SC_SPEC_TYPE_MUXED_ADDRESS`
 
 A muxed address in the Stellar network. It can represent an account with a memo id embedded in the address.
+
+ScVal mapping:
+```rust
+ScVal::MuxedAddress(MuxedAccountMedCryptoEd25519(..., 12345)) // with memo ID 12345
+```
 
 ##### `SC_SPEC_TYPE_OPTION`
 
@@ -754,6 +875,15 @@ Example:
 SCSpecTypeDef::OPTION(SCSpecTypeOption {
     value_type: SCSpecTypeDef::U64
 })
+```
+
+ScVal mapping:
+```rust
+// Some value
+ScVal::Vec(VecM::from_array([ScVal::U64(42)]))
+
+// None value
+ScVal::Vec(VecM::from_array([]))
 ```
 
 ##### `SC_SPEC_TYPE_RESULT`
@@ -778,6 +908,15 @@ SCSpecTypeDef::RESULT(SCSpecTypeResult {
 })
 ```
 
+ScVal mapping:
+```rust
+// Ok result
+ScVal::Vec(VecM::from_array([ScVal::Bool(true), ScVal::U64(42)]))
+
+// Error result
+ScVal::Vec(VecM::from_array([ScVal::Bool(false), ScVal::Error(Error::Contract(...))]))
+```
+
 ##### `SC_SPEC_TYPE_VEC`
 
 A vector type that represents a collection of elements of the same type.
@@ -794,6 +933,15 @@ Example:
 SCSpecTypeDef::VEC(SCSpecTypeVec {
     element_type: SCSpecTypeDef::STRING
 })
+```
+
+ScVal mapping:
+```rust
+ScVal::Vec(VecM::from_array([
+    ScVal::String(String::from_str("one")),
+    ScVal::String(String::from_str("two")),
+    ScVal::String(String::from_str("three"))
+]))
 ```
 
 ##### `SC_SPEC_TYPE_MAP`
@@ -814,6 +962,15 @@ SCSpecTypeDef::MAP(SCSpecTypeMap {
     key_type: SCSpecTypeDef::ADDRESS,
     value_type: SCSpecTypeDef::U64
 })
+```
+
+ScVal mapping:
+```rust
+ScVal::Map(MapM::from_array([
+    (ScVal::Address(Address::Account(AccountId(...))), ScVal::U64(100)),
+    (ScVal::Address(Address::Account(AccountId(...))), ScVal::U64(200)),
+    (ScVal::Address(Address::Account(AccountId(...))), ScVal::U64(300))
+]))
 ```
 
 ##### `SC_SPEC_TYPE_TUPLE`
@@ -838,6 +995,15 @@ SCSpecTypeDef::TUPLE(SCSpecTypeTuple {
 })
 ```
 
+ScVal mapping:
+```rust
+ScVal::Vec(VecM::from_array([
+    ScVal::U64(42),
+    ScVal::String(String::from_str("hello")),
+    ScVal::Bool(true)
+]))
+```
+
 ##### `SC_SPEC_TYPE_BYTES_N`
 
 A fixed-size array of bytes.
@@ -856,6 +1022,12 @@ SCSpecTypeDef::BYTES_N(SCSpecTypeBytesN {
 })
 ```
 
+ScVal mapping:
+```rust
+// A 32-byte fixed array
+ScVal::Bytes(Bytes::from_array([0; 32]))
+```
+
 ##### `SC_SPEC_TYPE_UDT`
 
 A user-defined type. This is a reference to a type that is defined elsewhere in the contract spec.
@@ -872,6 +1044,25 @@ Example:
 SCSpecTypeDef::UDT(SCSpecTypeUDT {
     name: "MyStruct"
 })
+```
+
+ScVal mapping:
+```rust
+// For a struct UDT
+ScVal::Vec(VecM::from_array([
+    ScVal::U64(42),             // field1
+    ScVal::String(String::from_str("hello"))  // field2
+]))
+
+// For an enum UDT
+ScVal::U32(1)  // Represents the enum variant with value 1
+
+// For a union UDT
+ScVal::Vec(VecM::from_array([
+    ScVal::Symbol(Symbol::from_str("WithData")),  // variant name
+    ScVal::U64(42),                             // variant data
+    ScVal::String(String::from_str("hello"))      // more variant data
+]))
 ```
 
 ## Example Usage
