@@ -397,6 +397,23 @@ struct SCSpecUDTStructFieldV0
 };
 ```
 
+###### Example
+
+In the Soroban Rust SDK the above structure describes a type such as:
+
+```rust
+#[contracttype]
+pub struct MyStruct {
+    pub field1: u64,
+    pub field2: String,
+}
+```
+
+Which will be encoded to the following XDR:
+
+```
+```
+
 ##### `SC_SPEC_ENTRY_UDT_UNION_V0`
 
 ##### `SC_SPEC_ENTRY_UDT_ENUM_V0`
