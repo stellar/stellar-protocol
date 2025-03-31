@@ -14,7 +14,7 @@ Discussion: https://github.com/stellar/stellar-protocol/discussions/TBD
 
 ## Simple Summary
 
-A standard for contracts to self-describe their call interface.
+A standard for contracts to self-describe their exported interface.
 
 ## Dependencies
 
@@ -22,40 +22,49 @@ None.
 
 ## Motivation
 
-It should be possible for off-chain tooling and systems to discover the functions exported by a contract and intended to
-be called and passed in as inputs.
+It is necessary for tooling, SDKs, and off-chain systems to be able to discover
+the functions exported by a contract. Tooling and SDKs must be able to generate
+client code for calling contracts. Off-chain systems must be able to present a
+human friendly interface describing a called contract interface.
 
-Wasm files contain a list of exported functions, their names, their parameters and return values, and the primitive
-types of the parameters and return values. However, no names are preserved for each parameter, and the primitive types
-do not capture the host types that Soroban provides.
+All Wasm files contain a list of exported functions, but the contents of that
+list is primitive. The list includes their names, parameters, return values,
+but only the primitive types (e.g. i64, i32, u64, u32) of those values, and
+nothing about the Soroban host types (e.g. String, Symbol, Map, Vec, I128,
+U256, etc) the functions accept.
 
-Contracts need to be able to communicate a richer set of information about their interface, so that:
-
-- Clients can be code generated with names and rich types for parameters.
-- Tooling can present a human friendly interface for calling contracts.
+A richer interface is needed to fully express the Soroban host types a function
+expects, and to be able to recreate a contract interface exactly as it was
+originally coded.
 
 ## Abstract
 
-This SEP defines a way well-known location where contracts can communicate to off-chain tooling information about the
-contract interface, sufficient to reproduce the contract interface in code.
+This SEP defines a format for communicating about a contract's interface, as
+well as a common location to store the contract interface inside the Wasm
+files.
 
 ## Specification
 
 ### Wasm Custom Section
 
-Spec entries are stored in one `contractspecv0` Wasm custom section of the contract Wasm file.
-
-Multiple entries may exist in a single custom section.
+The contract interface is stored in one `contractspecv0` Wasm custom section of
+the contract Wasm file.
 
 ### XDR Encoding
 
-Each entry is structured and encoded using the `SCSpecEntry` type.
+Each entry of the contract interface is structured and encoded using the
+`SCSpecEntry` type.
 
-When encoding entries and storing them in the custom section they should be appended to one another with no frame, no
-header, and no prefix, including no length prefix. They should be in effect a stream of `SCSpecEntry` XDR binary encoded
-values.
+When encoding entries and storing them in the custom section they should be
+binary XDR encoded, appended to one another with no frame, no header, no
+delimiter, no prefix, including no length prefix. They should be in effect a
+stream of `SCSpecEntry` XDR binary encoded values.
 
-```
+Each `SCSpecEntry` describes a function, or a user-defined type.
+
+The following XDR types are specified:
+
+```xdr
 const SC_SPEC_DOC_LIMIT = 1024;
 
 enum SCSpecType
@@ -289,6 +298,110 @@ case SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0:
 ```
 
 Ref: https://github.com/stellar/stellar-xdr/blob/curr/Stellar-contract-spec.x
+
+#### XDR Common Fields
+
+Many of the XDR types that compromise the format of the contract interface have common fields.
+
+The `doc` field is a human readable description of the type, field, or
+function. It is intended to be rendered into generated client code, or tooling,
+such that users and developers can understand the purpose of the type, field,
+or function.
+
+The `name` field is the name of the type, field, or function. It is intended to
+be used in generated client code, or tooling, as the identifier.
+
+The `lib` field is the name of the library that the type was imported from. It
+is mostly only usedul for contract SDK implementations that support importing
+the original library the type was defined in.
+
+#### XDR Spec Entry Kinds
+
+##### `SC_SPEC_ENTRY_FUNCTION_V0`
+
+A function spec entry describes a contract function exported and callable.
+
+The `inputs` field is a list of the function's input parameters.
+
+The `outputs` field is a list of the function's return values.
+
+```xdr
+struct SCSpecFunctionV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    SCSymbol name;
+    SCSpecFunctionInputV0 inputs<10>;
+    SCSpecTypeDef outputs<1>;
+};
+```
+
+Each input parameter is described by the `SCSpecFunctionInputV0` struct.
+
+The `type` field is the type of the input parameter.
+
+```xdr
+struct SCSpecFunctionInputV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string name<30>;
+    SCSpecTypeDef type;
+};
+```
+
+###### Example
+
+In the Soroban Rust SDK the above structure describes a function such as:
+
+```rust
+#[contractimpl]
+impl MyContract {
+    pub fn my_function(input: u64) -> Result<u64, Error> {
+        ...
+    }
+}
+```
+
+Which will be encoded to the following XDR:
+
+```
+```
+
+##### `SC_SPEC_ENTRY_UDT_STRUCT_V0`
+
+A user-defined type struct spec entry describes a user-defined type that has
+the properties of a Rust `struct` and that is used as a function parameter, or
+as a type within some other type that is a function parameter.
+
+The `fields` field is a list of named fields.
+
+```xdr
+struct SCSpecUDTStructV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string lib<80>;
+    string name<60>;
+    SCSpecUDTStructFieldV0 fields<40>;
+};
+```
+
+Each field is described by the `SCSpecUDTStructFieldV0` struct.
+
+The `type` field is the type of the field.
+
+```xdr
+struct SCSpecUDTStructFieldV0
+{
+    string doc<SC_SPEC_DOC_LIMIT>;
+    string name<30>;
+    SCSpecTypeDef type;
+};
+```
+
+##### `SC_SPEC_ENTRY_UDT_UNION_V0`
+
+##### `SC_SPEC_ENTRY_UDT_ENUM_V0`
+
+##### `SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`
 
 #### XDR Spec Types
 
