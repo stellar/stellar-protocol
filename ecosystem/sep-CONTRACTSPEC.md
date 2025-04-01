@@ -657,6 +657,10 @@ struct SCSpecUDTErrorEnumCaseV0
 };
 ```
 
+A contract emitting this value into diagnostic logs, will emit a `SCVal` of
+type `SCV_ERROR` with the `SCError` having type `SCE_CONTRACT` and the
+`contractCode` set to the value of the error enum case.
+
 ###### Example
 
 In the Soroban Rust SDK the above structure describes a type such as:
@@ -702,6 +706,12 @@ SCSpecEntry::UDT_ERROR_ENUM_V0(SCSpecUDTErrorEnumV0 {
     ]
 })
 ```
+
+A contract emitting this value into diagnostic logs, will emit a `SCVal` of
+type `SCV_ERROR` with the `SCError` having type `SCE_CONTRACT` and:
+1. If the value is `InvalidInput`, the `contractCode` will be `1`.
+2. If the value is `InsufficientFunds`, the `contractCode` will be `2`.
+3. If the value is `Unauthorized`, the `contractCode` will be `3`.
 
 #### XDR Spec Types
 
