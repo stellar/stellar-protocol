@@ -422,6 +422,8 @@ struct SCSpecUDTStructFieldV0
 };
 ```
 
+A contract expecting this type, expects a `SCVal` to be a `SCV_MAP`, with each field stored in a map entry where the key is an `SCVal` `SCV_SYMBOL` containing the field name and the value is an `SCVal` containing the field value.
+
 ###### Example
 
 In the Soroban Rust SDK the above structure describes a type such as:
@@ -459,6 +461,10 @@ SCSpecEntry::UDT_STRUCT_V0(SCSpecUDTStructV0 {
 })
 ```
 
+A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with two entries:
+1. A `SCMapEntry` with a key of `SCV_SYMBOL` `field1`, and value of `SCV_U64`.
+2. A `SCMapEntry` with a key of `SCV_SYMBOL` `field2`, and value of `SCV_STRING`.
+
 ##### `SC_SPEC_ENTRY_UDT_UNION_V0`
 
 A user-defined type union spec entry describes a user-defined type that has
@@ -488,6 +494,8 @@ case SC_SPEC_UDT_UNION_CASE_TUPLE_V0:
     SCSpecUDTUnionCaseTupleV0 tupleCase;
 };
 ```
+
+A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`, with the first element an `SCV_SYMBOL` containing the name of the variant, and the remaining elements the tuple values if any.
 
 ###### Example
 
@@ -528,6 +536,16 @@ SCSpecEntry::UDT_UNION_V0(SCSpecUDTUnionV0 {
 })
 ```
 
+A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`.
+
+If the value is `NoData`, the vec will have one element:
+1. A `SCV_SYMBOL` with the value `NoData`.
+
+If the value is `WithData`, the vec will have three elements:
+1. A `SCV_SYMBOL` with the value `WithData`.
+2. A `SCV_U64` with the first tuple value.
+3. A `SCV_STRING` with the second tuple value.
+
 ##### `SC_SPEC_ENTRY_UDT_ENUM_V0`
 
 A user-defined type enum spec entry describes a user-defined type that has the properties of a Rust
@@ -556,6 +574,8 @@ struct SCSpecUDTEnumCaseV0
     uint32 value;
 };
 ```
+
+A contract expecting this type, expects the `SCVal` to be a `SCV_U32` containing one of the values included in the enum's cases.
 
 ###### Example
 
@@ -602,6 +622,11 @@ SCSpecEntry::UDT_ENUM_V0(SCSpecUDTEnumV0 {
     ]
 })
 ```
+
+A contract expecting this type, expects the `SCVal` to be a `SCV_U32`.
+1. If the value is `Red`, the value will be `1`.
+2. If the value is `Green`, the value will be `2`.
+3. If the value is `Blue`, the value will be `3`.
 
 ##### `SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`
 
@@ -837,6 +862,8 @@ be of a type, either the `SC_SPEC_TYPE_ERROR` or `SC_SPEC_TYPE_UDT` referencing 
 
 A vector type that represents a collection of elements of the same type.
 
+Note that the type may be `SC_SPEC_TYPE_VAL` to represent a vector of any type.
+
 ```xdr
 struct SCSpecTypeVec
 {
@@ -844,25 +871,15 @@ struct SCSpecTypeVec
 };
 ```
 
-Example:
-```
-SCSpecTypeDef::VEC(SCSpecTypeVec {
-    element_type: SCSpecTypeDef::STRING
-})
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_VEC` with all elements of the `elementType`.
 
-A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
-```rust
-SCVal::VEC(VecM::from_array([
-    SCVal::STRING(String::from_str("one")),
-    SCVal::STRING(String::from_str("two")),
-    SCVal::STRING(String::from_str("three"))
-]))
-```
+Contracts might not validate that the elements are all the `elementType`.
 
 ##### `SC_SPEC_TYPE_MAP`
 
 A map type that represents a collection of key-value pairs where all keys have the same type and all values have the same type.
+
+Note that either or both the key and value type may be `SC_SPEC_TYPE_VAL` to specify that they have no type constraint.
 
 ```xdr
 struct SCSpecTypeMap
@@ -872,22 +889,9 @@ struct SCSpecTypeMap
 };
 ```
 
-Example:
-```
-SCSpecTypeDef::MAP(SCSpecTypeMap {
-    key_type: SCSpecTypeDef::ADDRESS,
-    value_type: SCSpecTypeDef::U64
-})
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with all keys of the `keyType` and all values of the `valueType`.
 
-A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
-```rust
-SCVal::MAP(MapM::from_array([
-    (SCVal::ADDRESS(Address::Account(AccountId(...))), ScVal::U64(100)),
-    (SCVal::ADDRESS(Address::Account(AccountId(...))), ScVal::U64(200)),
-    (SCVal::ADDRESS(Address::Account(AccountId(...))), ScVal::U64(300))
-]))
-```
+Contracts might not validate that the map entry key and values are of the specified types.
 
 ##### `SC_SPEC_TYPE_TUPLE`
 
@@ -900,25 +904,7 @@ struct SCSpecTypeTuple
 };
 ```
 
-Example:
-```
-SCSpecTypeDef::TUPLE(SCSpecTypeTuple {
-    value_types: [
-        SCSpecTypeDef::U64,
-        SCSpecTypeDef::STRING,
-        SCSpecTypeDef::BOOL
-    ]
-})
-```
-
-A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
-```rust
-SCVal::VEC(VecM::from_array([
-    SCVal::U64(42),
-    SCVal::STRING(String::from_str("hello")),
-    SCVal::BOOL(true)
-]))
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_VEC` with each entry having the type as specified by the type specified at the same index in the `valuesTypes` vararray.
 
 ##### `SC_SPEC_TYPE_BYTES_N`
 
@@ -931,18 +917,7 @@ struct SCSpecTypeBytesN
 };
 ```
 
-Example:
-```
-SCSpecTypeDef::BYTES_N(SCSpecTypeBytesN {
-    n: 32
-})
-```
-
-A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
-```rust
-// A 32-byte fixed array
-SCVal::BYTES(Bytes::from_array([0; 32]))
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_BYTES` with the length being exactly `n`.
 
 ##### `SC_SPEC_TYPE_UDT`
 
@@ -955,31 +930,7 @@ struct SCSpecTypeUDT
 };
 ```
 
-Example:
-```
-SCSpecTypeDef::UDT(SCSpecTypeUDT {
-    name: "MyStruct"
-})
-```
-
-A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
-```rust
-// For a struct UDT
-SCVal::VEC(VecM::from_array([
-    SCVal::U64(42),             // field1
-    SCVal::STRING(String::from_str("hello"))  // field2
-]))
-
-// For an enum UDT
-SCVal::U32(1)  // Represents the enum variant with value 1
-
-// For a union UDT
-SCVal::VEC(VecM::from_array([
-    SCVal::SYMBOL(Symbol::from_str("WithData")),  // variant name
-    SCVal::U64(42),                             // variant data
-    SCVal::STRING(String::from_str("hello"))      // more variant data
-]))
-```
+A contract expecting this type, expects the `SCVal` to be the type as specified by the user-defined type with the same name as the `name` field.
 
 ## Example Usage
 
