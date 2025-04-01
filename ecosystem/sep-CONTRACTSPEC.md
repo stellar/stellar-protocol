@@ -31,10 +31,10 @@ All Wasm files contain a list of exported functions, but the contents of that
 list is primitive. The list includes their names, parameters, return values,
 but only the primitive types (e.g. i64, i32, u64, u32) of those values, and
 nothing about the Soroban host types (e.g. String, Symbol, Map, Vec, I128,
-U256, etc) the functions accept.
+U256, etc) or user-defined types that the functions accept.
 
-A richer interface is needed to fully express the Soroban host types a function
-expects, and to be able to recreate a contract interface exactly as it was
+A richer description of the interface is needed to fully understand the
+interface, and to be able to recreate a contract interface exactly as it was
 originally coded.
 
 ## Abstract
@@ -309,7 +309,8 @@ such that users and developers can understand the purpose of the type, field,
 or function.
 
 The `name` field is the name of the type, field, or function. It is intended to
-be used in generated client code, or tooling, as the identifier.
+be used in generated client code, or tooling, as the identifier for the type,
+field, or function.
 
 The `lib` field is the name of the library that the type was imported from. It
 is mostly only usedul for contract SDK implementations that support importing
@@ -320,6 +321,10 @@ the original library the type was defined in.
 ##### `SC_SPEC_ENTRY_FUNCTION_V0`
 
 A function spec entry describes a contract function exported and callable.
+
+The function name must match a name in the contract Wasm function table, with
+the same number of parameters as `inputs`, and the same number of return values
+as `outputs`.
 
 The `inputs` field is a list of the function's input parameters.
 
@@ -355,17 +360,18 @@ In the Soroban Rust SDK the above structure describes a function such as:
 ```rust
 #[contractimpl]
 impl MyContract {
+    /// My function description.
     pub fn my_function(input: u64) -> Result<u64, Error> {
         ...
     }
 }
 ```
 
-Which will be encoded to the following XDR:
+Which will be encoded to the following XDR (as expressed as pseudocode):
 
 ```
 SCSpecEntry::FUNCTION_V0(SCSpecFunctionV0 {
-    doc: "",
+    doc: "My function description.",
     name: "my_function",
     inputs: [
         SCSpecFunctionInputV0 {
@@ -421,28 +427,31 @@ struct SCSpecUDTStructFieldV0
 In the Soroban Rust SDK the above structure describes a type such as:
 
 ```rust
+/// My struct description.
 #[contracttype]
 pub struct MyStruct {
+    /// My field1 description.
     pub field1: u64,
+    /// My field2 description.
     pub field2: String,
 }
 ```
 
-Which will be encoded to the following XDR:
+Which will be encoded to the following XDR (as expressed as pseudocode):
 
 ```
 SCSpecEntry::UDT_STRUCT_V0(SCSpecUDTStructV0 {
-    doc: "",
+    doc: "My struct description.",
     lib: "",
     name: "MyStruct",
     fields: [
         SCSpecUDTStructFieldV0 {
-            doc: "",
+            doc: "My field1 description.",
             name: "field1",
             type: SCSpecTypeDef::U64
         },
         SCSpecUDTStructFieldV0 {
-            doc: "",
+            doc: "My field2 description.",
             name: "field2",
             type: SCSpecTypeDef::STRING
         }
@@ -485,27 +494,30 @@ case SC_SPEC_UDT_UNION_CASE_TUPLE_V0:
 In the Soroban Rust SDK the above structure describes a type such as:
 
 ```rust
+/// My union description.
 #[contracttype]
 pub enum MyUnion {
+    /// No data variant.
     NoData,
+    /// With data variant.
     WithData(u64, String),
 }
 ```
 
-Which will be encoded to the following XDR:
+Which will be encoded to the following XDR (as expressed as pseudocode):
 
 ```
 SCSpecEntry::UDT_UNION_V0(SCSpecUDTUnionV0 {
-    doc: "",
+    doc: "My union description.",
     lib: "",
     name: "MyUnion",
     cases: [
         SCSpecUDTUnionCaseV0::VOID(SCSpecUDTUnionCaseVoidV0 {
-            doc: "",
+            doc: "No data variant.",
             name: "NoData"
         }),
         SCSpecUDTUnionCaseV0::TUPLE(SCSpecUDTUnionCaseTupleV0 {
-            doc: "",
+            doc: "With data variant.",
             name: "WithData",
             type: [
                 SCSpecTypeDef::U64,
@@ -550,36 +562,40 @@ struct SCSpecUDTEnumCaseV0
 In the Soroban Rust SDK the above structure describes a type such as:
 
 ```rust
+/// My enum description.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Color {
+    /// Red color.
     Red = 1,
+    /// Green color.
     Green = 2,
+    /// Blue color.
     Blue = 3,
 }
 ```
 
-Which will be encoded to the following XDR:
+Which will be encoded to the following XDR (as expressed as pseudocode):
 
 ```
 SCSpecEntry::UDT_ENUM_V0(SCSpecUDTEnumV0 {
-    doc: "",
+    doc: "My enum description.",
     lib: "",
     name: "Color",
     cases: [
         SCSpecUDTEnumCaseV0 {
-            doc: "",
+            doc: "Red color.",
             name: "Red",
             value: 1
         },
         SCSpecUDTEnumCaseV0 {
-            doc: "",
+            doc: "Green color.",
             name: "Green",
             value: 2
         },
         SCSpecUDTEnumCaseV0 {
-            doc: "",
+            doc: "Blue color.",
             name: "Blue",
             value: 3
         }
@@ -621,36 +637,40 @@ struct SCSpecUDTErrorEnumCaseV0
 In the Soroban Rust SDK the above structure describes a type such as:
 
 ```rust
+/// My error enum description.
 #[contracterror]
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
+    /// Invalid input error.
     InvalidInput = 1,
+    /// Insufficient funds error.
     InsufficientFunds = 2,
+    /// Unauthorized error.
     Unauthorized = 3,
 }
 ```
 
-Which will be encoded to the following XDR:
+Which will be encoded to the following XDR (as expressed as pseudocode):
 
 ```
 SCSpecEntry::UDT_ERROR_ENUM_V0(SCSpecUDTErrorEnumV0 {
-    doc: "",
+    doc: "My error enum description.",
     lib: "",
     name: "Error",
     cases: [
         SCSpecUDTErrorEnumCaseV0 {
-            doc: "",
+            doc: "Invalid input error.",
             name: "InvalidInput",
             value: 1
         },
         SCSpecUDTErrorEnumCaseV0 {
-            doc: "",
+            doc: "Insufficient funds error.",
             name: "InsufficientFunds",
             value: 2
         },
         SCSpecUDTErrorEnumCaseV0 {
-            doc: "",
+            doc: "Unauthorized error.",
             name: "Unauthorized",
             value: 3
         }
@@ -666,198 +686,119 @@ This section describes all the types that can be used in function parameters, re
 
 A generic value type that could be any type. This is typically used when the contract needs to accept any type of value.
 
-ScVal mapping:
-```rust
-// Can be any ScVal
-ScVal::Bool(true)
-ScVal::U32(42)
-ScVal::String(String::from_str("hello"))
-// etc.
-```
+A contract expecting this type, expects a `SCVal` of any variant.
 
 ##### `SC_SPEC_TYPE_BOOL`
 
 A boolean type that can be either `true` or `false`.
 
-ScVal mapping:
-```rust
-ScVal::Bool(true)
-ScVal::Bool(false)
-```
+A contract expecting this type, expects a `SCVal` to be a `SCV_BOOL`.
 
 ##### `SC_SPEC_TYPE_VOID`
 
 A void type that represents the absence of a value. This is typically used for functions that do not return anything.
 
-ScVal mapping:
-```rust
-ScVal::Void
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_VOID`.
 
 ##### `SC_SPEC_TYPE_ERROR`
 
 A generic error type. This is typically used to indicate that a function can return an error without specifying the exact error type.
 
-ScVal mapping:
-```rust
-// Maps to the Error type in the ScVal::Error variant
-ScVal::Error(Error::Contract(...))
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_ERROR`.
 
 ##### `SC_SPEC_TYPE_U32`
 
 An unsigned 32-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::U32(42)
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_U32`.
 
 ##### `SC_SPEC_TYPE_I32`
 
 A signed 32-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::I32(-42)
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_I32`.
 
 ##### `SC_SPEC_TYPE_U64`
 
 An unsigned 64-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::U64(1000000000)
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_U64`.
 
 ##### `SC_SPEC_TYPE_I64`
 
 A signed 64-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::I64(-1000000000)
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_I64`.
 
 ##### `SC_SPEC_TYPE_TIMEPOINT`
 
 A point in time represented as the number of seconds since the Unix epoch (January 1, 1970 00:00:00 UTC).
 
-ScVal mapping:
-```rust
-ScVal::Timepoint(TimePoint::from_unix(1609459200)) // 2021-01-01 00:00:00 UTC
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_TIMEPOINT`.
 
 ##### `SC_SPEC_TYPE_DURATION`
 
 A duration represented as the number of seconds.
 
-ScVal mapping:
-```rust
-ScVal::Duration(Duration::from_seconds(86400)) // 1 day
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_DURATION`.
 
 ##### `SC_SPEC_TYPE_U128`
 
 An unsigned 128-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::U128(U128Parts {
-    hi: 0,
-    lo: 340282366920938463463374607431768211455
-})
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_U128`.
 
 ##### `SC_SPEC_TYPE_I128`
 
 A signed 128-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::I128(I128Parts {
-    hi: -1,
-    lo: 340282366920938463463374607431768211455
-})
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_I128`.
 
 ##### `SC_SPEC_TYPE_U256`
 
 An unsigned 256-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::U256(U256Parts {
-    hi_hi: 0,
-    hi_lo: 0,
-    lo_hi: 0,
-    lo_lo: 115792089237316195423570985008687907853269984665640564039457584007913129639935
-})
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_U256`.
 
 ##### `SC_SPEC_TYPE_I256`
 
 A signed 256-bit integer.
 
-ScVal mapping:
-```rust
-ScVal::I256(I256Parts {
-    hi_hi: -1,
-    hi_lo: -1,
-    lo_hi: -1,
-    lo_lo: 115792089237316195423570985008687907853269984665640564039457584007913129639935
-})
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_I256`.
 
 ##### `SC_SPEC_TYPE_BYTES`
 
 A variable-length array of bytes.
 
-ScVal mapping:
-```rust
-ScVal::Bytes(Bytes::from_vec(vec![0x01, 0x02, 0x03, 0x04]))
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_BYTES`.
 
 ##### `SC_SPEC_TYPE_STRING`
 
-A UTF-8 encoded string.
+An unencoded string.
 
-ScVal mapping:
-```rust
-ScVal::String(String::from_str("Hello, Soroban!"))
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_STRING`.
 
 ##### `SC_SPEC_TYPE_SYMBOL`
 
 A symbol is a string-like type that is optimized for equality comparison rather than content manipulation.
 
-ScVal mapping:
-```rust
-ScVal::Symbol(Symbol::from_str("transfer"))
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_SYMBOL`.
 
 ##### `SC_SPEC_TYPE_ADDRESS`
 
-An address in the Stellar network. It can represent an account, a contract, or other addressable entity.
+An address in the Stellar network.
 
-ScVal mapping:
-```rust
-// Account address
-ScVal::Address(Address::Account(AccountId(...)))
-
-// Contract address
-ScVal::Address(Address::Contract(Hash(...)))
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with
+the contained `SCAddress` being of variant `SC_ADDRESS_TYPE_ACCOUNT` or
+`SC_ADDRESS_TYPE_CONTRACT`.
 
 ##### `SC_SPEC_TYPE_MUXED_ADDRESS`
 
-A muxed address in the Stellar network. It can represent an account with a memo id embedded in the address.
+A muxed or virtual address in the Stellar network.
 
-ScVal mapping:
-```rust
-ScVal::MuxedAddress(MuxedAccountMedCryptoEd25519(..., 12345)) // with memo ID 12345
-```
+A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with
+the contained `SCAddress` being of variant `SC_ADDRESS_TYPE_ACCOUNT`,
+`SC_ADDRESS_TYPE_CONTRACT`, or `SC_ADDRESS_TYPE_MUXED_ACCOUNT`.
 
 ##### `SC_SPEC_TYPE_OPTION`
 
@@ -870,21 +811,9 @@ struct SCSpecTypeOption
 };
 ```
 
-Example:
-```
-SCSpecTypeDef::OPTION(SCSpecTypeOption {
-    value_type: SCSpecTypeDef::U64
-})
-```
-
-ScVal mapping:
-```rust
-// Some value
-ScVal::Vec(VecM::from_array([ScVal::U64(42)]))
-
-// None value
-ScVal::Vec(VecM::from_array([]))
-```
+A contract expecting this type, expects the `SCVal` to be either:
+- `SCV_VOID`, meaning the value is not set.
+- The `SCVal` type specified by the `valueType` field.
 
 ##### `SC_SPEC_TYPE_RESULT`
 
@@ -898,24 +827,11 @@ struct SCSpecTypeResult
 };
 ```
 
-Example:
-```
-SCSpecTypeDef::RESULT(SCSpecTypeResult {
-    ok_type: SCSpecTypeDef::U64,
-    error_type: SCSpecTypeDef::UDT(SCSpecTypeUDT {
-        name: "Error"
-    })
-})
-```
-
-ScVal mapping:
-```rust
-// Ok result
-ScVal::Vec(VecM::from_array([ScVal::Bool(true), ScVal::U64(42)]))
-
-// Error result
-ScVal::Vec(VecM::from_array([ScVal::Bool(false), ScVal::Error(Error::Contract(...))]))
-```
+A contract expecting this type, expects the `SCVal` to be either:
+- The `SCVal` type specified by the `okType`. The value of `okType` must not be
+an `SCV_ERROR`.
+- The `SCVal` type specified by the `errorType`. The value of `errorType` must
+be of a type, either the `SC_SPEC_TYPE_ERROR` or `SC_SPEC_TYPE_UDT` referencing a user-defined error type. In both cases mapping to a `SCV_ERROR`.
 
 ##### `SC_SPEC_TYPE_VEC`
 
@@ -935,12 +851,12 @@ SCSpecTypeDef::VEC(SCSpecTypeVec {
 })
 ```
 
-ScVal mapping:
+A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
 ```rust
-ScVal::Vec(VecM::from_array([
-    ScVal::String(String::from_str("one")),
-    ScVal::String(String::from_str("two")),
-    ScVal::String(String::from_str("three"))
+SCVal::VEC(VecM::from_array([
+    SCVal::STRING(String::from_str("one")),
+    SCVal::STRING(String::from_str("two")),
+    SCVal::STRING(String::from_str("three"))
 ]))
 ```
 
@@ -964,12 +880,12 @@ SCSpecTypeDef::MAP(SCSpecTypeMap {
 })
 ```
 
-ScVal mapping:
+A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
 ```rust
-ScVal::Map(MapM::from_array([
-    (ScVal::Address(Address::Account(AccountId(...))), ScVal::U64(100)),
-    (ScVal::Address(Address::Account(AccountId(...))), ScVal::U64(200)),
-    (ScVal::Address(Address::Account(AccountId(...))), ScVal::U64(300))
+SCVal::MAP(MapM::from_array([
+    (SCVal::ADDRESS(Address::Account(AccountId(...))), ScVal::U64(100)),
+    (SCVal::ADDRESS(Address::Account(AccountId(...))), ScVal::U64(200)),
+    (SCVal::ADDRESS(Address::Account(AccountId(...))), ScVal::U64(300))
 ]))
 ```
 
@@ -995,12 +911,12 @@ SCSpecTypeDef::TUPLE(SCSpecTypeTuple {
 })
 ```
 
-ScVal mapping:
+A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
 ```rust
-ScVal::Vec(VecM::from_array([
-    ScVal::U64(42),
-    ScVal::String(String::from_str("hello")),
-    ScVal::Bool(true)
+SCVal::VEC(VecM::from_array([
+    SCVal::U64(42),
+    SCVal::STRING(String::from_str("hello")),
+    SCVal::BOOL(true)
 ]))
 ```
 
@@ -1022,10 +938,10 @@ SCSpecTypeDef::BYTES_N(SCSpecTypeBytesN {
 })
 ```
 
-ScVal mapping:
+A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
 ```rust
 // A 32-byte fixed array
-ScVal::Bytes(Bytes::from_array([0; 32]))
+SCVal::BYTES(Bytes::from_array([0; 32]))
 ```
 
 ##### `SC_SPEC_TYPE_UDT`
@@ -1046,22 +962,22 @@ SCSpecTypeDef::UDT(SCSpecTypeUDT {
 })
 ```
 
-ScVal mapping:
+A contract expecting this type, expects one of the following `ScVal`s to be given. to `ScVal`s of the following types:
 ```rust
 // For a struct UDT
-ScVal::Vec(VecM::from_array([
-    ScVal::U64(42),             // field1
-    ScVal::String(String::from_str("hello"))  // field2
+SCVal::VEC(VecM::from_array([
+    SCVal::U64(42),             // field1
+    SCVal::STRING(String::from_str("hello"))  // field2
 ]))
 
 // For an enum UDT
-ScVal::U32(1)  // Represents the enum variant with value 1
+SCVal::U32(1)  // Represents the enum variant with value 1
 
 // For a union UDT
-ScVal::Vec(VecM::from_array([
-    ScVal::Symbol(Symbol::from_str("WithData")),  // variant name
-    ScVal::U64(42),                             // variant data
-    ScVal::String(String::from_str("hello"))      // more variant data
+SCVal::VEC(VecM::from_array([
+    SCVal::SYMBOL(Symbol::from_str("WithData")),  // variant name
+    SCVal::U64(42),                             // variant data
+    SCVal::STRING(String::from_str("hello"))      // more variant data
 ]))
 ```
 
