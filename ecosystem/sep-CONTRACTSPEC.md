@@ -367,28 +367,30 @@ impl MyContract {
 }
 ```
 
-Which will be encoded to the following XDR (as expressed as pseudocode):
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
 
-```
-SCSpecEntry::FUNCTION_V0(SCSpecFunctionV0 {
-    doc: "My function description.",
-    name: "my_function",
-    inputs: [
-        SCSpecFunctionInputV0 {
-            doc: "",
-            name: "input",
-            type: SCSpecTypeDef::U64
-        }
+```json
+{
+  "function_v0": {
+    "doc": "My function description.",
+    "name": "my_function",
+    "inputs": [
+      {
+        "doc": "",
+        "name": "input",
+        "type_": "u64"
+      }
     ],
-    outputs: [
-        SCSpecTypeDef::RESULT(SCSpecTypeResult {
-            ok_type: SCSpecTypeDef::U64,
-            error_type: SCSpecTypeDef::UDT(SCSpecTypeUDT {
-                name: "Error"
-            })
-        })
+    "outputs": [
+      {
+        "result": {
+          "ok_type": "u64",
+          "error_type": "error"
+        }
+      }
     ]
-})
+  }
+}
 ```
 
 ##### `SC_SPEC_ENTRY_UDT_STRUCT_V0`
@@ -439,26 +441,28 @@ pub struct MyStruct {
 }
 ```
 
-Which will be encoded to the following XDR (as expressed as pseudocode):
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
 
-```
-SCSpecEntry::UDT_STRUCT_V0(SCSpecUDTStructV0 {
-    doc: "My struct description.",
-    lib: "",
-    name: "MyStruct",
-    fields: [
-        SCSpecUDTStructFieldV0 {
-            doc: "My field1 description.",
-            name: "field1",
-            type: SCSpecTypeDef::U64
-        },
-        SCSpecUDTStructFieldV0 {
-            doc: "My field2 description.",
-            name: "field2",
-            type: SCSpecTypeDef::STRING
-        }
+```json
+{
+  "udt_struct_v0": {
+    "doc": "My struct description.",
+    "lib": "",
+    "name": "MyStruct",
+    "fields": [
+      {
+        "doc": "My field1 description.",
+        "name": "field1",
+        "type_": "u64"
+      },
+      {
+        "doc": "My field2 description.",
+        "name": "field2",
+        "type_": "String"
+      }
     ]
-})
+  }
+}
 ```
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with two entries:
@@ -512,28 +516,23 @@ pub enum MyUnion {
 }
 ```
 
-Which will be encoded to the following XDR (as expressed as pseudocode):
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
 
-```
-SCSpecEntry::UDT_UNION_V0(SCSpecUDTUnionV0 {
-    doc: "My union description.",
-    lib: "",
-    name: "MyUnion",
-    cases: [
-        SCSpecUDTUnionCaseV0::VOID(SCSpecUDTUnionCaseVoidV0 {
-            doc: "No data variant.",
-            name: "NoData"
-        }),
-        SCSpecUDTUnionCaseV0::TUPLE(SCSpecUDTUnionCaseTupleV0 {
-            doc: "With data variant.",
-            name: "WithData",
-            type: [
-                SCSpecTypeDef::U64,
-                SCSpecTypeDef::STRING
-            ]
-        })
+```json
+{
+  "udt_struct_v0": {
+    "doc": "",
+    "lib": "",
+    "name": "IncrementContractType",
+    "fields": [
+      {
+        "doc": "",
+        "name": "counter",
+        "type_": "u32"
+      }
     ]
-})
+  }
+}
 ```
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`.
@@ -596,31 +595,33 @@ pub enum Color {
 }
 ```
 
-Which will be encoded to the following XDR (as expressed as pseudocode):
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
 
-```
-SCSpecEntry::UDT_ENUM_V0(SCSpecUDTEnumV0 {
-    doc: "My enum description.",
-    lib: "",
-    name: "Color",
-    cases: [
-        SCSpecUDTEnumCaseV0 {
-            doc: "Red color.",
-            name: "Red",
-            value: 1
-        },
-        SCSpecUDTEnumCaseV0 {
-            doc: "Green color.",
-            name: "Green",
-            value: 2
-        },
-        SCSpecUDTEnumCaseV0 {
-            doc: "Blue color.",
-            name: "Blue",
-            value: 3
-        }
+```json
+{
+  "udt_enum_v0": {
+    "doc": "My enum description.",
+    "lib": "",
+    "name": "Color",
+    "cases": [
+      {
+        "doc": "Red color.",
+        "name": "Red",
+        "value": 1
+      },
+      {
+        "doc": "Green color.",
+        "name": "Green",
+        "value": 2
+      },
+      {
+        "doc": "Blue color.",
+        "name": "Blue",
+        "value": 3
+      }
     ]
-})
+  }
+}
 ```
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_U32`.
@@ -680,31 +681,34 @@ pub enum Error {
 }
 ```
 
-Which will be encoded to the following XDR (as expressed as pseudocode):
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
 
-```
-SCSpecEntry::UDT_ERROR_ENUM_V0(SCSpecUDTErrorEnumV0 {
-    doc: "My error enum description.",
-    lib: "",
-    name: "Error",
-    cases: [
-        SCSpecUDTErrorEnumCaseV0 {
-            doc: "Invalid input error.",
-            name: "InvalidInput",
-            value: 1
-        },
-        SCSpecUDTErrorEnumCaseV0 {
-            doc: "Insufficient funds error.",
-            name: "InsufficientFunds",
-            value: 2
-        },
-        SCSpecUDTErrorEnumCaseV0 {
-            doc: "Unauthorized error.",
-            name: "Unauthorized",
-            value: 3
-        }
+```json
+{
+  "udt_error_enum_v0": {
+    "doc": "My error enum description.",
+    "lib": "",
+    "name": "Error",
+    "cases": [
+      {
+        "doc": "Invalid input error.",
+        "name": "InvalidInput",
+        "value": 1
+      },
+      {
+        "doc": "Insufficient funds error.",
+        "name": "InsufficientFunds",
+        "value": 2
+      },
+      {
+        "doc": "Unauthorized error.",
+        "name": "Unauthorized",
+        "value": 3
+      }
     ]
-})
+  }
+}
+
 ```
 
 A contract emitting this value into diagnostic logs, will emit a `SCVal` of
