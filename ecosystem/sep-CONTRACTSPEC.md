@@ -1297,7 +1297,7 @@ user-defined type sections for how they are structured:
 
 ## Example Usage
 
-### Soroban Rust SDK (`soroban-sdk`)
+### Soroban Rust SDK ([`soroban-sdk`])
 
 Contract specs are automatically inserted in code with the Rust `soroban-sdk` by using the [`contractimpl`],
 [`contracttype`], and [`contracterror`] macros.
@@ -1306,7 +1306,7 @@ Contract specs are automatically inserted in code with the Rust `soroban-sdk` by
 [`contracttype`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracttype.html
 [`contracterror`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracterror.html
 
-### Stellar CLI (`stellar-cli`)
+### Stellar CLI ([`stellar-cli`])
 
 Contract specs are inspectable when using the Stellar CLI `stellar contract info interface` command.
 
@@ -1358,4 +1358,7 @@ include spec entries for funtions that do not exist. Or a contract may omit spec
 
 ## Changelog
 
-- `v0.1.0`: Initial draft capturing the status quo as implemented in soroban-sdk.
+- `v0.1.0`: Initial draft capturing the status quo as implemented in [`soroban-sdk`].
+
+[`soroban-sdk`]: https://github.com/stellar/rs-soroban-sdk
+[`stellar-cli`]: https://github.com/stellar/stellar-cli
