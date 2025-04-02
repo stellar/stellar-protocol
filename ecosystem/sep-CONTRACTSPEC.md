@@ -848,11 +848,27 @@ A signed 32-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_I32`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "i32": 1
+}
+```
+
 ##### `SC_SPEC_TYPE_U64`
 
 An unsigned 64-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_U64`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "u64": 1
+}
+```
 
 ##### `SC_SPEC_TYPE_I64`
 
@@ -860,11 +876,27 @@ A signed 64-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_I64`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "i64": 1
+}
+```
+
 ##### `SC_SPEC_TYPE_TIMEPOINT`
 
 A point in time represented as the number of seconds since the Unix epoch (January 1, 1970 00:00:00 UTC).
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_TIMEPOINT`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "timepoint": 1
+}
+```
 
 ##### `SC_SPEC_TYPE_DURATION`
 
@@ -872,11 +904,30 @@ A duration represented as the number of seconds.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_DURATION`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "duration": 1
+}
+```
+
 ##### `SC_SPEC_TYPE_U128`
 
 An unsigned 128-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_U128`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "u128": {
+    "hi": 0,
+    "lo": 1
+  }
+}
+```
 
 ##### `SC_SPEC_TYPE_I128`
 
@@ -884,11 +935,35 @@ A signed 128-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_I128`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "i128": {
+    "hi": 0,
+    "lo": 1
+  }
+}
+```
+
 ##### `SC_SPEC_TYPE_U256`
 
 An unsigned 256-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_U256`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "u256": {
+    "hi_hi": 0,
+    "hi_lo": 0,
+    "lo_hi": 0,
+    "lo_lo": 1
+  }
+}
+```
 
 ##### `SC_SPEC_TYPE_I256`
 
@@ -896,11 +971,32 @@ A signed 256-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_I256`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "i256": {
+    "hi_hi": 0,
+    "hi_lo": 0,
+    "lo_hi": 0,
+    "lo_lo": 1
+  }
+}
+```
+
 ##### `SC_SPEC_TYPE_BYTES`
 
 A variable-length array of bytes.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_BYTES`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "bytes": "00000001"
+}
+```
 
 ##### `SC_SPEC_TYPE_STRING`
 
@@ -908,11 +1004,27 @@ An unencoded string.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_STRING`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "string": "hello"
+}
+```
+
 ##### `SC_SPEC_TYPE_SYMBOL`
 
 A symbol is a string-like type that is optimized for equality comparison rather than content manipulation.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_SYMBOL`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "symbol": "hello"
+}
+```
 
 ##### `SC_SPEC_TYPE_ADDRESS`
 
@@ -922,6 +1034,20 @@ A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with
 the contained `SCAddress` being of variant `SC_ADDRESS_TYPE_ACCOUNT` or
 `SC_ADDRESS_TYPE_CONTRACT`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "address": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+}
+```
+
+```json
+{
+  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4"
+}
+```
+
 ##### `SC_SPEC_TYPE_MUXED_ADDRESS`
 
 A muxed or virtual address in the Stellar network.
@@ -929,6 +1055,14 @@ A muxed or virtual address in the Stellar network.
 A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with
 the contained `SCAddress` being of variant `SC_ADDRESS_TYPE_ACCOUNT`,
 `SC_ADDRESS_TYPE_CONTRACT`, or `SC_ADDRESS_TYPE_MUXED_ACCOUNT`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "address": "MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB5IG"
+}
+```
 
 ##### `SC_SPEC_TYPE_OPTION`
 
@@ -944,6 +1078,21 @@ struct SCSpecTypeOption
 A contract expecting this type, expects the `SCVal` to be either:
 - `SCV_VOID`, meaning the value is not set.
 - The `SCVal` type specified by the `valueType` field.
+
+For example, the `SCVal` in XDR when not set, expressed in XDR-JSON:
+
+```json
+"void"
+```
+
+For example, the `SCVal` in XDR when set with `valueType` `SC_SPEC_TYPE_U64`,
+expressed in XDR-JSON:
+
+```json
+{
+  "u64": 1
+}
+```
 
 ##### `SC_SPEC_TYPE_RESULT`
 
@@ -963,6 +1112,25 @@ an `SCV_ERROR`.
 - The `SCVal` type specified by the `errorType`. The value of `errorType` must
 be of a type, either the `SC_SPEC_TYPE_ERROR` or `SC_SPEC_TYPE_UDT` referencing a user-defined error type. In both cases mapping to a `SCV_ERROR`.
 
+For example, the `SCVal` in XDR when ok with the `okType` `SC_SPEC_TYPE_U64`,
+expressed in XDR-JSON:
+
+```json
+{
+  "u64": 1
+}
+```
+
+For example, the `SCVal` in XDR when error, expressed in XDR-JSON:
+
+```json
+{
+  "error": {
+    "contract": 1
+  }
+}
+```
+
 ##### `SC_SPEC_TYPE_VEC`
 
 A vector type that represents a collection of elements of the same type.
@@ -980,6 +1148,22 @@ A contract expecting this type, expects the `SCVal` to be a `SCV_VEC` with all e
 
 Contracts might not validate that the elements are all the `elementType`.
 
+For example, the `SCVal` in XDR when `elementType` `SC_SPEC_TYPE_U64`,
+expressed in XDR-JSON:
+
+```json
+{
+  "vec": [
+    {
+      "u64": 1
+    },
+    {
+      "u64": 2
+    }
+  ]
+}
+```
+
 ##### `SC_SPEC_TYPE_MAP`
 
 A map type that represents a collection of key-value pairs where all keys have the same type and all values have the same type.
@@ -994,9 +1178,28 @@ struct SCSpecTypeMap
 };
 ```
 
-A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with all keys of the `keyType` and all values of the `valueType`.
+A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with all
+keys of the `keyType` and all values of the `valueType`. Note that contracts
+might not validate that the map entry key and values are of the specified
+types.
 
-Contracts might not validate that the map entry key and values are of the specified types.
+For example, the `SCVal` in XDR when `keyType` `SC_SPEC_TYPE_SYMBOL` and
+`valueType` `SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
+
+```json
+{
+  "map": [
+    {
+      "key": {
+        "symbol": "key"
+      },
+      "val": {
+        "u64": 1
+      }
+    }
+  ]
+}
+```
 
 ##### `SC_SPEC_TYPE_TUPLE`
 
@@ -1011,6 +1214,22 @@ struct SCSpecTypeTuple
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_VEC` with each entry having the type as specified by the type specified at the same index in the `valuesTypes` vararray.
 
+For example, the `SCVal` in XDR when `valueTypes` `SC_SPEC_TYPE_SYMBOL` and
+`SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
+
+```json
+{
+  "vec": [
+    {
+      "symbol": "hello"
+    },
+    {
+      "u64": 1
+    }
+  ]
+}
+```
+
 ##### `SC_SPEC_TYPE_BYTES_N`
 
 A fixed-size array of bytes.
@@ -1023,6 +1242,14 @@ struct SCSpecTypeBytesN
 ```
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_BYTES` with the length being exactly `n`.
+
+For example, the `SCVal` in XDR when `n` is `32`, expressed in XDR-JSON:
+
+```json
+{
+  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+}
+```
 
 ##### `SC_SPEC_TYPE_UDT`
 
