@@ -1287,11 +1287,13 @@ struct SCSpecTypeUDT
 };
 ```
 
-A contract expecting this type, expects the `SCVal` to be the type as specified by the user-defined type with the same name as the `name` field.
+A contract expecting this type, expects the `SCVal` to be the type as specified
+by the user-defined type with the same name as the `name` field. See the
+user-defined type sections for how they are structured.
 
 ## Example Usage
 
-### Rust soroban-sdk
+### Soroban Rust SDK (`soroban-sdk`)
 
 Contract specs are automatically inserted in code with the Rust `soroban-sdk` by using the [`contractimpl`],
 [`contracttype`], and [`contracterror`] macros.
@@ -1299,6 +1301,10 @@ Contract specs are automatically inserted in code with the Rust `soroban-sdk` by
 [`contractimpl`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contractimpl.html
 [`contracttype`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracttype.html
 [`contracterror`]: https://docs.rs/soroban-sdk/latest/soroban_sdk/macro.contracterror.html
+
+### Stellar CLI (`stellar-cli`)
+
+Contract specs are inspectable when using the Stellar CLI `stellar contract info interface` command.
 
 ## Limitations
 
