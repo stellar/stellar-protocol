@@ -299,7 +299,7 @@ case SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0:
 
 Ref: https://github.com/stellar/stellar-xdr/blob/curr/Stellar-contract-spec.x
 
-#### XDR Common Fields
+### XDR Common Fields
 
 Many of the XDR types that compromise the format of the contract interface have common fields.
 
@@ -316,9 +316,9 @@ The `lib` field is the name of the library that the type was imported from. It
 is mostly only usedul for contract SDK implementations that support importing
 the original library the type was defined in.
 
-#### XDR Spec Entry Kinds
+### XDR Spec Entry Kinds
 
-##### `SC_SPEC_ENTRY_FUNCTION_V0`
+#### `SC_SPEC_ENTRY_FUNCTION_V0`
 
 A function spec entry describes a contract function exported and callable.
 
@@ -353,7 +353,7 @@ struct SCSpecFunctionInputV0
 };
 ```
 
-###### Example
+##### Example
 
 In the Soroban Rust SDK the above structure describes a function such as:
 
@@ -393,7 +393,7 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
 }
 ```
 
-##### `SC_SPEC_ENTRY_UDT_STRUCT_V0`
+#### `SC_SPEC_ENTRY_UDT_STRUCT_V0`
 
 A user-defined type struct spec entry describes a user-defined type that has
 the properties of a Rust `struct` and that is used as a function parameter, or
@@ -426,7 +426,7 @@ struct SCSpecUDTStructFieldV0
 
 A contract expecting this type, expects a `SCVal` to be a `SCV_MAP`, with each field stored in a map entry where the key is an `SCVal` `SCV_SYMBOL` containing the field name and the value is an `SCVal` containing the field value.
 
-###### Example
+##### Example
 
 In the Soroban Rust SDK the above structure describes a type such as:
 
@@ -494,7 +494,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_ENTRY_UDT_UNION_V0`
+#### `SC_SPEC_ENTRY_UDT_UNION_V0`
 
 A user-defined type union spec entry describes a user-defined type that has
 the properties of a Rust `enum` with data containing variants and that is used as a function parameter, or
@@ -526,7 +526,7 @@ case SC_SPEC_UDT_UNION_CASE_TUPLE_V0:
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`, with the first element an `SCV_SYMBOL` containing the name of the variant, and the remaining elements the tuple values if any.
 
-###### Example
+##### Example
 
 In the Soroban Rust SDK the above structure describes a type such as:
 
@@ -611,7 +611,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_ENTRY_UDT_ENUM_V0`
+#### `SC_SPEC_ENTRY_UDT_ENUM_V0`
 
 A user-defined type enum spec entry describes a user-defined type that has the properties of a Rust
 `enum` with C-like integer values and that is used as a function parameter, or as a type within some other
@@ -642,7 +642,7 @@ struct SCSpecUDTEnumCaseV0
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_U32` containing one of the values included in the enum's cases.
 
-###### Example
+##### Example
 
 In the Soroban Rust SDK the above structure describes a type such as:
 
@@ -703,7 +703,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`
+#### `SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`
 
 A user-defined type error enum spec entry describes a user-defined type that has the properties of a Rust
 `enum` with C-like integer values and is marked as being used for errors. It is used as a function 
@@ -736,7 +736,7 @@ A contract emitting this value into diagnostic logs, will emit a `SCVal` of
 type `SCV_ERROR` with the `SCError` having type `SCE_CONTRACT` and the
 `contractCode` set to the value of the error enum case.
 
-###### Example
+##### Example
 
 In the Soroban Rust SDK the above structure describes a type such as:
 
@@ -801,17 +801,17 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-#### XDR Spec Types
+### XDR Spec Types
 
 This section describes all the types that can be used in function parameters, return values, and as fields in user-defined types.
 
-##### `SC_SPEC_TYPE_VAL`
+#### `SC_SPEC_TYPE_VAL`
 
 A generic value type that could be any type. This is typically used when the contract needs to accept any type of value.
 
 A contract expecting this type, expects a `SCVal` of any variant.
 
-##### `SC_SPEC_TYPE_BOOL`
+#### `SC_SPEC_TYPE_BOOL`
 
 A boolean type that can be either `true` or `false`.
 
@@ -825,7 +825,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_VOID`
+#### `SC_SPEC_TYPE_VOID`
 
 A void type that represents the absence of a value. This is typically used for functions that do not return anything.
 
@@ -837,7 +837,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 "void"
 ```
 
-##### `SC_SPEC_TYPE_ERROR`
+#### `SC_SPEC_TYPE_ERROR`
 
 A generic error type. This is typically used to indicate that a function can return an error without specifying the exact error type.
 
@@ -853,7 +853,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_U32`
+#### `SC_SPEC_TYPE_U32`
 
 An unsigned 32-bit integer.
 
@@ -867,7 +867,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_I32`
+#### `SC_SPEC_TYPE_I32`
 
 A signed 32-bit integer.
 
@@ -881,7 +881,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_U64`
+#### `SC_SPEC_TYPE_U64`
 
 An unsigned 64-bit integer.
 
@@ -895,7 +895,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_I64`
+#### `SC_SPEC_TYPE_I64`
 
 A signed 64-bit integer.
 
@@ -909,7 +909,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_TIMEPOINT`
+#### `SC_SPEC_TYPE_TIMEPOINT`
 
 A point in time represented as the number of seconds since the Unix epoch (January 1, 1970 00:00:00 UTC).
 
@@ -923,7 +923,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_DURATION`
+#### `SC_SPEC_TYPE_DURATION`
 
 A duration represented as the number of seconds.
 
@@ -937,7 +937,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_U128`
+#### `SC_SPEC_TYPE_U128`
 
 An unsigned 128-bit integer.
 
@@ -954,7 +954,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_I128`
+#### `SC_SPEC_TYPE_I128`
 
 A signed 128-bit integer.
 
@@ -971,7 +971,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_U256`
+#### `SC_SPEC_TYPE_U256`
 
 An unsigned 256-bit integer.
 
@@ -990,7 +990,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_I256`
+#### `SC_SPEC_TYPE_I256`
 
 A signed 256-bit integer.
 
@@ -1009,7 +1009,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_BYTES`
+#### `SC_SPEC_TYPE_BYTES`
 
 A variable-length array of bytes.
 
@@ -1023,7 +1023,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_STRING`
+#### `SC_SPEC_TYPE_STRING`
 
 An unencoded string.
 
@@ -1037,7 +1037,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_SYMBOL`
+#### `SC_SPEC_TYPE_SYMBOL`
 
 A symbol is a string-like type that is optimized for equality comparison rather than content manipulation.
 
@@ -1051,7 +1051,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_ADDRESS`
+#### `SC_SPEC_TYPE_ADDRESS`
 
 An address in the Stellar network.
 
@@ -1073,7 +1073,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_MUXED_ADDRESS`
+#### `SC_SPEC_TYPE_MUXED_ADDRESS`
 
 A muxed or virtual address in the Stellar network.
 
@@ -1089,7 +1089,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_OPTION`
+#### `SC_SPEC_TYPE_OPTION`
 
 An option type that represents either a value of the specified type or no value (None/null).
 
@@ -1119,7 +1119,7 @@ expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_RESULT`
+#### `SC_SPEC_TYPE_RESULT`
 
 A result type that represents either a success value of one type or an error value of another type.
 
@@ -1156,7 +1156,7 @@ For example, the `SCVal` in XDR when error, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_VEC`
+#### `SC_SPEC_TYPE_VEC`
 
 A vector type that represents a collection of elements of the same type.
 
@@ -1189,7 +1189,7 @@ expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_MAP`
+#### `SC_SPEC_TYPE_MAP`
 
 A map type that represents a collection of key-value pairs where all keys have the same type and all values have the same type.
 
@@ -1226,7 +1226,7 @@ For example, the `SCVal` in XDR when `keyType` `SC_SPEC_TYPE_SYMBOL` and
 }
 ```
 
-##### `SC_SPEC_TYPE_TUPLE`
+#### `SC_SPEC_TYPE_TUPLE`
 
 A tuple type that represents a fixed-size collection of elements of potentially different types.
 
@@ -1255,7 +1255,7 @@ For example, the `SCVal` in XDR when `valueTypes` `SC_SPEC_TYPE_SYMBOL` and
 }
 ```
 
-##### `SC_SPEC_TYPE_BYTES_N`
+#### `SC_SPEC_TYPE_BYTES_N`
 
 A fixed-size array of bytes.
 
@@ -1276,7 +1276,7 @@ For example, the `SCVal` in XDR when `n` is `32`, expressed in XDR-JSON:
 }
 ```
 
-##### `SC_SPEC_TYPE_UDT`
+#### `SC_SPEC_TYPE_UDT`
 
 A user-defined type. This is a reference to a type that is defined elsewhere in the contract spec.
 
