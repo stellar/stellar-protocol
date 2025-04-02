@@ -520,15 +520,26 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
 
 ```json
 {
-  "udt_struct_v0": {
-    "doc": "",
+  "udt_union_v0": {
+    "doc": "My union description.",
     "lib": "",
-    "name": "IncrementContractType",
-    "fields": [
+    "name": "MyUnion",
+    "cases": [
       {
-        "doc": "",
-        "name": "counter",
-        "type_": "u32"
+        "void_v0": {
+          "doc": "No data variant.",
+          "name": "NoData"
+        }
+      },
+      {
+        "tuple_v0": {
+          "doc": "With data variant.",
+          "name": "WithData",
+          "type_": [
+            "u64",
+            "string"
+          ]
+        }
       }
     ]
   }
@@ -540,10 +551,40 @@ A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`.
 If the value is `NoData`, the vec will have one element:
 1. A `SCV_SYMBOL` with the value `NoData`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "vec": [
+    {
+      "symbol": "NoData"
+    }
+  ]
+}
+```
+
 If the value is `WithData`, the vec will have three elements:
 1. A `SCV_SYMBOL` with the value `WithData`.
 2. A `SCV_U64` with the first tuple value.
 3. A `SCV_STRING` with the second tuple value.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "vec": [
+    {
+      "symbol": "WithData"
+    },
+    {
+      "u64": 1
+    },
+    {
+      "string": "hello"
+    }
+  ]
+}
+```
 
 ##### `SC_SPEC_ENTRY_UDT_ENUM_V0`
 
@@ -628,6 +669,14 @@ A contract expecting this type, expects the `SCVal` to be a `SCV_U32`.
 1. If the value is `Red`, the value will be `1`.
 2. If the value is `Green`, the value will be `2`.
 3. If the value is `Blue`, the value will be `3`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "u32": 1
+}
+```
 
 ##### `SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`
 
@@ -716,6 +765,16 @@ type `SCV_ERROR` with the `SCError` having type `SCE_CONTRACT` and:
 1. If the value is `InvalidInput`, the `contractCode` will be `1`.
 2. If the value is `InsufficientFunds`, the `contractCode` will be `2`.
 3. If the value is `Unauthorized`, the `contractCode` will be `3`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "error": {
+    "contract": 1
+  }
+}
+```
 
 #### XDR Spec Types
 
