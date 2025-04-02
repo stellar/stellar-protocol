@@ -1289,7 +1289,11 @@ struct SCSpecTypeUDT
 
 A contract expecting this type, expects the `SCVal` to be the type as specified
 by the user-defined type with the same name as the `name` field. See the
-user-defined type sections for how they are structured.
+user-defined type sections for how they are structured:
+- [`SC_SPEC_ENTRY_UDT_STRUCT_V0`](#sc_spec_entry_udt_struct_v0)
+- [`SC_SPEC_ENTRY_UDT_UNION_V0`](#sc_spec_entry_udt_union_v0)
+- [`SC_SPEC_ENTRY_UDT_ENUM_V0`](#sc_spec_entry_udt_enum_v0)
+- [`SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`](#sc_spec_entry_udt_error_enum_v0)
 
 ## Example Usage
 
