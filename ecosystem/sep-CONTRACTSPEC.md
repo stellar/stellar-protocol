@@ -22,43 +22,36 @@ None.
 
 ## Motivation
 
-It is necessary for tooling, SDKs, and off-chain systems to be able to discover
-the functions exported by a contract. Tooling and SDKs must be able to generate
-client code for calling contracts. Off-chain systems must be able to present a
+It is necessary for tooling, SDKs, and off-chain systems to be able to discover the functions exported by a contract.
+Tooling and SDKs must be able to generate client code for calling contracts. Off-chain systems must be able to present a
 human friendly interface describing a called contract interface.
 
-All Wasm files contain a list of exported functions, but the contents of that
-list is primitive. The list includes their names, parameters, return values,
-but only the primitive types (e.g. i64, i32, u64, u32) of those values, and
-nothing about the Soroban host types (e.g. String, Symbol, Map, Vec, I128,
-U256, etc) or user-defined types that the functions accept.
+All Wasm files contain a list of exported functions, but the contents of that list is primitive. The list includes their
+names, parameters, return values, but only the primitive types (e.g. i64, i32, u64, u32) of those values, and nothing
+about the Soroban host types (e.g. String, Symbol, Map, Vec, I128, U256, etc) or user-defined types that the functions
+accept.
 
-A richer description of the interface is needed to fully understand the
-interface, and to be able to recreate a contract interface exactly as it was
-originally coded.
+A richer description of the interface is needed to fully understand the interface, and to be able to recreate a contract
+interface exactly as it was originally coded.
 
 ## Abstract
 
-This SEP defines a format for communicating about a contract's interface, as
-well as a common location to store the contract interface inside the Wasm
-files.
+This SEP defines a format for communicating about a contract's interface, as well as a common location to store the
+contract interface inside the Wasm files.
 
 ## Specification
 
 ### Wasm Custom Section
 
-The contract interface is stored in one `contractspecv0` Wasm custom section of
-the contract Wasm file.
+The contract interface is stored in one `contractspecv0` Wasm custom section of the contract Wasm file.
 
 ### XDR Encoding
 
-Each entry of the contract interface is structured and encoded using the
-`SCSpecEntry` type.
+Each entry of the contract interface is structured and encoded using the `SCSpecEntry` type.
 
-When encoding entries and storing them in the custom section they should be
-binary XDR encoded, appended to one another with no frame, no header, no
-delimiter, no prefix, including no length prefix. They should be in effect a
-stream of `SCSpecEntry` XDR binary encoded values.
+When encoding entries and storing them in the custom section they should be binary XDR encoded, appended to one another
+with no frame, no header, no delimiter, no prefix, including no length prefix. They should be in effect a stream of
+`SCSpecEntry` XDR binary encoded values.
 
 Each `SCSpecEntry` describes a function, or a user-defined type.
 
@@ -303,18 +296,15 @@ Ref: https://github.com/stellar/stellar-xdr/blob/curr/Stellar-contract-spec.x
 
 Many of the XDR types that compromise the format of the contract interface have common fields.
 
-The `doc` field is a human readable description of the type, field, or
-function. It is intended to be rendered into generated client code, or tooling,
-such that users and developers can understand the purpose of the type, field,
-or function.
+The `doc` field is a human readable description of the type, field, or function. It is intended to be rendered into
+generated client code, or tooling, such that users and developers can understand the purpose of the type, field, or
+function.
 
-The `name` field is the name of the type, field, or function. It is intended to
-be used in generated client code, or tooling, as the identifier for the type,
-field, or function.
+The `name` field is the name of the type, field, or function. It is intended to be used in generated client code, or
+tooling, as the identifier for the type, field, or function.
 
-The `lib` field is the name of the library that the type was imported from. It
-is mostly only usedul for contract SDK implementations that support importing
-the original library the type was defined in.
+The `lib` field is the name of the library that the type was imported from. It is mostly only usedul for contract SDK
+implementations that support importing the original library the type was defined in.
 
 ### XDR Spec Entry Kinds
 
@@ -322,9 +312,8 @@ the original library the type was defined in.
 
 A function spec entry describes a contract function exported and callable.
 
-The function name must match a name in the contract Wasm function table, with
-the same number of parameters as `inputs`, and the same number of return values
-as `outputs`.
+The function name must match a name in the contract Wasm function table, with the same number of parameters as `inputs`,
+and the same number of return values as `outputs`.
 
 The `inputs` field is a list of the function's input parameters.
 
@@ -367,7 +356,8 @@ impl MyContract {
 }
 ```
 
-Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed
+as XDR-JSON:
 
 ```json
 {
@@ -395,9 +385,8 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
 
 #### `SC_SPEC_ENTRY_UDT_STRUCT_V0`
 
-A user-defined type struct spec entry describes a user-defined type that has
-the properties of a Rust `struct` and that is used as a function parameter, or
-as a type within some other type that is a function parameter.
+A user-defined type struct spec entry describes a user-defined type that has the properties of a Rust `struct` and that
+is used as a function parameter, or as a type within some other type that is a function parameter.
 
 The `fields` field is a list of named fields.
 
@@ -424,7 +413,8 @@ struct SCSpecUDTStructFieldV0
 };
 ```
 
-A contract expecting this type, expects a `SCVal` to be a `SCV_MAP`, with each field stored in a map entry where the key is an `SCVal` `SCV_SYMBOL` containing the field name and the value is an `SCVal` containing the field value.
+A contract expecting this type, expects a `SCVal` to be a `SCV_MAP`, with each field stored in a map entry where the key
+is an `SCVal` `SCV_SYMBOL` containing the field name and the value is an `SCVal` containing the field value.
 
 ##### Example
 
@@ -441,7 +431,8 @@ pub struct MyStruct {
 }
 ```
 
-Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed
+as XDR-JSON:
 
 ```json
 {
@@ -466,6 +457,7 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
 ```
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with two entries:
+
 1. A `SCMapEntry` with a key of `SCV_SYMBOL` `field1`, and value of `SCV_U64`.
 2. A `SCMapEntry` with a key of `SCV_SYMBOL` `field2`, and value of `SCV_STRING`.
 
@@ -496,9 +488,9 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
 #### `SC_SPEC_ENTRY_UDT_UNION_V0`
 
-A user-defined type union spec entry describes a user-defined type that has
-the properties of a Rust `enum` with data containing variants and that is used as a function parameter, or
-as a type within some other type that is a function parameter.
+A user-defined type union spec entry describes a user-defined type that has the properties of a Rust `enum` with data
+containing variants and that is used as a function parameter, or as a type within some other type that is a function
+parameter.
 
 The `cases` field is a list of union cases.
 
@@ -524,7 +516,8 @@ case SC_SPEC_UDT_UNION_CASE_TUPLE_V0:
 };
 ```
 
-A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`, with the first element an `SCV_SYMBOL` containing the name of the variant, and the remaining elements the tuple values if any.
+A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`, with the first element an `SCV_SYMBOL` containing
+the name of the variant, and the remaining elements the tuple values if any.
 
 ##### Example
 
@@ -541,7 +534,8 @@ pub enum MyUnion {
 }
 ```
 
-Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed
+as XDR-JSON:
 
 ```json
 {
@@ -560,10 +554,7 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
         "tuple_v0": {
           "doc": "With data variant.",
           "name": "WithData",
-          "type_": [
-            "u64",
-            "string"
-          ]
+          "type_": ["u64", "string"]
         }
       }
     ]
@@ -574,6 +565,7 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
 A contract expecting this type, expects the `SCVal` to be a `SCV_VEC`.
 
 If the value is `NoData`, the vec will have one element:
+
 1. A `SCV_SYMBOL` with the value `NoData`.
 
 For example, the `SCVal` in XDR, expressed in XDR-JSON:
@@ -589,6 +581,7 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 ```
 
 If the value is `WithData`, the vec will have three elements:
+
 1. A `SCV_SYMBOL` with the value `WithData`.
 2. A `SCV_U64` with the first tuple value.
 3. A `SCV_STRING` with the second tuple value.
@@ -613,9 +606,9 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
 #### `SC_SPEC_ENTRY_UDT_ENUM_V0`
 
-A user-defined type enum spec entry describes a user-defined type that has the properties of a Rust
-`enum` with C-like integer values and that is used as a function parameter, or as a type within some other
-type that is a function parameter.
+A user-defined type enum spec entry describes a user-defined type that has the properties of a Rust `enum` with C-like
+integer values and that is used as a function parameter, or as a type within some other type that is a function
+parameter.
 
 The `cases` field is a list of enum cases.
 
@@ -640,7 +633,8 @@ struct SCSpecUDTEnumCaseV0
 };
 ```
 
-A contract expecting this type, expects the `SCVal` to be a `SCV_U32` containing one of the values included in the enum's cases.
+A contract expecting this type, expects the `SCVal` to be a `SCV_U32` containing one of the values included in the
+enum's cases.
 
 ##### Example
 
@@ -661,7 +655,8 @@ pub enum Color {
 }
 ```
 
-Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed
+as XDR-JSON:
 
 ```json
 {
@@ -691,6 +686,7 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
 ```
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_U32`.
+
 1. If the value is `Red`, the value will be `1`.
 2. If the value is `Green`, the value will be `2`.
 3. If the value is `Blue`, the value will be `3`.
@@ -705,9 +701,9 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
 #### `SC_SPEC_ENTRY_UDT_ERROR_ENUM_V0`
 
-A user-defined type error enum spec entry describes a user-defined type that has the properties of a Rust
-`enum` with C-like integer values and is marked as being used for errors. It is used as a function 
-parameter, or as a type within some other type that is a function parameter.
+A user-defined type error enum spec entry describes a user-defined type that has the properties of a Rust `enum` with
+C-like integer values and is marked as being used for errors. It is used as a function parameter, or as a type within
+some other type that is a function parameter.
 
 The `cases` field is a list of error enum cases.
 
@@ -732,9 +728,8 @@ struct SCSpecUDTErrorEnumCaseV0
 };
 ```
 
-A contract emitting this value into diagnostic logs, will emit a `SCVal` of
-type `SCV_ERROR` with the `SCError` having type `SCE_CONTRACT` and the
-`contractCode` set to the value of the error enum case.
+A contract emitting this value into diagnostic logs, will emit a `SCVal` of type `SCV_ERROR` with the `SCError` having
+type `SCE_CONTRACT` and the `contractCode` set to the value of the error enum case.
 
 ##### Example
 
@@ -755,7 +750,8 @@ pub enum Error {
 }
 ```
 
-Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed as XDR-JSON:
+Which will be encoded to the following `SCSpecEntry` XDR when stored in the custom section. The `SCSpecEntry` expressed
+as XDR-JSON:
 
 ```json
 {
@@ -782,11 +778,11 @@ Which will be encoded to the following `SCSpecEntry` XDR when stored in the cust
     ]
   }
 }
-
 ```
 
-A contract emitting this value into diagnostic logs, will emit a `SCVal` of
-type `SCV_ERROR` with the `SCError` having type `SCE_CONTRACT` and:
+A contract emitting this value into diagnostic logs, will emit a `SCVal` of type `SCV_ERROR` with the `SCError` having
+type `SCE_CONTRACT` and:
+
 1. If the value is `InvalidInput`, the `contractCode` will be `1`.
 2. If the value is `InsufficientFunds`, the `contractCode` will be `2`.
 3. If the value is `Unauthorized`, the `contractCode` will be `3`.
@@ -803,7 +799,8 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
 ### XDR Spec Types
 
-This section describes all the types that can be used in function parameters, return values, and as fields in user-defined types.
+This section describes all the types that can be used in function parameters, return values, and as fields in
+user-defined types.
 
 #### `SC_SPEC_TYPE_VAL`
 
@@ -839,7 +836,8 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
 #### `SC_SPEC_TYPE_ERROR`
 
-A generic error type. This is typically used to indicate that a function can return an error without specifying the exact error type.
+A generic error type. This is typically used to indicate that a function can return an error without specifying the
+exact error type.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_ERROR`.
 
@@ -1055,9 +1053,8 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
 An address in the Stellar network.
 
-A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with
-the contained `SCAddress` being of variant `SC_ADDRESS_TYPE_ACCOUNT` or
-`SC_ADDRESS_TYPE_CONTRACT`.
+A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with the contained `SCAddress` being of
+variant `SC_ADDRESS_TYPE_ACCOUNT` or `SC_ADDRESS_TYPE_CONTRACT`.
 
 For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
@@ -1077,9 +1074,8 @@ For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
 A muxed or virtual address in the Stellar network.
 
-A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with
-the contained `SCAddress` being of variant `SC_ADDRESS_TYPE_ACCOUNT`,
-`SC_ADDRESS_TYPE_CONTRACT`, or `SC_ADDRESS_TYPE_MUXED_ACCOUNT`.
+A contract expecting this type, expects the `SCVal` to be a `SCV_ADDRESS` with the contained `SCAddress` being of
+variant `SC_ADDRESS_TYPE_ACCOUNT`, `SC_ADDRESS_TYPE_CONTRACT`, or `SC_ADDRESS_TYPE_MUXED_ACCOUNT`.
 
 For example, the `SCVal` in XDR, expressed in XDR-JSON:
 
@@ -1101,6 +1097,7 @@ struct SCSpecTypeOption
 ```
 
 A contract expecting this type, expects the `SCVal` to be either:
+
 - `SCV_VOID`, meaning the value is not set.
 - The `SCVal` type specified by the `valueType` field.
 
@@ -1110,8 +1107,7 @@ For example, the `SCVal` in XDR when not set, expressed in XDR-JSON:
 "void"
 ```
 
-For example, the `SCVal` in XDR when set with `valueType` `SC_SPEC_TYPE_U64`,
-expressed in XDR-JSON:
+For example, the `SCVal` in XDR when set with `valueType` `SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
 
 ```json
 {
@@ -1132,13 +1128,13 @@ struct SCSpecTypeResult
 ```
 
 A contract expecting this type, expects the `SCVal` to be either:
-- The `SCVal` type specified by the `okType`. The value of `okType` must not be
-an `SCV_ERROR`.
-- The `SCVal` type specified by the `errorType`. The value of `errorType` must
-be of a type, either the `SC_SPEC_TYPE_ERROR` or `SC_SPEC_TYPE_UDT` referencing a user-defined error type. In both cases mapping to a `SCV_ERROR`.
 
-For example, the `SCVal` in XDR when ok with the `okType` `SC_SPEC_TYPE_U64`,
-expressed in XDR-JSON:
+- The `SCVal` type specified by the `okType`. The value of `okType` must not be an `SCV_ERROR`.
+- The `SCVal` type specified by the `errorType`. The value of `errorType` must be of a type, either the
+  `SC_SPEC_TYPE_ERROR` or `SC_SPEC_TYPE_UDT` referencing a user-defined error type. In both cases mapping to a
+  `SCV_ERROR`.
+
+For example, the `SCVal` in XDR when ok with the `okType` `SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
 
 ```json
 {
@@ -1173,8 +1169,7 @@ A contract expecting this type, expects the `SCVal` to be a `SCV_VEC` with all e
 
 Contracts might not validate that the elements are all the `elementType`.
 
-For example, the `SCVal` in XDR when `elementType` `SC_SPEC_TYPE_U64`,
-expressed in XDR-JSON:
+For example, the `SCVal` in XDR when `elementType` `SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
 
 ```json
 {
@@ -1191,7 +1186,8 @@ expressed in XDR-JSON:
 
 #### `SC_SPEC_TYPE_MAP`
 
-A map type that represents a collection of key-value pairs where all keys have the same type and all values have the same type.
+A map type that represents a collection of key-value pairs where all keys have the same type and all values have the
+same type.
 
 Note that either or both the key and value type may be `SC_SPEC_TYPE_VAL` to specify that they have no type constraint.
 
@@ -1203,13 +1199,11 @@ struct SCSpecTypeMap
 };
 ```
 
-A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with all
-keys of the `keyType` and all values of the `valueType`. Note that contracts
-might not validate that the map entry key and values are of the specified
-types.
+A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with all keys of the `keyType` and all values of
+the `valueType`. Note that contracts might not validate that the map entry key and values are of the specified types.
 
-For example, the `SCVal` in XDR when `keyType` `SC_SPEC_TYPE_SYMBOL` and
-`valueType` `SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
+For example, the `SCVal` in XDR when `keyType` `SC_SPEC_TYPE_SYMBOL` and `valueType` `SC_SPEC_TYPE_U64`, expressed in
+XDR-JSON:
 
 ```json
 {
@@ -1237,10 +1231,10 @@ struct SCSpecTypeTuple
 };
 ```
 
-A contract expecting this type, expects the `SCVal` to be a `SCV_VEC` with each entry having the type as specified by the type specified at the same index in the `valuesTypes` vararray.
+A contract expecting this type, expects the `SCVal` to be a `SCV_VEC` with each entry having the type as specified by
+the type specified at the same index in the `valuesTypes` vararray.
 
-For example, the `SCVal` in XDR when `valueTypes` `SC_SPEC_TYPE_SYMBOL` and
-`SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
+For example, the `SCVal` in XDR when `valueTypes` `SC_SPEC_TYPE_SYMBOL` and `SC_SPEC_TYPE_U64`, expressed in XDR-JSON:
 
 ```json
 {
@@ -1287,9 +1281,9 @@ struct SCSpecTypeUDT
 };
 ```
 
-A contract expecting this type, expects the `SCVal` to be the type as specified
-by the user-defined type with the same name as the `name` field. See the
-user-defined type sections for how they are structured:
+A contract expecting this type, expects the `SCVal` to be the type as specified by the user-defined type with the same
+name as the `name` field. See the user-defined type sections for how they are structured:
+
 - [`SC_SPEC_ENTRY_UDT_STRUCT_V0`](#sc_spec_entry_udt_struct_v0)
 - [`SC_SPEC_ENTRY_UDT_UNION_V0`](#sc_spec_entry_udt_union_v0)
 - [`SC_SPEC_ENTRY_UDT_ENUM_V0`](#sc_spec_entry_udt_enum_v0)
@@ -1333,11 +1327,16 @@ does not have access to the custom section and is not affected by it.
 
 ### XDR Encoding
 
-The XDR encoding is the format used to encode contract interface data. XDR (External Data Representation) is a standard data serialization format that ensures data compatibility across different computer architectures and systems. It is the same format used by the Stellar network for encoding transactions and other data structures.
+The XDR encoding is the format used to encode contract interface data. XDR (External Data Representation) is a standard
+data serialization format that ensures data compatibility across different computer architectures and systems. It is the
+same format used by the Stellar network for encoding transactions and other data structures.
 
-The contract interface uses XDR to encode the structure of functions and types, allowing tools, SDKs, and clients to reliably decode and understand a contract's interface regardless of the implementation details or the platform used to build the contract.
+The contract interface uses XDR to encode the structure of functions and types, allowing tools, SDKs, and clients to
+reliably decode and understand a contract's interface regardless of the implementation details or the platform used to
+build the contract.
 
-The XDR is extendable at multiple points and other types other than strings can be trivially added when required. The schema includes version tags in enum discriminants to support backward compatibility as the specification evolves.
+The XDR is extendable at multiple points and other types other than strings can be trivially added when required. The
+schema includes version tags in enum discriminants to support backward compatibility as the specification evolves.
 
 ### XDR Stream Encoding
 
