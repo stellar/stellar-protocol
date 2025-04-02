@@ -9,7 +9,7 @@ Status: Draft
 Created: 2025-03-26
 Updated: 2025-03-26
 Version: 0.1.0
-Discussion: https://github.com/stellar/stellar-protocol/discussions/TBD
+Discussion: https://github.com/stellar/stellar-protocol/discussions/1693
 ```
 
 ## Simple Summary
