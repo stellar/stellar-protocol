@@ -792,11 +792,25 @@ A boolean type that can be either `true` or `false`.
 
 A contract expecting this type, expects a `SCVal` to be a `SCV_BOOL`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "bool": true
+}
+```
+
 ##### `SC_SPEC_TYPE_VOID`
 
 A void type that represents the absence of a value. This is typically used for functions that do not return anything.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_VOID`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+"void"
+```
 
 ##### `SC_SPEC_TYPE_ERROR`
 
@@ -804,11 +818,29 @@ A generic error type. This is typically used to indicate that a function can ret
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_ERROR`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "error": {
+    "contract": 1
+  }
+}
+```
+
 ##### `SC_SPEC_TYPE_U32`
 
 An unsigned 32-bit integer.
 
 A contract expecting this type, expects the `SCVal` to be a `SCV_U32`.
+
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "u32": 1
+}
+```
 
 ##### `SC_SPEC_TYPE_I32`
 
