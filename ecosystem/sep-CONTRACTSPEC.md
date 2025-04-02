@@ -469,6 +469,31 @@ A contract expecting this type, expects the `SCVal` to be a `SCV_MAP` with two e
 1. A `SCMapEntry` with a key of `SCV_SYMBOL` `field1`, and value of `SCV_U64`.
 2. A `SCMapEntry` with a key of `SCV_SYMBOL` `field2`, and value of `SCV_STRING`.
 
+For example, the `SCVal` in XDR, expressed in XDR-JSON:
+
+```json
+{
+  "map": [
+    {
+      "key": {
+        "symbol": "field1"
+      },
+      "val": {
+        "u64": 1
+      }
+    },
+    {
+      "key": {
+        "symbol": "field2"
+      },
+      "val": {
+        "string": "hello"
+      }
+    }
+  ]
+}
+```
+
 ##### `SC_SPEC_ENTRY_UDT_UNION_V0`
 
 A user-defined type union spec entry describes a user-defined type that has
