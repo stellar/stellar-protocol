@@ -284,8 +284,8 @@ well, resulting in the need to type `"hello\\\\xc3world"`._
 
 #### Arrays (Fixed Length)
 
-The fixed-length array data type ([RFC 4506 Section 4.12]) are represented as JSON arrays with elements
-encoding acccording to their type.
+The fixed-length array data type ([RFC 4506 Section 4.12]) is represented as
+a JSON array with elements encoded acccording to their type.
 
 For example:
 
@@ -309,26 +309,38 @@ JSON:
 [1, 2, 3, 4]
 ```
 
-      4.13. Variable-Length Array ....................................11
-      4.14. Structure ................................................12
-      4.15. Discriminated Union ......................................12
-      4.16. Void .....................................................13
-      4.17. Constant .................................................13
-      4.18. Typedef ..................................................13
-      4.19. Optional-Data ............................................14
-
 #### Arrays (Variable Length)
 
-Variable-length arrays (XDR `array<>`) are also represented as JSON arrays:
+The variable-length array data type ([RFC 4506 Section 4.13]) is represented as
+a JSON array with elements encoded acccording to their type.
 
+For example:
+
+XDR Definition:
+```xdr
+int identifier<>;
+```
+
+XDR Binary:
+```
+00000000: 0000 0004 0000 0001 0000 0002 0000 0003  ................
+00000010: 0000 0004                                ....
+```
+
+XDR Binary Base64 Encoded:
+```
+AAAABAAAAAEAAAACAAAAAwAAAAQ=
+```
+
+JSON:
 ```json
-["value1", "value2", "value3"]
+[1, 2, 3, 4]
 ```
 
 #### Enum
 
-XDR enum data types ([RFC 4506 Section 4.3]) are represented in JSON with a
-string, derived from the name-identifier that corresponds to their value. The
+The XDR enum data type ([RFC 4506 Section 4.3]) is represented in JSON with a
+string, derived from the name-identifier that corresponds to its value. The
 string is the name-identifier modified to be snake_case, and truncated removing
 any shared prefix if there are multiple identifiers in the enum.
 
@@ -343,7 +355,7 @@ enum SCValType
     SCV_ERROR = 2,
     SCV_U32 = 3,
     SCV_I32 = 4,
-...
+//...
 }
 ```
 
@@ -364,41 +376,109 @@ JSON:
 
 #### Struct
 
-XDR structs are mapped to JSON objects, with each field name as a property:
+The XDR struct data type ([RFC 4506 Section 4.14]) is represented in JSON as an
+object with each struct component declaration mapping to a key-value pair in
+the object. The key is name of the component declaration, modified to be
+snake_case.
 
-```json
+For example:
+
+XDR Definition:
+```xdr
+struct TtlEntry
 {
-  "fieldName1": "value1",
-  "fieldName2": 42
+    Hash keyHash;
+    uint32 liveUntilLedgerSeq;
 }
 ```
 
-#### Union
+XDR Binary:
+```
+00000000: 0102 0304 0506 0708 0910 1112 1314 1516  ................
+00000010: 1718 1920 2122 2324 2526 2728 2930 3132  ... !"#$%&'()012
+00000020: 0000 0001                                ....
+```
 
-XDR discriminated unions are represented using the serde externally tagged model, where the tag is the variant name and
-the value is the variant's content:
+XDR Binary Base64 Encoded:
+```
+AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIAAAAB
+```
 
+JSON:
 ```json
 {
-  "accountId": "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI"
+  "key_hash": "0102030405060708091011121314151617181920212223242526272829303132",
+  "live_until_ledger_seq": 1
 }
 ```
 
-For a union with multiple variants, each variant would be represented as a separate object with a single key-value pair:
+      4.15. Discriminated Union ......................................12
+      4.16. Void .....................................................13
+      4.17. Constant .................................................13
+      4.18. Typedef ..................................................13
+      4.19. Optional-Data ............................................14
 
-```json
+#### Discriminated Union
+
+The XDR discriminated union data type ([RFC 4506 Section 4.15]) is represented
+in JSON as either a string, or an object. In both cases the discriminant name
+is modified to be snake_case, and truncated removing any shared prefix if there
+are multiple identifiers in the enum defined as the discriminant.
+
+The union represents as a JSON string containing the modified and truncated
+discriminant name, if the union arm is void.
+
+For example:
+
+XDR Definition:
+```xdr
+union Asset switch (AssetType type)
 {
-  "native": null
-}
+case ASSET_TYPE_NATIVE:
+    void;
+case ASSET_TYPE_CREDIT_ALPHANUM4:
+    AlphaNum4 alphaNum4;
+//...
+};
 ```
 
-Or for variants with content:
+XDR Binary:
+```
+00000000: 0000 0000                                ....
+```
 
+XDR Binary Base64 Encoded:
+```
+AAAAAA==
+```
+
+JSON:
+```json
+"native"
+```
+
+The union represents as a JSON object with a single key-value pair, if the
+union arm is a type other than void. The key is the modified and truncated
+discriminant name. The value is the value of the union arm.
+
+XDR Binary:
+```
+00000000: 0000 0001 4142 4344 0000 0000 0000 0000  ....ABCD........
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000            ............
+```
+
+XDR Binary Base64 Encoded:
+```
+AAAAAUFCQ0QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+```
+
+JSON:
 ```json
 {
-  "alphanum4": {
-    "assetCode": "USD",
-    "issuer": "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI"
+  "credit_alphanum4": {
+    "asset_code": "ABCD",
+    "issuer": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
   }
 }
 ```
@@ -644,3 +724,7 @@ therefore this specification does not include or define them. The Floating-Point
 [RFC 4506 Section 4.13]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.13
 [RFC 4506 Section 4.14]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.14
 [RFC 4506 Section 4.15]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.15
+[RFC 4506 Section 4.16]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.16
+[RFC 4506 Section 4.17]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.17
+[RFC 4506 Section 4.18]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.18
+[RFC 4506 Section 4.19]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.19
