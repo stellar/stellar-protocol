@@ -486,16 +486,48 @@ TODO: What about uses in structs? Or independent uses?
 
 #### Optional Data
 
-XDR optional types (`option<>`) are represented as either the JSON value or `null`:
+The XDR optional data type ([RFC 4506 Section 4.19]) is represented in JSON as
+null when not set, or a value depending on the type when set.
 
+For example:
+
+XDR Definition:
+```xdr
+int* identifier;
+```
+
+When not set:
+
+XDR Binary:
+```
+00000000: 0000 0000                                ....
+```
+
+XDR Binary Base64 Encoded:
+```
+AAAAAA==
+```
+
+JSON:
 ```json
 null
 ```
 
-or
+When set:
 
+XDR Binary:
+```
+00000000: 0000 0001 0000 0001                      ........
+```
+
+XDR Binary Base64 Encoded:
+```
+AAAAAQAAAAE=
+```
+
+JSON:
 ```json
-"some value"
+1
 ```
 
 ### Stellar-Specific Types
