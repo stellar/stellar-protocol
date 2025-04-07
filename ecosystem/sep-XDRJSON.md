@@ -412,12 +412,6 @@ JSON:
 }
 ```
 
-      4.15. Discriminated Union ......................................12
-      4.16. Void .....................................................13
-      4.17. Constant .................................................13
-      4.18. Typedef ..................................................13
-      4.19. Optional-Data ............................................14
-
 #### Discriminated Union
 
 The XDR discriminated union data type ([RFC 4506 Section 4.15]) is represented
@@ -485,9 +479,12 @@ JSON:
 
 #### Void
 
-XDR void is represented as `null` in JSON.
+The XDR void data type ([RFC 4506 Section 4.16]) is omitted in JSON. See
+[Discriminated Union](#discriminated-union) for more details.
 
-#### Optional Types (Nullable)
+TODO: What about uses in structs? Or independent uses?
+
+#### Optional Data
 
 XDR optional types (`option<>`) are represented as either the JSON value or `null`:
 
