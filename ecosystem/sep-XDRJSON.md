@@ -233,8 +233,82 @@ JSON:
 "61626364"
 ```
 
-      4.11. String ...................................................10
-      4.12. Fixed-Length Array .......................................11
+#### String
+
+The string data type ([RFC 4506 Section 4.11]) is interpreted as ASCII and when
+encoding the bytes into a string, all non-printable ASCII characters are
+escaped.
+
+Character escaping occurs following these rules:
+- Nul is escaped as `\0`.
+- Tab is escaped as `\t`.
+- Line feed is escaped as `\n`.
+- Carriage return is escaped as `\r`.
+- Backslash is escaped as `\\`.
+- Any character in the printable ASCII range `0x20..=0x7e` is not escaped.
+- Any other character is hex escaped in the form `\xNN`.
+
+When the encoded string is stored in JSON, backslashes are escaped a second
+time because JSON strings escape backslash.
+
+For example:
+
+XDR Definition:
+```xdr
+string identifier<>;
+```
+
+XDR Binary:
+```
+00000000: 0000 000b 6865 6c6c 6fc3 776f 726c 6400  ....hello.world.
+```
+
+XDR Binary Base64 Encoded:
+```
+AAAAC2hlbGxvw3dvcmxkAA==
+```
+
+String:
+```
+hello\xc3world
+```
+
+JSON:
+```json
+"hello\\xc3world"
+```
+
+_Note: When entering the above JSON on a terminal command line, depending on
+the shell in use, the backslash (`\`) may need to be additionally escaped as
+well, resulting in the need to type `"hello\\\\xc3world"`._
+
+#### Arrays (Fixed Length)
+
+The fixed-length array data type ([RFC 4506 Section 4.12]) are represented as JSON arrays with elements
+encoding acccording to their type.
+
+For example:
+
+XDR Definition:
+```xdr
+int identifier[4];
+```
+
+XDR Binary:
+```
+00000000: 0000 0001 0000 0002 0000 0003 0000 0004  ................
+```
+
+XDR Binary Base64 Encoded:
+```
+AAAAAQAAAAIAAAADAAAABA==
+```
+
+JSON:
+```json
+[1, 2, 3, 4]
+```
+
       4.13. Variable-Length Array ....................................11
       4.14. Structure ................................................12
       4.15. Discriminated Union ......................................12
@@ -242,53 +316,6 @@ JSON:
       4.17. Constant .................................................13
       4.18. Typedef ..................................................13
       4.19. Optional-Data ............................................14
-
-#### String
-
-The string data type ([RFC 4506 Section 4.11]) is represented as a hexadecimal
-string.
-
-For example:
-
-XDR Definition:
-```xdr
-opaque identifier<>;
-```
-
-XDR Binary:
-```
-00000000: 0000 0004 6162 6364                      ....abcd
-```
-
-XDR Binary Base64 Encoded:
-```
-AAAABGFiY2Q=
-```
-
-JSON:
-```json
-"61626364"
-```
-
-String escaping follows these rules:
-
-- Non-printable ASCII characters are specially escaped:
-  - `\0` for null byte
-  - `\t` for tab
-  - `\n` for newline
-  - `\r` for carriage return
-  - `\\` for backslash
-- Other non-ASCII characters and control characters are hex-escaped as `\xNN` (where NN is the hexadecimal value)
-- Printable ASCII characters (range 0x20-0x7E) remain unchanged
-- UTF-8 validation is performed during conversion
-
-#### Arrays (Fixed Length)
-
-Fixed-length arrays are represented as JSON arrays:
-
-```json
-[1, 2, 3, 4]
-```
 
 #### Arrays (Variable Length)
 
@@ -602,3 +629,18 @@ therefore this specification does not include or define them. The Floating-Point
 - `v0.1.0`: Initial draft. [PR to be created]
 
 [RFC 4506]: https://datatracker.ietf.org/doc/html/rfc4506
+[RFC 4506 Section 4.1]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.1
+[RFC 4506 Section 4.2]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.2
+[RFC 4506 Section 4.3]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.3
+[RFC 4506 Section 4.4]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.4
+[RFC 4506 Section 4.5]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.5
+[RFC 4506 Section 4.6]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.6
+[RFC 4506 Section 4.7]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.7
+[RFC 4506 Section 4.8]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.8
+[RFC 4506 Section 4.9]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.9
+[RFC 4506 Section 4.10]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.10
+[RFC 4506 Section 4.11]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.11
+[RFC 4506 Section 4.12]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.12
+[RFC 4506 Section 4.13]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.13
+[RFC 4506 Section 4.14]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.14
+[RFC 4506 Section 4.15]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.15
