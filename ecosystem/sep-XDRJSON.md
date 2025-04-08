@@ -532,73 +532,120 @@ JSON:
 
 ### Stellar-Specific Types
 
-#### AccountID
+#### Address Types
 
-Represented as a Stellar public key in string format:
+The following Stellar XDR types describing addresses, signers, and keys are
+represented in JSON as a string containing a [SEP-23 Strkey]:
 
-```json
-"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI"
-```
+- `ScAddress`
+- `AccountID`
+- `ContractID`
+- `MuxedAccount`
+- `MuxedAccountMed25519`
+- `MuxedEd25519Account`
+- `PoolID`
+- `ClaimableBalanceID`
+- `PublicKey`
+- `SignerKey`
+- `NodeID`
+- `SignerKeyEd25519SignedPayload`
 
-#### MuxedAccount
+For example:
 
-Represented as either a standard account or a multiplexed account:
-
-```json
+XDR Definition:
+```xdr
+union SCAddress switch (SCAddressType type)
 {
-  "type": "KEY_TYPE_ED25519",
-  "ed25519": "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI"
-}
+case SC_ADDRESS_TYPE_ACCOUNT:
+    AccountID accountId;
+case SC_ADDRESS_TYPE_CONTRACT:
+    ContractID contractId;
+case SC_ADDRESS_TYPE_MUXED_ACCOUNT:
+    MuxedEd25519Account muxedAccount;
+case SC_ADDRESS_TYPE_CLAIMABLE_BALANCE:
+    ClaimableBalanceID claimableBalanceId;
+case SC_ADDRESS_TYPE_LIQUIDITY_POOL:
+    PoolID liquidityPoolId;
+};
 ```
 
-or
+Constructed with:
+- `SC_ADDRESS_TYPE_MUXED_ACCOUNT`
+  - `id`: `1`
+  - `ed25519`: `0000000000000000000000000000000000000000000000000000000000000000`
 
+XDR Binary:
+```
+00000000: 0000 0002 0000 0000 0000 0001 0000 0000  ................
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000            ............
+```
+
+XDR Binary Base64 Encoded:
+```
+AAAAAgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+```
+
+JSON:
 ```json
+"MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNZG"
+```
+
+#### Asset Code Types
+
+The following Stellar XDR types should render as a JSON string encoded
+according to the below instructions.
+
+- `AssetCode`
+- `AssetCode4`
+- `AssetCode12`
+
+The `AssetCode` type should be represented according to its sub-components with no
+additional information encoded.
+
+The `AssetCode4` type should be truncated removing all trailing zero bytes.
+Bytes should be encoded according to the [String](#string) XDR data type.
+
+The `AssetCode12` type should be truncated removing all trailing zero bytes
+down to the 6th byte, ensuring that irrespective of how many zero bytes exist,
+the resulting string represents at least 5-bytes so as to distinguish it
+uniquely from any value encoded for `AssetCode4`. Bytes should be encoded
+according to the [String](#string) XDR data type.
+
+For example:
+
+XDR Definition:
+```xdr
+union SCAddress switch (SCAddressType type)
 {
-  "type": "KEY_TYPE_MUXED_ED25519",
-  "med25519": {
-    "id": "123",
-    "ed25519": "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI"
-  }
-}
+case SC_ADDRESS_TYPE_ACCOUNT:
+    AccountID accountId;
+case SC_ADDRESS_TYPE_CONTRACT:
+    ContractID contractId;
+case SC_ADDRESS_TYPE_MUXED_ACCOUNT:
+    MuxedEd25519Account muxedAccount;
+case SC_ADDRESS_TYPE_CLAIMABLE_BALANCE:
+    ClaimableBalanceID claimableBalanceId;
+case SC_ADDRESS_TYPE_LIQUIDITY_POOL:
+    PoolID liquidityPoolId;
+};
 ```
 
-#### Asset
-
-Represented based on asset type:
-
-```json
-{
-  "type": "ASSET_TYPE_NATIVE"
-}
+XDR Binary:
+```
+00000000: 0000 0002 0000 0000 0000 0001 0000 0000  ................
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000            ............
 ```
 
-or
-
-```json
-{
-  "type": "ASSET_TYPE_CREDIT_ALPHANUM4",
-  "alphaNum4": {
-    "assetCode": "USD",
-    "issuer": "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI"
-  }
-}
+XDR Binary Base64 Encoded:
+```
+AAAAAgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
-#### Hash
-
-Represented as a base64 or hex string (implementation may vary, but must be consistent):
-
+JSON:
 ```json
-"AAABBBCCC=="
-```
-
-#### Timepoint
-
-XDR timepoint (uint64) is represented as a string to avoid precision issues:
-
-```json
-"1639084800"
+"MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNZG"
 ```
 
 ### Examples
@@ -737,6 +784,7 @@ therefore this specification does not include or define them. The Floating-Point
 
 - `v0.1.0`: Initial draft. [PR to be created]
 
+[SEP-23 Strkey]: sep-0023.md
 [RFC 4506]: https://datatracker.ietf.org/doc/html/rfc4506
 [RFC 4506 Section 4.1]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.1
 [RFC 4506 Section 4.2]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.2
