@@ -2,7 +2,7 @@
 
 ```
 SEP: TBD
-Title: Upgradeable Contracts SEP
+Title: Upgradeable Contracts
 Author: OpenZeppelin, Boyan Barakov <@brozorec>, Özgün Özerk <@ozgunozerk>
 Track: Standard
 Status: Draft
