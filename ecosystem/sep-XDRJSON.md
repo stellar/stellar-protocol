@@ -537,6 +537,8 @@ JSON:
 The following Stellar XDR types describing addresses, signers, and keys are
 represented in JSON as a string containing a [SEP-23 Strkey]:
 
+TODO: Add XDR examples for each?
+
 - `ScAddress`
 - `AccountID`
 - `ContractID`
@@ -603,8 +605,12 @@ according to the below instructions.
 The `AssetCode` type should be represented according to its sub-components with no
 additional information encoded.
 
+TODO: XDR Example
+
 The `AssetCode4` type should be truncated removing all trailing zero bytes.
 Bytes should be encoded according to the [String](#string) XDR data type.
+
+TODO: XDR Example
 
 The `AssetCode12` type should be truncated removing all trailing zero bytes
 down to the 6th byte, ensuring that irrespective of how many zero bytes exist,
@@ -612,41 +618,8 @@ the resulting string represents at least 5-bytes so as to distinguish it
 uniquely from any value encoded for `AssetCode4`. Bytes should be encoded
 according to the [String](#string) XDR data type.
 
-For example:
+TODO: XDR Example
 
-XDR Definition:
-```xdr
-union SCAddress switch (SCAddressType type)
-{
-case SC_ADDRESS_TYPE_ACCOUNT:
-    AccountID accountId;
-case SC_ADDRESS_TYPE_CONTRACT:
-    ContractID contractId;
-case SC_ADDRESS_TYPE_MUXED_ACCOUNT:
-    MuxedEd25519Account muxedAccount;
-case SC_ADDRESS_TYPE_CLAIMABLE_BALANCE:
-    ClaimableBalanceID claimableBalanceId;
-case SC_ADDRESS_TYPE_LIQUIDITY_POOL:
-    PoolID liquidityPoolId;
-};
-```
-
-XDR Binary:
-```
-00000000: 0000 0002 0000 0000 0000 0001 0000 0000  ................
-00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
-00000020: 0000 0000 0000 0000 0000 0000            ............
-```
-
-XDR Binary Base64 Encoded:
-```
-AAAAAgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-```
-
-JSON:
-```json
-"MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNZG"
-```
 
 ### Examples
 
