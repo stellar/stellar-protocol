@@ -1,1 +1,5 @@
 github-pandoc.css
+
+# Temporarily ignore sep-0045.md because there are open PRs modifying it when
+# we are changing the formatting.
+ecosystem/sep-0045.md
