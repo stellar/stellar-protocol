@@ -77,6 +77,8 @@
 | [SEP-0046](sep-0046.md) | Contract Meta                                                  | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                               | Leigh McCulloch                               | Standard      | Draft                |
+| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
+| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
 
 ### Rejected and Deprecated Proposals
 
