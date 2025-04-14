@@ -14,8 +14,8 @@ Discussion: [Discussion link to be added]
 
 ## Simple Summary
 
-This proposal defines XDR-JSON, the standard mapping between Stellar's XDR
-(External Data Representation) structures and their JSON representation.
+This proposal defines XDR-JSON, a standard mapping between Stellar's XDR
+(External Data Representation) structures and a JSON representation.
 
 ## Dependencies
 
@@ -324,7 +324,7 @@ well, resulting in the need to type `"hello\\\\xc3world"`._
 #### Arrays (Fixed Length)
 
 The fixed-length array data type ([RFC 4506 Section 4.12]) is represented as a
-JSON array with elements encoded acccording to their type.
+JSON array with elements encoded according to their type.
 
 For example:
 
@@ -355,7 +355,7 @@ JSON:
 #### Arrays (Variable Length)
 
 The variable-length array data type ([RFC 4506 Section 4.13]) is represented as
-a JSON array with elements encoded acccording to their type.
+a JSON array with elements encoded according to their type.
 
 For example:
 
@@ -472,7 +472,9 @@ JSON:
 The XDR discriminated union data type ([RFC 4506 Section 4.15]) is represented
 in JSON as either a string, or an object. In both cases the discriminant name
 is modified to be snake_case, and truncated removing any shared prefix if there
-are multiple identifiers in the enum defined as the discriminant.
+are multiple identifiers in the enum defined as the discriminant. If the union
+cases are integers, then the discriminant name becomes the name of the
+discriminant suffixed by the integer.
 
 The union represents as a JSON string containing the modified and truncated
 discriminant name, if the union arm is void.
@@ -539,12 +541,46 @@ JSON:
 }
 ```
 
+When the union cases are integers, the union represents as a JSON string with a
+name matching the discriminant name suffixed with the integer.
+
+For example:
+
+XDR Definition:
+
+```xdr
+union SorobanTransactionMetaExt switch (int v)
+{
+case 0:
+    void;
+case 1:
+    SorobanTransactionMetaExtV1 v1;
+};
+
+```
+
+XDR Binary:
+
+```
+00000000: 0000 0000                                ....
+```
+
+XDR Binary Base64 Encoded:
+
+```
+AAAAAA==
+```
+
+JSON:
+
+```json
+"v0"
+```
+
 #### Void
 
 The XDR void data type ([RFC 4506 Section 4.16]) is omitted in JSON. See
-[Discriminated Union](#discriminated-union) for more details.
-
-TODO: What about uses in structs? Or independent uses?
+[Discriminated Union](#discriminated-union) for more details. TODO: What about
 
 #### Optional Data
 
@@ -606,20 +642,31 @@ JSON:
 The following Stellar XDR types describing addresses, signers, and keys are
 represented in JSON as a string containing a [SEP-23 Strkey]:
 
-TODO: Add XDR examples for each?
-
 - `ScAddress`
-- `AccountID`
-- `ContractID`
+  - `SC_ADDRESS_TYPE_ACCOUNT` - `G` strkey
+  - `SC_ADDRESS_TYPE_CONTRACT` - `C` strkey
+  - `SC_ADDRESS_TYPE_MUXED_ACCOUNT` - `M` strkey
+  - `SC_ADDRESS_TYPE_CLAIMABLE_BALANCE` - `B` strkey
+  - `SC_ADDRESS_TYPE_LIQUIDITY_POOL` - `L` strkey
+- `AccountID` - `G` strkey
+- `ContractID` - `C` strkey
 - `MuxedAccount`
-- `MuxedAccountMed25519`
-- `MuxedEd25519Account`
-- `PoolID`
-- `ClaimableBalanceID`
+  - `KEY_TYPE_ED25519` - `G` strkey
+  - ` KEY_TYPE_MUXED_ED2551`` - `M` strkey
+- `MuxedAccountMed25519` - `M` strkey
+- `MuxedEd25519Account` - `M` strkey
+- `PoolID` - `L` strkey
+- `ClaimableBalanceID` - `B` strkey
 - `PublicKey`
-- `SignerKey`
+  - `PUBLIC_KEY_TYPE_ED25519` - `G` strkey
 - `NodeID`
-- `SignerKeyEd25519SignedPayload`
+  - `PUBLIC_KEY_TYPE_ED25519` - `G` strkey
+- `SignerKey`
+  - `SIGNER_KEY_TYPE_ED25519` - `G` strkey
+  - `SIGNER_KEY_TYPE_PRE_AUTH_TX` - `T` strkey
+  - `SIGNER_KEY_TYPE_HASH_X` - `X` strkey
+  - `SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD` - `P` strkey
+- `SignerKeyEd25519SignedPayload` - `P` strkey
 
 For example:
 
@@ -644,9 +691,10 @@ case SC_ADDRESS_TYPE_LIQUIDITY_POOL:
 Constructed with:
 
 - `SC_ADDRESS_TYPE_MUXED_ACCOUNT`
-  - `id`: `1`
-  - `ed25519`:
-    `0000000000000000000000000000000000000000000000000000000000000000`
+  - `muxedAccount:`
+    - `id`: `1`
+    - `ed25519`:
+      `0000000000000000000000000000000000000000000000000000000000000000`
 
 XDR Binary:
 
@@ -677,71 +725,183 @@ according to the below instructions.
 - `AssetCode4`
 - `AssetCode12`
 
-The `AssetCode` type should be represented according to its sub-components with
-no additional information encoded.
-
-TODO: XDR Example
+The `AssetCode` type should be represented according `AssetCode4` and
+`AssetCode12`. `AssetCode4` is always 4 encoded characters or less.
+`AssetCode12` is always 5 encoded characters or more.
 
 The `AssetCode4` type should be truncated removing all trailing zero bytes.
-Bytes should be encoded according to the [String](#string) XDR data type.
+Bytes should then be encoded according to the [String](#string) XDR data type.
 
-TODO: XDR Example
+For example:
+
+XDR Definition:
+
+```xdr
+typedef opaque AssetCode4[4];
+```
+
+An `AssetCode4` filling three bytes:
+
+XDR Binary:
+
+```b
+00000000: 4142 4300                                ABC.
+```
+
+XDR Binary Base64 Encoded:
+
+```base64
+QUJDAA==
+```
+
+JSON:
+
+```json
+"ABC"
+```
 
 The `AssetCode12` type should be truncated removing all trailing zero bytes
-down to the 6th byte, ensuring that irrespective of how many zero bytes exist,
-the resulting string represents at least 5-bytes so as to distinguish it
-uniquely from any value encoded for `AssetCode4`. Bytes should be encoded
-according to the [String](#string) XDR data type.
+down to and including the 6th byte, ensuring that irrespective of how many zero
+bytes exist, the resulting encoded string represents at least 5-bytes so as to
+distinguish it uniquely from any value encoded for `AssetCode4`. Bytes should
+be encoded according to the [String](#string) XDR data type.
 
-TODO: XDR Example
+For example:
+
+XDR Definition:
+
+```xdr
+typedef opaque AssetCode12[12];
+```
+
+An `AssetCode12` filling five bytes:
+
+XDR Binary:
+
+```b
+00000000: 4142 4344 4500 0000 0000 0000            ABCDE.......
+```
+
+XDR Binary Base64 Encoded:
+
+```base64
+QUJDREUAAAAAAAAA
+```
+
+JSON:
+
+```json
+"ABCDE"
+```
+
+An `AssetCode12` filling three bytes:
+
+XDR Binary:
+
+```b
+00000000: 4142 4300 0000 0000 0000 0000            ABC.........
+```
+
+XDR Binary Base64 Encoded:
+
+```base64
+QUJDAAAAAAAAAAAA
+```
+
+JSON:
+
+```json
+"ABC\\0\\0"
+```
 
 ### Examples
 
-#### Transaction Envelope
+#### `TransactionEnvelope`
 
-A simplified transaction envelope representation using the externally tagged
-union model:
+XDR Binary:
+
+```b
+00000000: 0000 0002 0000 0000 e699 2664 c18d f5eb  ..........&d....
+00000010: 74cc a2e0 764d 8f0c 963a 97c3 6231 5584  t...vM...:..b1U.
+00000020: c6ca f0eb 47a6 2d00 002a 9a64 0000 1a6e  ....G.-..*.d...n
+00000030: 0000 0001 0000 0000 0000 0000 0000 0001  ................
+00000040: 0000 0000 0000 0018 0000 0001 0000 0001  ................
+00000050: 0000 0000 0000 0001 0000 0000 0000 0001  ................
+00000060: 0000 0000 0000 0000 0000 0001 0000 0006  ................
+00000070: 0000 0001 d792 8b72 c270 3ccf eaf7 eb9f  .......r.p<.....
+00000080: f4ef 4d50 4a55 a8b9 79fc 9b45 0ea2 c842  ..MPJU..y..E...B
+00000090: b4d1 ce61 0000 0014 0000 0001 0002 3d7d  ...a..........=}
+000000a0: 0000 0000 0000 00f8 0000 0000 002a 9a00  .............*..
+000000b0: 0000 0001 47a6 2d00 0000 0040 2b0e dc5b  ....G.-....@+..[
+000000c0: a942 3e0a c764 4665 7494 5855 b74c 3207  .B>..dFet.XU.L2.
+000000d0: b7f2 ae69 a433 a16b df9c 293d c2bc 58a7  ...i.3.k..)=..X.
+000000e0: 1778 a4e5 e014 3e6a 4135 e0c6 6da5 a79a  .x....>jA5..m...
+000000f0: f4b3 1d85 7a29 696d e924 0d04            ....z)im.$..
+```
+
+XDR Binary Base64 Encoded:
+
+```base64
+AAAAAgAAAADmmSZkwY3163TMouB2TY8MljqXw2IxVYTGyvDrR6YtAAAqmmQAABpuAAAAAQAAAAAAAAAAAAAAAQAAAAAAAAAYAAAAAQAAAAEAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAAAAAABAAAABgAAAAHXkotywnA8z+r365/0701QSlWouXn8m0UOoshCtNHOYQAAABQAAAABAAI9fQAAAAAAAAD4AAAAAAAqmgAAAAABR6YtAAAAAEArDtxbqUI+CsdkRmV0lFhVt0wyB7fyrmmkM6Fr35wpPcK8WKcXeKTl4BQ+akE14MZtpaea9LMdhXopaW3pJA0E
+```
+
+JSON:
 
 ```json
 {
-  "v1": {
+  "tx": {
     "tx": {
-      "sourceAccount": {
-        "ed25519": "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI"
-      },
-      "fee": 100,
-      "seqNum": "103420918407103888",
-      "timeBounds": {
-        "minTime": "0",
-        "maxTime": "1640995199"
-      },
-      "memo": {
-        "text": "Hello, Stellar!"
-      },
+      "source_account": "GDTJSJTEYGG7L23UZSROA5SNR4GJMOUXYNRDCVMEY3FPB22HUYWQBZIA",
+      "fee": 2792036,
+      "seq_num": 29059748724737,
+      "cond": "none",
+      "memo": "none",
       "operations": [
         {
-          "sourceAccount": null,
+          "source_account": null,
           "body": {
-            "payment": {
-              "destination": {
-                "ed25519": "GDWZCOEQRODFCH3IETLYXXHYPJ4HZYJNNWTQNKH5JFQI3OHBQRC7AGE5"
+            "invoke_host_function": {
+              "host_function": {
+                "create_contract": {
+                  "contract_id_preimage": {
+                    "asset": "native"
+                  },
+                  "executable": "stellar_asset"
+                }
               },
-              "asset": {
-                "native": null
-              },
-              "amount": "1000000000"
+              "auth": []
             }
           }
         }
       ],
       "ext": {
-        "v": 0
+        "v1": {
+          "ext": "v0",
+          "resources": {
+            "footprint": {
+              "read_only": [],
+              "read_write": [
+                {
+                  "contract_data": {
+                    "contract": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+                    "key": "ledger_key_contract_instance",
+                    "durability": "persistent"
+                  }
+                }
+              ]
+            },
+            "instructions": 146813,
+            "read_bytes": 0,
+            "write_bytes": 248
+          },
+          "resource_fee": 2791936
+        }
       }
     },
     "signatures": [
       {
-        "hint": "00010203",
-        "signature": "0011223344556677889900"
+        "hint": "47a62d00",
+        "signature": "2b0edc5ba9423e0ac764466574945855b74c3207b7f2ae69a433a16bdf9c293dc2bc58a71778a4e5e0143e6a4135e0c66da5a79af4b31d857a29696de9240d04"
       }
     ]
   }
@@ -752,30 +912,15 @@ union model:
 
 ### Naming Conventions
 
-#### Type Names
-
-XDR type names are preserved in their original form from the XDR definitions:
-
-- Stellar XDR types follow PascalCase naming convention (e.g., `AccountId`,
-  `TransactionEnvelope`)
-- Generated JSON object keys for these types match the original case
-
-#### Field Names
+#### Snake Case
 
 Field naming follows consistent conventions:
 
-- Field names use camelCase format (e.g., `sourceAccount`, `assetCode`)
-- The first letter is lowercase
-- Acronyms within field names are treated as regular words with only their
-  first letter capitalized (e.g., `accountId` not `accountID`)
-- Special names like `ed25519` retain their lowercase format as exceptions
+- Field names use snake_case format (e.g., `source_account`, `asset_code`)
+- Acronyms are treated as regular words with only their first letter
+  capitalized (e.g., `accountId` not `accountID`)
 
-#### Enum Values
-
-Enum values are represented as uppercase strings with underscores, matching
-their XDR definitions:
-
-- Example: `KEY_TYPE_ED25519`, `ASSET_TYPE_NATIVE`
+#### Lower Case
 
 ### String Representation for 64-bit Integers
 
@@ -806,7 +951,8 @@ languages.
 ### Null for Optional Values
 
 Using `null` for absent optional values aligns with common JSON practices and
-is more explicit than omitting the field entirely.
+results in a stable encoded representation where all fields are present even
+when optional.
 
 ### Ommission of Floating-Point Types
 
