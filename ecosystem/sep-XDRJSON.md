@@ -14,8 +14,8 @@ Discussion: [Discussion link to be added]
 
 ## Simple Summary
 
-This proposal defines XDR-JSON, the standard mapping between Stellar's XDR
-(External Data Representation) structures and their JSON representation.
+This proposal defines XDR-JSON, the standard mapping between Stellar's XDR (External Data Representation) structures and
+their JSON representation.
 
 ## Dependencies
 
@@ -23,20 +23,16 @@ None.
 
 ## Motivation
 
-Stellar's protocol data is defined in XDR, a compact binary format that is not
-human-readable. In most APIs when the XDR must be shared as text it is base64
-encoded, which is also not human-readable or easily mutated. Developer tooling
-needs to represent this data in a more accessible format either so it can be
-read or modified.
+Stellar's protocol data is defined in XDR, a compact binary format that is not human-readable. In most APIs when the XDR
+must be shared as text it is base64 encoded, which is also not human-readable or easily mutated. Developer tooling needs
+to represent this data in a more accessible format either so it can be read or modified.
 
 ## Abstract
 
-This proposal defines how a subset of XDR data type defined in [RFC 4506] is
-mapped to a JSON representation. It covers primitive types (integers,
-booleans), complex types (structs, unions, enums), and special Stellar-specific
-types (AccountID, Asset, etc.). The specification ensures that XDR data can be
-consistently serialized to JSON and deserialized back to XDR without data loss,
-while providing human readability.
+This proposal defines how a subset of XDR data type defined in [RFC 4506] is mapped to a JSON representation. It covers
+primitive types (integers, booleans), complex types (structs, unions, enums), and special Stellar-specific types
+(AccountID, Asset, etc.). The specification ensures that XDR data can be consistently serialized to JSON and
+deserialized back to XDR without data loss, while providing human readability.
 
 ## Specification
 
@@ -49,21 +45,25 @@ The XDR 32-bit signed integer data type ([RFC 4506 Section 4.1]) maps to JSON nu
 For example:
 
 XDR Definition:
+
 ```xdr
 int identifier;
 ```
 
 XDR Binary:
+
 ```b
 00000000: 7fff ffff                                ....
 ```
 
 XDR Binary Base64 Encoded:
+
 ```base64
 f////w==
 ```
 
 JSON:
+
 ```json
 2147483647
 ```
@@ -75,21 +75,25 @@ The XDR 32-bit unsigned integer data type ([RFC 4506 Section 4.2]) maps to JSON 
 For example:
 
 XDR Definition:
+
 ```xdr
 unsigned int identifier;
 ```
 
 XDR Binary:
+
 ```b
 00000000: ffff ffff                                ....
 ```
 
 XDR Binary Base64 Encoded:
+
 ```base64
 /////w==
 ```
 
 JSON:
+
 ```json
 4294967295
 ```
@@ -101,29 +105,32 @@ The XDR 64-bit signed integer data type ([RFC 4506 Section 4.5]) maps to JSON nu
 For example:
 
 XDR Definition:
+
 ```xdr
 hyper identifier;
 ```
 
 XDR Binary:
+
 ```b
 00000000: 7fff ffff ffff ffff                      ........
 ```
 
 XDR Binary Base64 Encoded:
+
 ```base64
 f/////////8=
 ```
 
 JSON:
+
 ```json
 9223372036854775807
 ```
 
-_Note: JavaScript runtime implementations of JSON do not support numbers that
-require more than 53-bits. JavaScript applications should use a JSON decoder
-supporting 64-bit numbers in JSON numbrs. JSON decoders in other languages do
-not typically have this constraint and support numbers up to 64-bits._
+_Note: JavaScript runtime implementations of JSON do not support numbers that require more than 53-bits. JavaScript
+applications should use a JSON decoder supporting 64-bit numbers in JSON numbrs. JSON decoders in other languages do not
+typically have this constraint and support numbers up to 64-bits._
 
 #### Unsigned Hyper Integer (64-bit)
 
@@ -132,29 +139,32 @@ The XDR 64-bit signed integer data type ([RFC 4506 Section 4.5]) maps to JSON nu
 For example:
 
 XDR Definition:
+
 ```xdr
 unsigned hyper identifier;
 ```
 
 XDR Binary:
+
 ```b
 00000000: ffff ffff ffff ffff                      ........
 ```
 
 XDR Binary Base64 Encoded:
+
 ```base64
 //////////8=
 ```
 
 JSON:
+
 ```json
 18446744073709551615
 ```
 
-_Note: JavaScript runtime implementations of JSON do not support numbers that
-require more than 53-bits. JavaScript applications should use a JSON decoder
-supporting 64-bit numbers in JSON numbrs. JSON decoders in other languages do
-not typically have this constraint and support numbers up to 64-bits._
+_Note: JavaScript runtime implementations of JSON do not support numbers that require more than 53-bits. JavaScript
+applications should use a JSON decoder supporting 64-bit numbers in JSON numbrs. JSON decoders in other languages do not
+typically have this constraint and support numbers up to 64-bits._
 
 #### Boolean
 
@@ -163,21 +173,25 @@ The XDR boolean data type ([RFC 4506 Section 4.4]) maps to the JSON boolean.
 For example:
 
 XDR Definition:
+
 ```xdr
 bool identifier;
 ```
 
 XDR Binary:
+
 ```b
 00000000: 0000 0001                                ....
 ```
 
 XDR Binary Base64 Encoded:
+
 ```base64
 AAAAAQ==
 ```
 
 JSON:
+
 ```json
 true
 ```
@@ -187,59 +201,66 @@ true
 The XDR fixed-length opaque data type ([RFC 4506 Section 4.9]) are represented as a hexadecimal string.
 
 XDR Definition:
+
 ```xdr
 opaque identifier[4];
 ```
 
 XDR Binary:
+
 ```
 00000000: 6162 6364                                abcd
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 YWJjZA==
 ```
 
 JSON:
+
 ```json
 "61626364"
 ```
 
 #### Opaque Data (Variable Length)
 
-The XDR variable-length opaque data type ([RFC 4506 Section 4.10]) are
-represented as a hexadecimal string.
+The XDR variable-length opaque data type ([RFC 4506 Section 4.10]) are represented as a hexadecimal string.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 opaque identifier<>;
 ```
 
 XDR Binary:
+
 ```
 00000000: 0000 0004 6162 6364                      ....abcd
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAABGFiY2Q=
 ```
 
 JSON:
+
 ```json
 "61626364"
 ```
 
 #### String
 
-The string data type ([RFC 4506 Section 4.11]) is interpreted as ASCII and when
-encoding the bytes into a string, all non-printable ASCII characters are
-escaped.
+The string data type ([RFC 4506 Section 4.11]) is interpreted as ASCII and when encoding the bytes into a string, all
+non-printable ASCII characters are escaped.
 
 Character escaping occurs following these rules:
+
 - Nul is escaped as `\0`.
 - Tab is escaped as `\t`.
 - Line feed is escaped as `\n`.
@@ -248,105 +269,116 @@ Character escaping occurs following these rules:
 - Any character in the printable ASCII range `0x20..=0x7e` is not escaped.
 - Any other character is hex escaped in the form `\xNN`.
 
-When the encoded string is stored in JSON, backslashes are escaped a second
-time because JSON strings escape backslash.
+When the encoded string is stored in JSON, backslashes are escaped a second time because JSON strings escape backslash.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 string identifier<>;
 ```
 
 XDR Binary:
+
 ```
 00000000: 0000 000b 6865 6c6c 6fc3 776f 726c 6400  ....hello.world.
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAC2hlbGxvw3dvcmxkAA==
 ```
 
 String:
+
 ```
 hello\xc3world
 ```
 
 JSON:
+
 ```json
 "hello\\xc3world"
 ```
 
-_Note: When entering the above JSON on a terminal command line, depending on
-the shell in use, the backslash (`\`) may need to be additionally escaped as
-well, resulting in the need to type `"hello\\\\xc3world"`._
+_Note: When entering the above JSON on a terminal command line, depending on the shell in use, the backslash (`\`) may
+need to be additionally escaped as well, resulting in the need to type `"hello\\\\xc3world"`._
 
 #### Arrays (Fixed Length)
 
-The fixed-length array data type ([RFC 4506 Section 4.12]) is represented as
-a JSON array with elements encoded acccording to their type.
+The fixed-length array data type ([RFC 4506 Section 4.12]) is represented as a JSON array with elements encoded
+acccording to their type.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 int identifier[4];
 ```
 
 XDR Binary:
+
 ```
 00000000: 0000 0001 0000 0002 0000 0003 0000 0004  ................
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAAQAAAAIAAAADAAAABA==
 ```
 
 JSON:
+
 ```json
 [1, 2, 3, 4]
 ```
 
 #### Arrays (Variable Length)
 
-The variable-length array data type ([RFC 4506 Section 4.13]) is represented as
-a JSON array with elements encoded acccording to their type.
+The variable-length array data type ([RFC 4506 Section 4.13]) is represented as a JSON array with elements encoded
+acccording to their type.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 int identifier<>;
 ```
 
 XDR Binary:
+
 ```
 00000000: 0000 0004 0000 0001 0000 0002 0000 0003  ................
 00000010: 0000 0004                                ....
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAABAAAAAEAAAACAAAAAwAAAAQ=
 ```
 
 JSON:
+
 ```json
 [1, 2, 3, 4]
 ```
 
 #### Enum
 
-The XDR enum data type ([RFC 4506 Section 4.3]) is represented in JSON with a
-string, derived from the name-identifier that corresponds to its value. The
-string is the name-identifier modified to be snake_case, and truncated removing
-any shared prefix if there are multiple identifiers in the enum.
+The XDR enum data type ([RFC 4506 Section 4.3]) is represented in JSON with a string, derived from the name-identifier
+that corresponds to its value. The string is the name-identifier modified to be snake_case, and truncated removing any
+shared prefix if there are multiple identifiers in the enum.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 enum SCValType
 {
@@ -360,30 +392,33 @@ enum SCValType
 ```
 
 XDR Binary:
+
 ```
 00000000: 0000 0003                                ....
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAAw==
 ```
 
 JSON:
+
 ```json
 "u32"
 ```
 
 #### Struct
 
-The XDR struct data type ([RFC 4506 Section 4.14]) is represented in JSON as an
-object with each struct component declaration mapping to a key-value pair in
-the object. The key is name of the component declaration, modified to be
+The XDR struct data type ([RFC 4506 Section 4.14]) is represented in JSON as an object with each struct component
+declaration mapping to a key-value pair in the object. The key is name of the component declaration, modified to be
 snake_case.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 struct TtlEntry
 {
@@ -393,6 +428,7 @@ struct TtlEntry
 ```
 
 XDR Binary:
+
 ```
 00000000: 0102 0304 0506 0708 0910 1112 1314 1516  ................
 00000010: 1718 1920 2122 2324 2526 2728 2930 3132  ... !"#$%&'()012
@@ -400,11 +436,13 @@ XDR Binary:
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIAAAAB
 ```
 
 JSON:
+
 ```json
 {
   "key_hash": "0102030405060708091011121314151617181920212223242526272829303132",
@@ -414,17 +452,16 @@ JSON:
 
 #### Discriminated Union
 
-The XDR discriminated union data type ([RFC 4506 Section 4.15]) is represented
-in JSON as either a string, or an object. In both cases the discriminant name
-is modified to be snake_case, and truncated removing any shared prefix if there
-are multiple identifiers in the enum defined as the discriminant.
+The XDR discriminated union data type ([RFC 4506 Section 4.15]) is represented in JSON as either a string, or an object.
+In both cases the discriminant name is modified to be snake_case, and truncated removing any shared prefix if there are
+multiple identifiers in the enum defined as the discriminant.
 
-The union represents as a JSON string containing the modified and truncated
-discriminant name, if the union arm is void.
+The union represents as a JSON string containing the modified and truncated discriminant name, if the union arm is void.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 union Asset switch (AssetType type)
 {
@@ -437,25 +474,28 @@ case ASSET_TYPE_CREDIT_ALPHANUM4:
 ```
 
 XDR Binary:
+
 ```
 00000000: 0000 0000                                ....
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAAA==
 ```
 
 JSON:
+
 ```json
 "native"
 ```
 
-The union represents as a JSON object with a single key-value pair, if the
-union arm is a type other than void. The key is the modified and truncated
-discriminant name. The value is the value of the union arm.
+The union represents as a JSON object with a single key-value pair, if the union arm is a type other than void. The key
+is the modified and truncated discriminant name. The value is the value of the union arm.
 
 XDR Binary:
+
 ```
 00000000: 0000 0001 4142 4344 0000 0000 0000 0000  ....ABCD........
 00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
@@ -463,11 +503,13 @@ XDR Binary:
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAAUFCQ0QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
 JSON:
+
 ```json
 {
   "credit_alphanum4": {
@@ -479,19 +521,20 @@ JSON:
 
 #### Void
 
-The XDR void data type ([RFC 4506 Section 4.16]) is omitted in JSON. See
-[Discriminated Union](#discriminated-union) for more details.
+The XDR void data type ([RFC 4506 Section 4.16]) is omitted in JSON. See [Discriminated Union](#discriminated-union) for
+more details.
 
 TODO: What about uses in structs? Or independent uses?
 
 #### Optional Data
 
-The XDR optional data type ([RFC 4506 Section 4.19]) is represented in JSON as
-null when not set, or a value depending on the type when set.
+The XDR optional data type ([RFC 4506 Section 4.19]) is represented in JSON as null when not set, or a value depending
+on the type when set.
 
 For example:
 
 XDR Definition:
+
 ```xdr
 int* identifier;
 ```
@@ -499,16 +542,19 @@ int* identifier;
 When not set:
 
 XDR Binary:
+
 ```
 00000000: 0000 0000                                ....
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAAA==
 ```
 
 JSON:
+
 ```json
 null
 ```
@@ -516,16 +562,19 @@ null
 When set:
 
 XDR Binary:
+
 ```
 00000000: 0000 0001 0000 0001                      ........
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAAQAAAAE=
 ```
 
 JSON:
+
 ```json
 1
 ```
@@ -534,8 +583,8 @@ JSON:
 
 #### Address Types
 
-The following Stellar XDR types describing addresses, signers, and keys are
-represented in JSON as a string containing a [SEP-23 Strkey]:
+The following Stellar XDR types describing addresses, signers, and keys are represented in JSON as a string containing a
+[SEP-23 Strkey]:
 
 TODO: Add XDR examples for each?
 
@@ -555,6 +604,7 @@ TODO: Add XDR examples for each?
 For example:
 
 XDR Definition:
+
 ```xdr
 union SCAddress switch (SCAddressType type)
 {
@@ -572,11 +622,13 @@ case SC_ADDRESS_TYPE_LIQUIDITY_POOL:
 ```
 
 Constructed with:
+
 - `SC_ADDRESS_TYPE_MUXED_ACCOUNT`
   - `id`: `1`
   - `ed25519`: `0000000000000000000000000000000000000000000000000000000000000000`
 
 XDR Binary:
+
 ```
 00000000: 0000 0002 0000 0000 0000 0001 0000 0000  ................
 00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
@@ -584,42 +636,40 @@ XDR Binary:
 ```
 
 XDR Binary Base64 Encoded:
+
 ```
 AAAAAgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
 JSON:
+
 ```json
 "MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNZG"
 ```
 
 #### Asset Code Types
 
-The following Stellar XDR types should render as a JSON string encoded
-according to the below instructions.
+The following Stellar XDR types should render as a JSON string encoded according to the below instructions.
 
 - `AssetCode`
 - `AssetCode4`
 - `AssetCode12`
 
-The `AssetCode` type should be represented according to its sub-components with no
-additional information encoded.
+The `AssetCode` type should be represented according to its sub-components with no additional information encoded.
 
 TODO: XDR Example
 
-The `AssetCode4` type should be truncated removing all trailing zero bytes.
-Bytes should be encoded according to the [String](#string) XDR data type.
+The `AssetCode4` type should be truncated removing all trailing zero bytes. Bytes should be encoded according to the
+[String](#string) XDR data type.
 
 TODO: XDR Example
 
-The `AssetCode12` type should be truncated removing all trailing zero bytes
-down to the 6th byte, ensuring that irrespective of how many zero bytes exist,
-the resulting string represents at least 5-bytes so as to distinguish it
-uniquely from any value encoded for `AssetCode4`. Bytes should be encoded
-according to the [String](#string) XDR data type.
+The `AssetCode12` type should be truncated removing all trailing zero bytes down to the 6th byte, ensuring that
+irrespective of how many zero bytes exist, the resulting string represents at least 5-bytes so as to distinguish it
+uniquely from any value encoded for `AssetCode4`. Bytes should be encoded according to the [String](#string) XDR data
+type.
 
 TODO: XDR Example
-
 
 ### Examples
 
@@ -728,8 +778,9 @@ entirely.
 
 ### Ommission of Floating-Point Types
 
-Stellar XDR does not utilise the Floating-Point types defined in [RFC 4506],
-therefore this specification does not include or define them. The Floating-Point types are defined in the XDR specification as:
+Stellar XDR does not utilise the Floating-Point types defined in [RFC 4506], therefore this specification does not
+include or define them. The Floating-Point types are defined in the XDR specification as:
+
 - Floating-Point
 - Double-Precision Floating-Point
 - Quadruple-Precision Floating-Point
@@ -764,9 +815,6 @@ therefore this specification does not include or define them. The Floating-Point
 [RFC 4506 Section 4.3]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.3
 [RFC 4506 Section 4.4]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.4
 [RFC 4506 Section 4.5]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.5
-[RFC 4506 Section 4.6]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.6
-[RFC 4506 Section 4.7]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.7
-[RFC 4506 Section 4.8]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.8
 [RFC 4506 Section 4.9]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.9
 [RFC 4506 Section 4.10]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.10
 [RFC 4506 Section 4.11]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.11
@@ -775,6 +823,4 @@ therefore this specification does not include or define them. The Floating-Point
 [RFC 4506 Section 4.14]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.14
 [RFC 4506 Section 4.15]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.15
 [RFC 4506 Section 4.16]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.16
-[RFC 4506 Section 4.17]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.17
-[RFC 4506 Section 4.18]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.18
 [RFC 4506 Section 4.19]: https://datatracker.ietf.org/doc/html/rfc4506#section-4.19
