@@ -580,7 +580,7 @@ JSON:
 #### Void
 
 The XDR void data type ([RFC 4506 Section 4.16]) is omitted in JSON. See
-[Discriminated Union](#discriminated-union) for more details. TODO: What about
+[Discriminated Union](#discriminated-union) for more details.
 
 #### Optional Data
 
