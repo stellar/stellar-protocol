@@ -959,32 +959,11 @@ Floating-Point types are defined in the XDR specification as:
 
 ## Security Concerns
 
-1. **Precision Loss**: Applications must be careful when handling 64-bit
-   integers. Even though they are represented as strings in the JSON,
-   applications might convert them to numbers, potentially causing precision
-   loss. This is particularly important for values like sequence numbers and
-   timepoints.
-
-2. **Consistent Hex Encoding Implementation**: Systems must use consistent
-   hexadecimal encoding/decoding implementations to ensure binary data is
-   interpreted correctly. Hexadecimal strings should always use lowercase
-   letters (a-f) for consistency.
-
-3. **String Escaping**: Proper implementation of the string escaping rules via
-   the `escape_bytes` crate or equivalent is essential to prevent injection
-   attacks and ensure strings are correctly processed.
-
-4. **Validation**: When converting from JSON to XDR, implementations should
-   validate that the JSON structure adheres to the expected schema to prevent
-   injection attacks or malformed data.
-
-5. **Canonicalization**: This specification does not define a canonical form
-   for the JSON representation. Applications requiring cryptographic
-   verification of JSON data may need additional canonicalization steps.
+TODO
 
 ## Changelog
 
-- `v0.1.0`: Initial draft. [PR to be created]
+- `v0.1.0`: Initial draft.
 
 [SEP-23 Strkey]: sep-0023.md
 [RFC 4506]: https://datatracker.ietf.org/doc/html/rfc4506
