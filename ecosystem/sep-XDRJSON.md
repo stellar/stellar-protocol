@@ -31,12 +31,12 @@ read or modified.
 
 ## Abstract
 
-This proposal defines how a subset of XDR data type defined in [RFC 4506] is
-mapped to a JSON representation. It covers primitive types (integers,
+This proposal defines how a subset of the XDR data types defined in [RFC 4506]
+is mapped to a JSON representation. It covers primitive types (integers,
 booleans), complex types (structs, unions, enums), and special Stellar-specific
 types (AccountID, Asset, etc.). The specification ensures that XDR data can be
 consistently serialized to JSON and deserialized back to XDR without data loss,
-while providing human readability.
+while providing human readability, specifically developers.
 
 ## Specification
 
@@ -142,7 +142,7 @@ not typically have this constraint and support numbers up to 64-bits._
 
 #### Unsigned Hyper Integer (64-bit)
 
-The XDR 64-bit signed integer data type ([RFC 4506 Section 4.5]) maps to JSON
+The XDR 64-bit unsigned integer data type ([RFC 4506 Section 4.5]) maps to JSON
 numbers.
 
 For example:
@@ -219,13 +219,13 @@ opaque identifier[4];
 
 XDR Binary:
 
-```
+```b
 00000000: 6162 6364                                abcd
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 YWJjZA==
 ```
 
@@ -250,13 +250,13 @@ opaque identifier<>;
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0004 6162 6364                      ....abcd
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAABGFiY2Q=
 ```
 
@@ -295,19 +295,19 @@ string identifier<>;
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 000b 6865 6c6c 6fc3 776f 726c 6400  ....hello.world.
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAC2hlbGxvw3dvcmxkAA==
 ```
 
 String:
 
-```
+```text
 hello\xc3world
 ```
 
@@ -336,13 +336,13 @@ int identifier[4];
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0001 0000 0002 0000 0003 0000 0004  ................
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAQAAAAIAAAADAAAABA==
 ```
 
@@ -367,14 +367,14 @@ int identifier<>;
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0004 0000 0001 0000 0002 0000 0003  ................
 00000010: 0000 0004                                ....
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAABAAAAAEAAAACAAAAAwAAAAQ=
 ```
 
@@ -409,13 +409,13 @@ enum SCValType
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0003                                ....
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAw==
 ```
 
@@ -446,7 +446,7 @@ struct TtlEntry
 
 XDR Binary:
 
-```
+```b
 00000000: 0102 0304 0506 0708 0910 1112 1314 1516  ................
 00000010: 1718 1920 2122 2324 2526 2728 2930 3132  ... !"#$%&'()012
 00000020: 0000 0001                                ....
@@ -454,7 +454,7 @@ XDR Binary:
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwMTIAAAAB
 ```
 
@@ -496,13 +496,13 @@ case ASSET_TYPE_CREDIT_ALPHANUM4:
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0000                                ....
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAA==
 ```
 
@@ -518,7 +518,7 @@ discriminant name. The value is the value of the union arm.
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0001 4142 4344 0000 0000 0000 0000  ....ABCD........
 00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
 00000020: 0000 0000 0000 0000 0000 0000            ............
@@ -526,7 +526,7 @@ XDR Binary:
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAUFCQ0QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
@@ -561,13 +561,13 @@ case 1:
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0000                                ....
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAA==
 ```
 
@@ -599,13 +599,13 @@ When not set:
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0000                                ....
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAA==
 ```
 
@@ -619,13 +619,13 @@ When set:
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0001 0000 0001                      ........
 ```
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAQAAAAE=
 ```
 
@@ -698,7 +698,7 @@ Constructed with:
 
 XDR Binary:
 
-```
+```b
 00000000: 0000 0002 0000 0000 0000 0001 0000 0000  ................
 00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
 00000020: 0000 0000 0000 0000 0000 0000            ............
@@ -706,7 +706,7 @@ XDR Binary:
 
 XDR Binary Base64 Encoded:
 
-```
+```base64
 AAAAAgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 ```
 
@@ -947,7 +947,7 @@ Using `null` for absent optional values aligns with common JSON practices and
 results in a stable encoded representation where all fields are present even
 when optional.
 
-### Ommission of Floating-Point Types
+### Omission of Floating-Point Types
 
 Stellar XDR does not utilise the Floating-Point types defined in [RFC 4506],
 therefore this specification does not include or define them. The
