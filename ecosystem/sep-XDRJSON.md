@@ -910,26 +910,13 @@ JSON:
 
 ## Design Rationale
 
-### Naming Conventions
-
-#### Snake Case
-
-Field naming follows consistent conventions:
-
-- Field names use snake_case format (e.g., `source_account`, `asset_code`)
-- Acronyms are treated as regular words with only their first letter
-  capitalized (e.g., `accountId` not `accountID`)
-
-#### Lower Case
-
 ### Number Representation for 64-bit Integers
 
 JSON has no bit-size limit on numbers. However, JavaScript cannot precisely
-represent numbers greater than 53-bits due to its use of IEEE 754
-double-precision floating-point format. Using strings is common in applications
-that output 64-bit numbers in JSON to ensure no precision is lost. XDR-JSON
-does not use strings because non-native JSON decoders in JavaScript support
-64-bit numbers and most other languages do also.
+represent numbers greater than 53-bits due to its use of IEEE 754 that output
+64-bit numbers in JSON to ensure no precision is lost. XDR-JSON does not use
+maps 64-bit integers to JSON numbers because non-native JSON decoders in
+JavaScript support 64-bit numbers and most other languages do also.
 
 ### Hexadecimal Encoding for Binary Data
 
@@ -937,21 +924,22 @@ Hexadecimal encoding is chosen for binary data as it is compact, widely
 supported, and easy for a human to understand. Each byte is represented by
 exactly two hexadecimal characters, making it easy to parse and validate. Many
 of the fields in the Stellar XDR that contain binary data are things like
-hashes, which are common rendered as hex in applications.
+hashes, which are commonly rendered as hex in applications.
 
 ### String Representation for Enums
 
 Using string identifiers for enums rather than their numeric values improves
 readability and debugging. It also makes the JSON more self-documenting, as the
-enum values are explicit.
+enum values state what their value means.
 
 ### Externally Tagged Unions
 
-The externally tagged model for unions provides a clean and explicit
-representation that clearly indicates which variant is being used. This
-approach aligns well with Serde's serialization model and makes the JSON
-structure intuitive to work with in both statically and dynamically typed
-languages.
+Unions are externally tagged, meaning the discriminant that signals which arm
+of the union is active, is placed outside the value as a key in an outer
+object. The format is the more compact than alternatives for including the
+discriminant alongside the value. The approach also lends itself well to when
+no value exists in the void case and the object can be simplified into the
+discriminant string.
 
 ### Null for Optional Values
 
