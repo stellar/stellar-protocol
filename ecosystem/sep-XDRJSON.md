@@ -652,7 +652,7 @@ represented in JSON as a string containing a [SEP-23 Strkey]:
 - `ContractID` - `C` strkey
 - `MuxedAccount`
   - `KEY_TYPE_ED25519` - `G` strkey
-  - ` KEY_TYPE_MUXED_ED2551`` - `M` strkey
+  - `KEY_TYPE_MUXED_ED2551` - `M` strkey
 - `MuxedAccountMed25519` - `M` strkey
 - `MuxedEd25519Account` - `M` strkey
 - `PoolID` - `L` strkey
@@ -922,17 +922,22 @@ Field naming follows consistent conventions:
 
 #### Lower Case
 
-### String Representation for 64-bit Integers
+### Number Representation for 64-bit Integers
 
-JavaScript cannot precisely represent all 64-bit integers as numbers due to its
-use of IEEE 754 double-precision floating-point format. Using strings ensures
-that no precision is lost when transferring data between systems.
+JSON has no bit-size limit on numbers. However, JavaScript cannot precisely
+represent numbers greater than 53-bits due to its use of IEEE 754
+double-precision floating-point format. Using strings is common in applications
+that output 64-bit numbers in JSON to ensure no precision is lost. XDR-JSON
+does not use strings because non-native JSON decoders in JavaScript support
+64-bit numbers and most other languages do also.
 
 ### Hexadecimal Encoding for Binary Data
 
 Hexadecimal encoding is chosen for binary data as it is compact, widely
-supported, and unambiguous. Each byte is represented by exactly two hexadecimal
-characters, making it easy to parse and validate.
+supported, and easy for a human to understand. Each byte is represented by
+exactly two hexadecimal characters, making it easy to parse and validate. Many
+of the fields in the Stellar XDR that contain binary data are things like
+hashes, which are common rendered as hex in applications.
 
 ### String Representation for Enums
 
