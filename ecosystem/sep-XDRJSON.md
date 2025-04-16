@@ -8,7 +8,7 @@ Track: Standard
 Status: Draft
 Created: 2025-04-16
 Updated: 2025-04-16
-Version: 22.0.0
+Version: 0.1.0
 Discussion: [Discussion link to be added]
 ```
 
@@ -995,6 +995,26 @@ limit. However, JavaScript cannot precisely represent numbers greater than
 53-bits due to its use of IEEE 754 that output 64-bit numbers in JSON to ensure
 no precision is lost. JavaScript applications must use a non-native JSON
 decoder to accurately decode 64-bit numbers otherwise precision may be lost.
+
+## Breaking Changes
+
+Two types of breaking changes can occur in relation to XDR-JSON:
+
+- As a result of XDR structural changes.
+
+  These changes will not result in a change or version change to this document.
+  While the structure of the XDR will cause the schema of XDR-JSON to change,
+  the XDR-JSON specification itself will not. Applications none-the-less still
+  need to coordinate these breakages if the format is used for anything more
+  than a short-lived use case.
+
+- As a result of the XDR-JSON specification defined in this proposal.
+
+  These changes will result in a change to this document and an update to the
+  specifications version, because the specification itself is changing. These
+  will be rarer but will still be coordinated with new protocol releases where
+  practical to reduce the need for additional coordination points for the
+  Stellar community.
 
 ## Implementations
 
