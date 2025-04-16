@@ -87,7 +87,7 @@
 | [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Standard      | Draft                |
 | [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Standard      | Draft                |
 | [SEP-0046](sep-0046.md) | Contract Meta                                                  | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Standard      | Draft                |
+| [SEP-0047](sep-0047.md) | Contract Interface Discovery                                   | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                               | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
