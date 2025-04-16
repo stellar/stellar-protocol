@@ -6,9 +6,9 @@ Title: XDR-JSON
 Author: Leigh McCulloch
 Track: Standard
 Status: Draft
-Created: 2025-04-03
-Updated: 2025-04-03
-Version: 0.1.0
+Created: 2025-04-16
+Updated: 2025-04-16
+Version: 22.0.0
 Discussion: [Discussion link to be added]
 ```
 
@@ -1004,7 +1004,7 @@ decoder to accurately decode 64-bit numbers otherwise precision may be lost.
 
 ## Changelog
 
-- `v0.1.0`: Initial draft.
+- `v22.0.0`: Initial SEP matching existing Protocol v22 XDR-JSON.
 
 [SEP-23 Strkey]: sep-0023.md
 [RFC 4506]: https://datatracker.ietf.org/doc/html/rfc4506
