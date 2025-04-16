@@ -91,7 +91,7 @@
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                               | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
-| [SEP-????](sep-????.md) | XDR-JSON                                                       | Leigh McCulloch                               | Standard      | Active               |
+| [SEP-????](sep-????.md) | XDR-JSON                                                       | Leigh McCulloch                               | Standard      | Draft                |
 
 ### Rejected and Deprecated Proposals
 
