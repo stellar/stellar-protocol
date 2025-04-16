@@ -814,9 +814,28 @@ JSON:
 "ABC\\0\\0"
 ```
 
-### Examples
+### JSON Schema
 
-#### `TransactionEnvelope`
+All JSON objects should allow, but not require, the presence of a `$schema`
+property with a corresponding value being a URL of a JSON Schema document
+describing the type described by the rest of the JSON objects.
+
+For example, for the `Asset` type, the `$schema` property can be optionally
+provided:
+
+```json
+{
+  "$schema": "https://stellar.org/schema/xdr-json/main/Asset.json",
+  "credit_alphanum4": {
+    "asset_code": "ABCD",
+    "issuer": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
+  }
+}
+```
+
+## Examples
+
+### `TransactionEnvelope`
 
 XDR Binary:
 
@@ -915,8 +934,8 @@ JSON:
 JSON has no bit-size limit on numbers. However, JavaScript cannot precisely
 represent numbers greater than 53-bits due to its use of IEEE 754 that output
 64-bit numbers in JSON to ensure no precision is lost. XDR-JSON does not use
-maps 64-bit integers to JSON numbers because non-native JSON decoders in
-JavaScript support 64-bit numbers and most other languages do also.
+the string type for 64-bit integers to JSON numbers because non-native JSON
+decoders in JavaScript support 64-bit numbers and most other languages do also.
 
 ### Hexadecimal Encoding for Binary Data
 
@@ -936,7 +955,7 @@ enum values state what their value means.
 
 Unions are externally tagged, meaning the discriminant that signals which arm
 of the union is active, is placed outside the value as a key in an outer
-object. The format is the more compact than alternatives for including the
+object. The format is more compact than alternatives for including the
 discriminant alongside the value. The approach also lends itself well to when
 no value exists in the void case and the object can be simplified into the
 discriminant string.
@@ -959,7 +978,29 @@ Floating-Point types are defined in the XDR specification as:
 
 ## Security Concerns
 
-TODO
+### Changed with Protocols
+
+XDR-JSON will naturally change from one protocol to the next because the
+Stellar XDR can structurally change with the release of new protcols. While
+those structural changes will not be binary breaking to the Stellar Protocol,
+any use of XDR-JSON should be limited to short-lived developer facing user
+interfaces. Other uses requiring more stability can use embedding the `$schema`
+as a way to signal schema version and fallback to past versions of the
+implementation for passing them appropriately.
+
+### Precision Loss with 64-bit Numbers
+
+XDR-JSON uses the JSON number type for 64-bit integers. JSON has no bit-size
+limit. However, JavaScript cannot precisely represent numbers greater than
+53-bits due to its use of IEEE 754 that output 64-bit numbers in JSON to ensure
+no precision is lost. JavaScript applications must use a non-native JSON
+decoder to accurately decode 64-bit numbers otherwise precision may be lost.
+
+## Implementations
+
+- JSON Schema:
+  <https://stellar.org/schema/xdr-json/main/TransactionEnvelope.json>
+- Rust: <https://github.com/stellar/rs-stellar-xdr>
 
 ## Changelog
 
