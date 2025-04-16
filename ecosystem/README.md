@@ -65,7 +65,6 @@
 | [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Standard | Active                                                            |
 | [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Standard | Active                                                            |
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Standard | Active                                                            |
-| [SEP-????](sep-????.md) | XDR-JSON                                                               | Leigh McCulloch                                               | Standard | Active                                                            |
 
 ### Draft Proposals
 
@@ -92,6 +91,7 @@
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                               | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
+| [SEP-????](sep-????.md) | XDR-JSON                                                       | Leigh McCulloch                               | Standard      | Active               |
 
 ### Rejected and Deprecated Proposals
 
