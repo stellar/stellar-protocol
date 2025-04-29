@@ -71,7 +71,7 @@ where `wasm_hash` is the SHA256 hash of the contract WASM binary.
 Metadata entries stored in the contract WASM:
 
 - `source_repo=github:<user_name>/<repo_name>` - source repository link (e.g.
-  `source_repo=github.com:reflector-network/reflector-dao-contract`)
+  `source_repo=github:reflector-network/reflector-dao-contract`)
 - `home_domain=<domain_name>` - domain that hosts organization's `stellar.toml`
   (e.g. `home_domain=reflector.network`, no schema or path is allowed)
 
