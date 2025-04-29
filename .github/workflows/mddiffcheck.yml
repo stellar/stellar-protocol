@@ -4,6 +4,7 @@ on:
   push:
     branches:
     - master
+    - testmddiffcheck
   pull_request:
 
 jobs:
@@ -19,9 +20,11 @@ jobs:
     - run: |
           failed=0
           for f in core/*.md; do
+            echo Checking "$f":
             mddiffcheck -repo https://github.com/stellar/stellar-core "$f" || \
             mddiffcheck -repo https://github.com/stellar/stellar-xdr "$f" || {
               failed=1
             }
+            echo
           done
           exit $failed
