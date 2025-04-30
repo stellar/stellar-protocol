@@ -103,6 +103,7 @@
 | [CAP-0067](cap-0067.md) | Unified Asset Events | Siddharth Suresh | Awaiting Decision |
 | [CAP-0068](cap-0068.md) | Host function for getting  executable for `Address` | Dmytro Kozhevin | Awaiting Decision |
 | [CAP-0069](cap-0069.md) | String/Bytes conversion host functions | Dmytro Kozhevin | Awaiting Decision |
+| [CAP-0070](cap-0070.md) | Configurable SCP Timing Parameters | Garand Tyson | Awaiting Decision |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
