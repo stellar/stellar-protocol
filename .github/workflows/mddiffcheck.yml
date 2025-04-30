@@ -14,6 +14,10 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.16
-    - run: go install github.com/stellar/mddiffcheck@v1.1.0
-    - run: mddiffcheck -repo https://github.com/stellar/stellar-core core/*.md
+        go-version: ^1.24
+    - run: go install github.com/stellar/mddiffcheck@v1.2.0
+    - run: >
+        mddiffcheck
+        -repo
+        'https://github.com/stellar/stellar-core https://github.com/stellar/stellar-xdr'
+        core/*.md
