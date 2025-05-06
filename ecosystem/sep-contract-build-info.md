@@ -185,13 +185,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: rustup update
-      - run: rustup target add wasm32-unknown-unknown
+      - run: rustup target add wasm32v1-none
       - run: cargo version
 
       # 3️⃣ Set up env vars that will be used in the workflow.
       - name: Set up env vars
         run: |
-          echo "WASM_FILE=target/wasm32-unknown-unknown/release/hello.wasm" >> $GITHUB_ENV
+          echo "WASM_FILE=target/wasm32v1-none/release/hello.wasm" >> $GITHUB_ENV
 
           if [ -n "${{ github.event.inputs.release_name }}" ]; then
             echo "TAG_NAME=${{ github.event.inputs.release_name }}" >> $GITHUB_ENV
@@ -291,6 +291,7 @@ using a particular GitHub repository.
 
 ## Changelog
 
+- `v0.4.1` - Update sample workflow to use the `wasm32v1-none` target.
 - `v0.4.0` - Simplify proposal by removing steps that don’t provide additional
   safety because they are easily circumvented.
 - `v0.3.0` - Updated workflow to exclude the Docker image, clarified what
