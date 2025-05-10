@@ -120,8 +120,9 @@ Before contributing, consider the following:
   `Informational` SEP is much lower than one for a `Standard`, and allows you
   to promote the SEP independently to gain feedback and traction before
   creating a Standard out of it.
-- Gather feedback from discussion on the dev mailing list and other forums, and
-  utilize it to begin a draft proposal.
+- Gather feedback from discussion on the [GitHub discussion forum], [Stellar
+  Dev Discord], or [sellar-dev mailing list], and utilize it to begin a draft
+  proposal.
 - Follow the proposal process listed below. If you're having difficulty moving
   the proposal forward, talk to the buddy that's assigned the SEP; they'll
   often have guidance on how to move things forward, as well as feedback
@@ -132,9 +133,8 @@ Before contributing, consider the following:
 
 ### Pre-SEP (Initial Discussion)
 
-Introduce your idea on the
-[stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev)
-and other community forums dedicated to Stellar.
+Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord], or
+[sellar-dev mailing list] and other community forums dedicated to Stellar.
 
 - Make sure to gather feedback and alternative ideas — it's useful before
   putting together a formal draft!
@@ -174,9 +174,9 @@ From there, the following process will happen:
     merging in the PR.
   - They'll provide initial feedback, and help pull in any subject matter
     experts that will help in pushing the SEP towards a final disposition.
-- You should continue the discussion of the draft SEP on the mailing list to
-  gather additional feedback. We welcome any additional PRs that iterate on the
-  draft.
+- You should continue the discussion of the draft SEP on the [GitHub discussion
+  forum], [Stellar Dev Discord], or [sellar-dev mailing list] to gather
+  additional feedback. We welcome any additional PRs that iterate on the draft.
 - Keep the version of the SEP as a v0 version while in draft.
 - Increment the minor or patch versions on each change while in draft. See [SEP
   Versioning].
@@ -271,6 +271,10 @@ require version updates:
 - David Mazières <@stanford-scs> (SDF)
 - Jed McCaleb <@jedmccaleb> (SDF)
 
+[GitHub discussion forum]:
+  https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals
+[Stellar Dev Discord]: https://discord.gg/stellardev
+[stellar-dev mailing list]: https://groups.google.com/g/stellar-dev
 [ietf]: https://ietf.org/
 [semantic versioning]: https://semver.org/
 [SEP Versioning]: #sep-versioning
