@@ -267,7 +267,6 @@ require version updates:
 - Jake Urban <@JakeUrban> (SDF)
 - Alex Cordeiro <@accordeiro> (SDF)
 - Marcelo Salloum <@marcelosalloum> (SDF)
-- Orbit Lens <@orbitlens>
 - David Mazières <@stanford-scs> (SDF)
 - Jed McCaleb <@jedmccaleb> (SDF)
 
