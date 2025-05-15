@@ -120,50 +120,50 @@
 
 # Contribution Process
 
-The Stellar Protocol, like most software in the world, continues to evolve over time to meet the
+The Stellar protocol, like most software in the world, continues to evolve over time to meet the
 needs of our network's participants and to drive technology forward into new territory. Given the
 importance of the reliability and safety of the network, we ask that all of those who have ideas
 towards pushing Stellar's protocol development forward adhere to the following:
 
-- Consider your idea and how it serves the fundamental goals of the Stellar Network and aligns with
-  values of the Stellar Protocol (which are listed below). If you cannot show how your proposal
+- Consider your idea and how it serves the fundamental goals of the Stellar network and aligns with
+  values of the Stellar protocol (which are listed below). If you cannot show how your proposal
   aligns with those goals and values, it's unlikely to ever be implemented.
 - Gather feedback from discussion on the dev mailing list and other forums, and utilize it to begin
   a draft proposal, otherwise known as a CAP (Core Advancement Proposal).
 - Follow the proposal process listed below.
 
-## Stellar Network Goals
-- **The Stellar Network should be secure and reliable, and should bias towards safety, simplicity,
+## Stellar network Goals
+- **The Stellar network should be secure and reliable, and should bias towards safety, simplicity,
   reliability, and performance over new functionality.**
-- **The Stellar Network should run at scale and at low cost to all participants of the network.**
-  * In support of this, the Stellar Network should support off-chain transactions, e.g. Starlight.
+- **The Stellar network should run at scale and at low cost to all participants of the network.**
+  * In support of this, the Stellar network should support off-chain transactions, e.g. Starlight.
   * An explicit non-goal is limiting the hardware requirements of stellar-core to a personal
     computer.
-- **The Stellar Network should facilitate simplicity and interoperability with other protocols and
+- **The Stellar network should facilitate simplicity and interoperability with other protocols and
   networks.**
-  * In support of this, the Stellar Network should facilitate side-chain transactions to enable
+  * In support of this, the Stellar network should facilitate side-chain transactions to enable
     sub-networks.
-- **The Stellar Network should enable cross-border payments, i.e. payments via exchange of assets,
+- **The Stellar network should enable cross-border payments, i.e. payments via exchange of assets,
   throughout the globe, enabling users to make payments between assets in a manner that is fast,
   cheap, and highly usable.**
-    - In support of this, the Stellar Network should support an orderbook that values simplicity
+    - In support of this, the Stellar network should support an orderbook that values simplicity
       over functionality, and one that primarily serves to enable cross-border payments.
-    - In support of this, the Stellar Network should facilitate liquidity as a means to enabling
+    - In support of this, the Stellar network should facilitate liquidity as a means to enabling
     - cross-border payments.
-    - In support of this, the Stellar Network should enable asset issuance, but as a means of
+    - In support of this, the Stellar network should enable asset issuance, but as a means of
     - enabling cross-border payments.
-- **The Stellar Network should support decentralization wherever possible, but not at the expense
+- **The Stellar network should support decentralization wherever possible, but not at the expense
   of the majority of its values.**
   - There should be no privileged actors — we should support egalitarianism and everyone
     participating on the same playing field.
-- **The Stellar Network should enable users to easily exchange their non-Stellar based assets to
+- **The Stellar network should enable users to easily exchange their non-Stellar based assets to
   Stellar-based assets, and vice versa.**
-- **The Stellar Network should make it easy for developers of Stellar projects to create highly
+- **The Stellar network should make it easy for developers of Stellar projects to create highly
   usable products.**
 
 ## Stellar Protocol Development Values
-- **The Stellar Protocol should serve the goals of the Stellar Network.**
-- **The Stellar Protocol should bias towards simplicity.**
+- **The Stellar protocol should serve the goals of the Stellar network.**
+- **The Stellar protocol should bias towards simplicity.**
   - When possible, solutions should be considered outside of core protocol changes such as via
     [SEPs (Stellar Ecosystem Proposals)](../ecosystem/README.md) to minimize complexity in the
     Stellar protocol.
@@ -181,12 +181,12 @@ towards pushing Stellar's protocol development forward adhere to the following:
     - Unobservable tx semantics (eg. performance or bug fixes)
     - Horizon semantics
     - Public APIs, Client Libraries/SDKs.
-- **The Stellar Protocol should be clear, concise, and opinionated.**
+- **The Stellar protocol should be clear, concise, and opinionated.**
   - New operations and functionality should be opinionated, and straightforward to use.
   - There should ideally be only one obvious way to accomplish a given task.
-- **The Stellar Protocol should bias towards broad use cases, and bias against niche
+- **The Stellar protocol should bias towards broad use cases, and bias against niche
     functionality.**
-- **The Stellar Protocol should bias towards user safety.**
+- **The Stellar protocol should bias towards user safety.**
 
 ## CAP Process
 These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Otbml6WIQPo) on how
