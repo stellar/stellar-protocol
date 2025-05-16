@@ -74,6 +74,14 @@
 | [CAP-0056](cap-0056.md) | 21 | Soroban intra-transaction module caching | Graydon Hoare | Final |
 | [CAP-0058](cap-0058.md) | 22 | Constructors for Soroban Contracts | Dmytro Kozhevin | Final |
 | [CAP-0059](cap-0059.md) | 22 | Host functions for BLS12-381 | Jay Geng | Final |
+| [CAP-0062](cap-0062.md) | Soroban Live State Prioritization | Garand Tyson | FCP: Accepted |
+| [CAP-0063](cap-0063.md) | Parallelism-friendly Transaction Scheduling | Dmytro Kozhevin | FCP: Accepted |
+| [CAP-0065](cap-0065.md) | Reusable Module Cache | Graydon Hoare | FCP: Accepted |
+| [CAP-0066](cap-0066.md) | Soroban In-memory Read Resource | Garand Tyson | FCP: Accepted |
+| [CAP-0067](cap-0067.md) | Unified Asset Events | Siddharth Suresh | FCP: Accepted |
+| [CAP-0068](cap-0068.md) | Host function for getting executable for `Address` | Dmytro Kozhevin | FCP: Accepted |
+| [CAP-0069](cap-0069.md) | String/Bytes conversion host functions | Dmytro Kozhevin | FCP: Accepted |
+| [CAP-0070](cap-0070.md) | Configurable SCP Timing Parameters | Garand Tyson | FCP: Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -95,15 +103,6 @@
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Draft |
-| [CAP-0062](cap-0062.md) | Soroban Live State Prioritization | Garand Tyson | Awaiting Decision |
-| [CAP-0063](cap-0063.md) | Parallelism-friendly Transaction Scheduling | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Rejected |
-| [CAP-0065](cap-0065.md) | Reusable Module Cache | Graydon Hoare | Awaiting Decision |
-| [CAP-0066](cap-0066.md) | Soroban In-memory Read Resource | Garand Tyson | Awaiting Decision |
-| [CAP-0067](cap-0067.md) | Unified Asset Events | Siddharth Suresh | Awaiting Decision |
-| [CAP-0068](cap-0068.md) | Host function for getting  executable for `Address` | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0069](cap-0069.md) | String/Bytes conversion host functions | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0070](cap-0070.md) | Configurable SCP Timing Parameters | Garand Tyson | Awaiting Decision |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
