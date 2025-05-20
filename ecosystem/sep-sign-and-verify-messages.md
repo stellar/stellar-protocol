@@ -3,7 +3,7 @@
 ```
 SEP: <TBD>
 Title: Sign and Verify Messages
-Author: Jun Luo (@overcat), Pamphile Roy (@tupui), Tomer Weller(@tomerweller), Leigh McCulloch (@leighmcculloch), OrbitLens (@orbitlens), Enrique Arrieta (@earrietadev), Piyal Basu (@piyalbasu), MonsieurNicolas (@MonsieurNicolas)
+Author: Jun Luo (@overcat), Pamphile Roy (@tupui), OrbitLens (@orbitlens), Enrique Arrieta (@earrietadev), Piyal Basu (@piyalbasu)
 Track: Standard
 Status: Draft
 Created: 2025-02-01
