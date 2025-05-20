@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-SEP: <TBD>
+SEP: 0053
 Title: Sign and Verify Messages
 Author: Jun Luo (@overcat), Pamphile Roy (@tupui), OrbitLens (@orbitlens), Enrique Arrieta (@earrietadev), Piyal Basu (@piyalbasu)
 Track: Standard
