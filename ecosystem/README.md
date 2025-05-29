@@ -8,44 +8,44 @@ author is intending to be adopted by participants in the Stellar ecosystem.
 All SEPs have individuals fulfilling the following roles:
 
 - **Author** - The author is the indiviudal(s) who created the proposal. The
-author is responsible for writing the SEP, encouraging adoption of the SEP, and
-the general success of the SEP.
+  author is responsible for writing the SEP, encouraging adoption of the SEP,
+  and the general success of the SEP.
 - **Maintainer** - The maintainer is optional. If not present, the maintainer
-is the author. The maintainer is responsible for reviewing changes to the SEP.
-For SEPs that have ecosystem adoption and are not Final, SDF may step in and
-act as the maintainer if the maintainer ceases to respond or engage and the SEP
-is not Final.
+  is the author. The maintainer is responsible for reviewing changes to the
+  SEP. For SEPs that have ecosystem adoption and are not Final, SDF may step in
+  and act as the maintainer if the maintainer ceases to respond or engage and
+  the SEP is not Final.
 
 ## SEP Status Terms
 
 - **Draft** - A SEP that is currently open for consideration, iteration and
-actively being discussed. It is malleable and may change significantly.
+  actively being discussed. It is malleable and may change significantly.
 - **FCP** — A SEP that has entered a Final Comment Period (FCP). An author
-places their SEP in FCP when they wish to signal that they plan to cease making
-significant changes. After at least one week has passed, during which any new
-concerns should be addressed, the SEP's status should move to `Active` or
-`Final`, or back to `Draft`.
+  places their SEP in FCP when they wish to signal that they plan to cease
+  making significant changes. After at least one week has passed, during which
+  any new concerns should be addressed, the SEP's status should move to
+  `Active` or `Final`, or back to `Draft`.
 - **Active** - A SEP ready to be adopted, by may still receive changes. The
-author intends the SEP in its current form to be actively adopted. Changes can
-be made without changing the SEP number, although the author should endeavor to
-make changes backwards compatible so that participants who have already adopted
-the SEP can continue to participate. Where changes cannot be backwards
-compatible, the major version should be updated to clearly distinguish new
-incompatible versions.
+  author intends the SEP in its current form to be actively adopted. Changes
+  can be made without changing the SEP number, although the author should
+  endeavor to make changes backwards compatible so that participants who have
+  already adopted the SEP can continue to participate. Where changes cannot be
+  backwards compatible, the major version should be updated to clearly
+  distinguish new incompatible versions.
 - **Final** - A SEP ready to be adopted, and no longer receiving changes, other
-than minor errata. The author intends to make no further changes. Adopters can
-expect significant changes to be proposed in a new SEP.
+  than minor errata. The author intends to make no further changes. Adopters
+  can expect significant changes to be proposed in a new SEP.
 
 ### Additional Statuses
 
 - **Abandoned** - A SEP has been abandoned by the author. SDF may move a SEP
-into this state if the SEP has no activity, no visible adoption, and the author
-is not responsive.
+  into this state if the SEP has no activity, no visible adoption, and the
+  author is not responsive.
 - **Deprecated** - A SEP that the maintainer has indicated no longer intends to
-be adopted. There may be legacy usage of a deprecated SEP.
+  be adopted. There may be legacy usage of a deprecated SEP.
 - **Superseded** - A SEP that the maintainer has indicated no longer intends to
-be adopted, and has been superseded by a new SEP. Both SEPs should reference
-each other.
+  be adopted, and has been superseded by a new SEP. Both SEPs should reference
+  each other.
 
 ## List of Proposals
 
@@ -106,8 +106,8 @@ each other.
 | Number                  | Title                                        | Author                                                   | Track         | Status     |
 | ----------------------- | -------------------------------------------- | -------------------------------------------------------- | ------------- | ---------- |
 | [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                      | Standard      | Deprecated |
-| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Informational | Abandoned   |
-| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Standard      | Abandoned   |
+| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Informational | Abandoned  |
+| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Standard      | Abandoned  |
 
 # Contribution Process
 
@@ -131,10 +131,10 @@ Before contributing, consider the following:
   Dev Discord], or [sellar-dev mailing list], and utilize it to begin a draft
   proposal.
 - Follow the proposal process listed below. If you're having difficulty moving
-  the proposal forward, talk to folks in the ecosystem, or folks at SDF; they'll
-  often have guidance on how to move things forward, as well as feedback
-  regarding feasibility and how the proposal does or does not align with the
-  Stellar Network's goals.
+  the proposal forward, talk to folks in the ecosystem, or folks at SDF;
+  they'll often have guidance on how to move things forward, as well as
+  feedback regarding feasibility and how the proposal does or does not align
+  with the Stellar Network's goals.
 
 ## SEP Process
 
@@ -148,7 +148,7 @@ Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord], or
 - Consider contacting experts in a particular area for feedback while you're
   hashing out the details.
 - Iterate as much as possible in this stage — making changes is easier before
-participants start adopting.
+  participants start adopting.
 
 ### Creating a SEP Draft
 
@@ -177,7 +177,9 @@ Finally, submit a PR of your draft via your fork of this repository.
 
 From there, the following process will happen:
 
-- A maintainer of the stellar-protocol repository will review the PR to ensure the SEP follows the template and does not introduce any abuse to the repository.
+- A maintainer of the stellar-protocol repository will review the PR to ensure
+  the SEP follows the template and does not introduce any abuse to the
+  repository.
 - A maintainer of the stellar-protocol repository will assign a SEP number.
 - The PR will be merged.
 - You should continue the discussion of the draft SEP on the [GitHub discussion
@@ -190,9 +192,9 @@ From there, the following process will happen:
 ### Draft -> Final Comment Period (FCP)
 
 - When you're ready to make no further changes, you should submit a PR changing
-the status in the draft to `Final Comment Period`.
+  the status in the draft to `Final Comment Period`.
 - Keep the proposal in FCP for at least one week, then submit a PR changing the
-status to `Active`, `Final`, or back to `Draft`.
+  status to `Active`, `Final`, or back to `Draft`.
 
 ### FCP -> Active
 
@@ -209,7 +211,7 @@ status to `Active`, `Final`, or back to `Draft`.
 ### Active -> Final
 
 - If a proposal does not intend to see any further changes, it can be moved to
-`Final`.
+  `Final`.
 - No changes will be made to a finalized SEP aside from fixing errata.
 - Changes should increment the patch version number only.
 - Much consideration should be given before moving to Final status, it is OK
