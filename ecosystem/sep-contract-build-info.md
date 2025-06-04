@@ -200,9 +200,9 @@ jobs:
           fi
 
       # 4️⃣ Set up the Stellar CLI.
-      - uses: stellar/stellar-cli@v22.5.0
+      - uses: stellar/stellar-cli@v22.8.1
         with:
-          version: 22.5.0
+          version: 22.8.1
 
       # 5️⃣ Build the contract and mark the WASM with the current repository.
       - name: Build contract
