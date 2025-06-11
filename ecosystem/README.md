@@ -40,65 +40,65 @@ All SEPs have individuals fulfilling the following roles:
 
 ## List of Proposals
 
-| Number                  | Title                                                                  | Author                                                        | Track    | Status |
-| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | -------- | ------ |
-| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | SDF                                                           | Standard | Draft  |
-| [SEP-0002](sep-0002.md) | Federation Protocol                                                    | SDF                                                           | Standard | Final  |
-| [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | SDF                                                           | Standard | Final  |
-| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | SDF                                                           | Standard | Final  |
-| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | SDF                                                           | Standard | Draft  |
-| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing                             | Interstellar                                                  | Standard | Final  |
-| [SEP-0008](sep-0008.md) | Regulated Assets                                                       | Interstellar                                                  | Standard | Final  |
-| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | SDF                                                           | Standard | Draft  |
-| [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Standard | Draft  |
-| [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Standard | Draft  |
-| [SEP-0012](sep-0012.md) | KYC API                                                                | Interstellar                                                  | Standard | Draft  |
-| [SEP-0014](sep-0014.md) | Dynamic Asset Metadata                                                 | OrbitLens, Paul Tiplady                                       | Standard | Draft  |
-| [SEP-0018](sep-0018.md) | Data Entry Namespaces                                                  | Mister.Ticot                                                  | Standard | Draft  |
-| [SEP-0020](sep-0020.md) | Self-verification of validator nodes                                   | Johan Stén                                                    | Standard | Draft  |
-| [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Standard | Draft  |
-| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | SDF                                                           | Standard | Draft  |
-| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | SDF                                                           | Standard | Final  |
-| [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Standard | Draft  |
-| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Standard | Draft  |
-| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Standard | Draft  |
-| [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Standard | Draft  |
-| [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Standard | Draft  |
+| Number                  | Title                                                                  | Author                                                        | Status |
+| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | ------ |
+| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | SDF                                                           | Draft  |
+| [SEP-0002](sep-0002.md) | Federation Protocol                                                    | SDF                                                           | Final  |
+| [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | SDF                                                           | Final  |
+| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | SDF                                                           | Final  |
+| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | SDF                                                           | Draft  |
+| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing                             | Interstellar                                                  | Final  |
+| [SEP-0008](sep-0008.md) | Regulated Assets                                                       | Interstellar                                                  | Final  |
+| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | SDF                                                           | Draft  |
+| [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Draft  |
+| [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Draft  |
+| [SEP-0012](sep-0012.md) | KYC API                                                                | Interstellar                                                  | Draft  |
+| [SEP-0014](sep-0014.md) | Dynamic Asset Metadata                                                 | OrbitLens, Paul Tiplady                                       | Draft  |
+| [SEP-0018](sep-0018.md) | Data Entry Namespaces                                                  | Mister.Ticot                                                  | Draft  |
+| [SEP-0020](sep-0020.md) | Self-verification of validator nodes                                   | Johan Stén                                                    | Draft  |
+| [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Draft  |
+| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | SDF                                                           | Draft  |
+| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | SDF                                                           | Final  |
+| [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Draft  |
+| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Draft  |
+| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Draft  |
+| [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Draft  |
+| [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Draft  |
 
 ### Draft Proposals
 
-| Number                  | Title                                                          | Author                                        | Track         | Status               |
-| ----------------------- | -------------------------------------------------------------- | --------------------------------------------- | ------------- | -------------------- |
-| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                  | Standard      | Draft                |
-| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                  | Standard      | Draft                |
-| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                    | Standard      | Draft                |
-| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                     | Standard      | Draft                |
-| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                  | Informational | Draft                |
-| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                          | Informational | Draft                |
-| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                  | Standard      | Draft                |
-| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                | Standard      | Final Comment Period |
-| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard      | Draft                |
-| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                     | Informational | Draft                |
-| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                | Standard      | Draft                |
-| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                              | Informational | Draft                |
-| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Standard      | Draft                |
-| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Standard      | Draft                |
-| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Standard      | Draft                |
-| [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
-| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
-| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Standard      | Draft                |
-| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu  | Standard      | Draft                |
+| Number                  | Title                                                          | Author                                        | Status               |
+| ----------------------- | -------------------------------------------------------------- | --------------------------------------------- | -------------------- |
+| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                  | Draft                |
+| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                  | Draft                |
+| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                    | Draft                |
+| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                     | Draft                |
+| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                  | Draft                |
+| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                          | Draft                |
+| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                  | Draft                |
+| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                               | Draft                |
+| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                | Final Comment Period |
+| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Draft                |
+| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                     | Draft                |
+| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                | Draft                |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                              | Draft                |
+| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Draft                |
+| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Draft                |
+| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Draft                |
+| [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Draft                |
+| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
+| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
+| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Draft                |
+| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Draft                |
+| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu  | Draft                |
 
 ### Rejected and Deprecated Proposals
 
-| Number                  | Title                                        | Author                                                   | Track         | Status     |
-| ----------------------- | -------------------------------------------- | -------------------------------------------------------- | ------------- | ---------- |
-| [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                      | Standard      | Deprecated |
-| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Informational | Abandoned  |
-| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Standard      | Abandoned  |
+| Number                  | Title                                        | Author                                                   | Status     |
+| ----------------------- | -------------------------------------------- | -------------------------------------------------------- | ---------- |
+| [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                      | Deprecated |
+| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Abandoned  |
+| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Abandoned  |
 
 # Contribution Process
 
