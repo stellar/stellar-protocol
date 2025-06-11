@@ -12,9 +12,9 @@ All SEPs have individuals fulfilling the following roles:
   and the general success of the SEP.
 - **Maintainer** - The maintainer is optional. If not present, the maintainer
   is the author. The maintainer is responsible for reviewing changes to the
-  SEP. For SEPs that have ecosystem adoption and are not Final, SDF may step in
-  and act as the maintainer if the maintainer ceases to respond or engage and
-  the SEP is not Final.
+  SEP. For SEPs that have ecosystem adoption, SDF may identify or become a
+  maintainer of last resort. A maintainer of last resort steps in and acts as
+  the maintainer if the maintainer ceases to respond or engage.
 
 ## SEP Status Terms
 
