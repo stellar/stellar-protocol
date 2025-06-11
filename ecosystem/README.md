@@ -20,7 +20,7 @@ All SEPs have individuals fulfilling the following roles:
 
 - **Draft** - A SEP that is currently open for consideration, iteration and
   actively being discussed. It is malleable and may change.
-- **FCP** — A SEP that has entered a Final Comment Period (FCP). An author
+- **FCP** - A SEP that has entered a Final Comment Period (FCP). An author
   places their SEP in FCP when they wish to signal that they plan to cease
   making changes. After at least one week has passed, during which any new
   concerns should be addressed, the SEP's status should move to `Final`, or
