@@ -158,8 +158,12 @@ following:
 - Include GitHub handles or emails for all authors listed. GitHub handles are
   preferred.
 - Set the version to `v0.0.1`.
-
-Finally, submit a PR of your draft via your fork of this repository.
+- Submit a PR of your draft via your fork of this repository.
+- A maintainer of the stellar-protocol repository will review the PR to ensure
+  the SEP follows the template and does not introduce any abuse to the
+  repository.
+- A maintainer of the stellar-protocol repository will assign a SEP number.
+- The PR will be merged.
 
 #### Additional Tips
 
@@ -169,15 +173,10 @@ Finally, submit a PR of your draft via your fork of this repository.
   link to an image from SEP-X would be
   `../contents/sep_happycoder_b274f73c/image.png`.
 
-### Draft: Merging & Further Iteration
+### Draft: Further Iteration
 
 From there, the following process will happen:
 
-- A maintainer of the stellar-protocol repository will review the PR to ensure
-  the SEP follows the template and does not introduce any abuse to the
-  repository.
-- A maintainer of the stellar-protocol repository will assign a SEP number.
-- The PR will be merged.
 - You should continue the discussion of the draft SEP on the [GitHub discussion
   forum], [Stellar Dev Discord], or [sellar-dev mailing list] to gather
   additional feedback. We welcome any additional PRs that iterate on the draft.
@@ -194,7 +193,13 @@ From there, the following process will happen:
 
 ### FCP -> Active
 
-- The SEP is marked as `Active` and updated to version `v1.0.0`.
+- After at least one week in FCP, submit a PR changing the status to `Active`
+  and setting the version to `v1.0.0`.
+- A maintainer of the stellar-protocol repository will review the PR to ensure
+  the changes are limited to changing the status and updating the version.
+
+### Active: Further Iteration
+
 - Increment the major, minor, or patch versions on each change. See [SEP
   Versioning].
 - Patch changes may be made to address bugs, errors, clarifications, or to fix
@@ -204,21 +209,14 @@ From there, the following process will happen:
 - Major changes, and breaking changes, should be considered with care as they
   may reduce interoperability.
 
-### Active -> Final
-
-- If a proposal does not intend to see any further changes, it can be moved to
-  `Final`.
-- No changes will be made to a finalized SEP aside from fixing errata.
-- Changes should increment the patch version number only.
-- Much consideration should be given before moving to Final status, it is OK
-  for SEPs to live in Active status for a long time.
-- Any significant changes should be proposed as a new SEP.
-
 ### FCP -> Final
 
 - The SEP is marked as `Final` and updated to version `v1.0.0`.
+
+### Final: No Further Iteration
+
 - No changes will be made to a finalized SEP aside from fixing errata.
-- Changes should increment the patch version number only.
+- Fixing errata should be so minor it is not accompanied by a version change.
 - Much consideration should be given before moving to Final status, it is OK
   for SEPs to live in Draft or Active status for a long time.
 - Any significant changes should be proposed as a new SEP.
@@ -241,6 +239,7 @@ require version updates:
 - Correcting metadata in the `Pragma` section.
 - Updating broken links.
 - Updating links to implementations.
+- Final SEPs where very minor errata is being corrected.
 
 Proposals in the `Final` status should not be changed and should not see their
 version number change once moved into the status.
