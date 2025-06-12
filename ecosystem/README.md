@@ -161,11 +161,14 @@ following:
   preferred.
 - Set the version to `v0.0.1`.
 - Submit a PR of your draft via your fork of this repository.
-- A maintainer of the stellar-protocol repository will review the PR to ensure
-  the SEP follows the template and does not introduce any abuse to the
-  repository.
-- A maintainer of the stellar-protocol repository will assign a SEP number.
-- The PR will be merged.
+- Enable the GitHub feature `Maintainers are allowed to edit this pull request`
+  on the PR so that a maintainer can assign a SEP number and merge the PR.
+- A maintainer of the stellar-protocol repository will:
+  - Review the PR to ensure the SEP follows the template and does not introduce
+    any abuse to the repository.
+  - When it is ready to merge:
+    - Assign a SEP number.
+    - Merge the PR.
 
 #### Additional Tips
 
