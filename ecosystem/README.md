@@ -166,7 +166,8 @@ following:
 - A maintainer of the stellar-protocol repository will:
   - Review the PR to ensure the SEP follows the template and does not introduce
     any abuse to the repository.
-  - When it is ready to merge:
+  - If the template is followed and the change does not introduce any abuse to
+    the repository:
     - Assign a SEP number.
     - Merge the PR.
 
