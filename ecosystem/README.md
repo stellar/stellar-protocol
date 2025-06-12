@@ -32,11 +32,6 @@ All SEPs have individuals fulfilling the following roles:
 - **Abandoned** - A SEP has been abandoned by the author. SDF may move a SEP
   into this state if the SEP has no activity, no visible adoption, and the
   author is not responsive.
-- **Deprecated** - A SEP that the maintainer has indicated no longer intends to
-  be adopted. There may be legacy usage of a deprecated SEP.
-- **Superseded** - A SEP that the maintainer has indicated no longer intends to
-  be adopted, and has been superseded by a new SEP. Both SEPs should reference
-  each other.
 
 ## List of Proposals
 
@@ -91,7 +86,7 @@ All SEPs have individuals fulfilling the following roles:
 
 | Number                  | Title                                        | Author                                                   | Status     |
 | ----------------------- | -------------------------------------------- | -------------------------------------------------------- | ---------- |
-| [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                      | Deprecated |
+| [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                      | Abandoned |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Abandoned  |
 | [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Abandoned  |
 
