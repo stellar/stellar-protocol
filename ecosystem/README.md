@@ -7,7 +7,7 @@ author is intending to be adopted by participants in the Stellar ecosystem.
 
 All SEPs have individuals fulfilling the following roles:
 
-- **Author** - The author is the indiviudal(s) who created the proposal. The
+- **Author** - The author is the individual(s) who created the proposal. The
   author is responsible for writing the SEP, encouraging adoption of the SEP,
   and the general success of the SEP.
 - **Maintainer** - The maintainer is optional. If not present, the maintainer
