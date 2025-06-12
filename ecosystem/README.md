@@ -19,12 +19,12 @@ All SEPs have individuals fulfilling the following roles:
 ## SEP Status Terms
 
 - **Draft** - A SEP that is currently open for consideration, iteration and
-  actively being discussed. It is malleable and may change.
+  actively being discussed. It may change.
 - **FCP** - A SEP that has entered a Final Comment Period (FCP). An author
   places their SEP in FCP when they wish to signal that they plan to cease
-  making changes. After at least one week has passed, during which any new
-  concerns should be addressed, the SEP's status should move to `Final`, or
-  back to `Draft`.
+  making changes. After at least one week has passed the SEP's status should
+  move to `Final`, or back to `Draft`. If changes are required, it should be
+  moved back to `Draft`.
 - **Final** - A SEP is no longer receiving changes, other than minor errata.
 
 ### Additional Statuses
@@ -103,8 +103,8 @@ technology forward into new territory.
 
 Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are
 intended to be a more dynamic way of introducing standards and protocols
-utilized in the ecosystem that are built on top of the Stellar Network. It
-attempts to take a more lightweight process for approval.
+utilized in the ecosystem that are built on top of the Stellar Network. It uses
+a lightweight process.
 
 A SEPs author is responsible for a proposals adoption. Other ecosystem
 participants, including SDF, may encourage adoption of a proposal, but authors
@@ -114,7 +114,7 @@ maintainers should plan to drive adoption themselves.
 Before contributing, consider the following:
 
 - Gather feedback from discussion on the [GitHub discussion forum], [Stellar
-  Dev Discord], or [sellar-dev mailing list], and utilize it to begin a draft
+  Dev Discord], or [stellar-dev mailing list], and utilize it to begin a draft
   proposal.
 - Follow the proposal process listed below. If you're having difficulty moving
   the proposal forward, talk to folks in the ecosystem, or folks at SDF;
@@ -127,7 +127,7 @@ Before contributing, consider the following:
 ### Pre-SEP (Initial Discussion)
 
 Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord], or
-[sellar-dev mailing list] and other community forums dedicated to Stellar.
+[stellar-dev mailing list] and other community forums dedicated to Stellar.
 
 - Make sure to gather feedback and alternative ideas — it's useful before
   putting together a formal draft!
@@ -192,9 +192,10 @@ From there, the following process will happen:
 
 ## SEP Versioning
 
-Unlike CAPs, SEPs are assigned versions because they are dynamic and change
-over time. SEPs use [semantic versioning] in the form `vMAJOR.MINOR.PATCH` to
-determine an appropriate version for each change.
+SEPs may stay in `Draft` status for an extended period of time. They are are
+assigned versions so that the ecosystem can communicate about which version
+they are implementing or discussing. SEPs use [semantic versioning] in the form
+`vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
 
 All changes to a SEP should be accompanied by an update to its version, no
 matter how small even typographical corrections. The exceptions that do not
