@@ -44,7 +44,7 @@ All SEPs have individuals fulfilling the following roles:
   into this state if the SEP has no activity, no visible adoption, and the
   author is not responsive.
 
-## List of Proposals
+## Proposals
 
 | Number                  | Title                                                                  | Author                                                        | Status |
 | ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | ------ |
