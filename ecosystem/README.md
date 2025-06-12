@@ -93,6 +93,7 @@
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
 | [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Standard      | Draft                |
+| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu  | Standard      | Draft                |
 
 ### Rejected and Deprecated Proposals
 
@@ -257,19 +258,6 @@ require version updates:
 - Correcting metadata in the `Pragma` section.
 - Updating broken links.
 - Updating links to implementations.
-
-## SEP Team Members
-
-- Justin Rice <@rice2000> (SDF)
-- Tomer Weller <@tomerweller> (SDF)
-- Nikhil Saraf<@nikhilsaraf> (SDF)
-- Leigh McCulloch <@leighmcculloch> (SDF)
-- Jake Urban <@JakeUrban> (SDF)
-- Alex Cordeiro <@accordeiro> (SDF)
-- Marcelo Salloum <@marcelosalloum> (SDF)
-- Orbit Lens <@orbitlens>
-- David Mazières <@stanford-scs> (SDF)
-- Jed McCaleb <@jedmccaleb> (SDF)
 
 [GitHub discussion forum]:
   https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals
