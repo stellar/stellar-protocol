@@ -33,17 +33,23 @@ All SEPs have individuals fulfilling the following roles:
   into this state if the SEP has no activity, no visible adoption, and the
   author is not responsive.
 
-## List of Proposals
+## Final Proposals
+
+| Number                  | Title                                       | Author       | Status |
+| ----------------------- | ------------------------------------------- | ------------ | ------ |
+| [SEP-0002](sep-0002.md) | Federation Protocol                         | SDF          | Final  |
+| [SEP-0004](sep-0004.md) | Tx Status Endpoint                          | SDF          | Final  |
+| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts | SDF          | Final  |
+| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing  | Interstellar | Final  |
+| [SEP-0008](sep-0008.md) | Regulated Assets                            | Interstellar | Final  |
+| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                         | SDF          | Final  |
+
+## Draft Proposals
 
 | Number                  | Title                                                                  | Author                                                        | Status |
 | ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | ------ |
 | [SEP-0001](sep-0001.md) | Stellar Info File                                                      | SDF                                                           | Draft  |
-| [SEP-0002](sep-0002.md) | Federation Protocol                                                    | SDF                                                           | Final  |
-| [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | SDF                                                           | Final  |
-| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | SDF                                                           | Final  |
 | [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | SDF                                                           | Draft  |
-| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing                             | Interstellar                                                  | Final  |
-| [SEP-0008](sep-0008.md) | Regulated Assets                                                       | Interstellar                                                  | Final  |
 | [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | SDF                                                           | Draft  |
 | [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Draft  |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Draft  |
@@ -59,7 +65,6 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0022](sep-0022.md) | IPFS Support                                                           | Samuel B. Sendelbach                                          | Draft  |
 | [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Draft  |
 | [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | SDF                                                           | Draft  |
-| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | SDF                                                           | Final  |
 | [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Draft  |
 | [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts         | Leigh McCulloch, Lindsay Lin                                  | Draft  |
 | [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Draft  |
