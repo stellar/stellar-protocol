@@ -3,13 +3,12 @@
 ```
 SEP: To Be Assigned
 Title: <SEP title>
-Author: <list of authors' names, GitHub handles, and optionally, email addresses, separated by commas>
-Track: <Informational or Standard>
+Author: <list of authors' names with GitHub handles separated by commas>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
 Updated: <date created or last updated, in ISO 8601 (yyyy-mm-dd) format>
-Version: 0.1.0
-Discussion: <link to where discussion for this SEP is taking place, typically the mailing list>
+Version: 0.0.1
+Discussion: <link to where discussion for this SEP is taking place, typically the GitHub Discussion>
 ```
 
 ## Simple Summary
