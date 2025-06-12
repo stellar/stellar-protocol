@@ -144,6 +144,7 @@ Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord], or
   putting together a formal draft!
 - Consider contacting experts in a particular area for feedback while you're
   hashing out the details.
+- Prototype, demo, and build confidence in the idea.
 - Iterate as much as possible in this stage — making changes is easier before
   participants start adopting.
 
