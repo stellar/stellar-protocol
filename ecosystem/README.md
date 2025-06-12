@@ -82,7 +82,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                                    | Pamphile Roy, Jun Luo                                         | Draft  |
 | [SEP-0053](sep-0053.md) | Sign and Verify Messages                                               | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu                  | Draft  |
 
-### Rejected and Deprecated Proposals
+### Abandoned Proposals
 
 | Number                  | Title                                        | Author                                                   | Status     |
 | ----------------------- | -------------------------------------------- | -------------------------------------------------------- | ---------- |
