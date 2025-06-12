@@ -84,11 +84,11 @@ All SEPs have individuals fulfilling the following roles:
 
 ### Abandoned Proposals
 
-| Number                  | Title                                        | Author                                                   | Status     |
-| ----------------------- | -------------------------------------------- | -------------------------------------------------------- | ---------- |
+| Number                  | Title                                        | Author                                                   | Status    |
+| ----------------------- | -------------------------------------------- | -------------------------------------------------------- | --------- |
 | [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                      | Abandoned |
-| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Abandoned  |
-| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Abandoned  |
+| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Abandoned |
+| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Abandoned |
 
 # Contribution Process
 
