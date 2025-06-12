@@ -25,17 +25,18 @@ All SEPs have individuals fulfilling the following roles:
   making changes. After at least one week has passed the SEP's status should
   move to `Active` or `Final`, or back to `Draft`. If changes are required, it
   should be moved back to `Draft`.
-- **Active** - A SEP ready to be adopted, but may still receive changes. The
-  author intends the SEP in its current form to be actively adopted. Changes
-  can be made without changing the SEP number, although in the interest of
-  growing an ecosystem of interopable participants the author should endeavor
-  to make changes backwards compatible so that participants who have already
-  adopted the SEP can continue to participate. Where changes cannot be
-  backwards compatible, the major version should be updated to clearly
-  distinguish new incompatible versions.
-- **Final** - A SEP ready to be adopted, and no longer receiving changes, other
-  than minor errata. The author intends to make no further changes. Adopters
-  can expect significant changes to be proposed in a new SEP.
+- **Active** - A SEP ready to be adopted, and the proposal is a living document
+  and may still receive changes. The author intends the SEP in its current form
+  to be actively adopted. Changes can be made without changing the SEP number,
+  although in the interest of growing an ecosystem of interopable participants
+  the author should endeavor to make changes backwards compatible so that
+  participants who have already adopted the SEP can continue to participate.
+  Where changes cannot be backwards compatible, the major version should be
+  updated to clearly distinguish new incompatible versions.
+- **Final** - A SEP ready to be adopted, and the proposal is an immutable
+  document and will no longer receive changes, other than minor errata. The
+  author intends to make no further changes. Adopters can expect significant
+  changes to be proposed in a new SEP.
 
 ### Additional Statuses
 
@@ -186,15 +187,32 @@ From there, the following process will happen:
 
 ### Draft -> Final Comment Period (FCP)
 
-- When you're ready to make no further changes, you should submit a PR changing
-  the status in the draft to `Final Comment Period`.
+When you're ready for others to adopt the proposal:
+
+- Decide if the proposal should be a living document and move to `Active`, or
+  an immutable document and move to `Final`.
+- Submit a PR changing the status in the draft to
+  `Final Comment Period (Active)` or `Final Comment Period (Final)`.
 - Keep the proposal in FCP for at least one week, then submit a PR changing the
   status to `Active`, `Final`, or back to `Draft`.
 
-### FCP -> Active
+#### Deciding Active vs Final
 
-- After at least one week in FCP, submit a PR changing the status to `Active`
-  and setting the version to `v1.0.0`.
+You choose whether your proposal targets an Active or Final status.
+
+Active proposals are living documents that the author intends to iterate on and
+maintain over time, such as a specification that expects evolution in a
+responsible manner with regards to backwards compatibility, and semver usage.
+
+Final documents are immutable documents that the author intends to write once,
+but do not intend to maintain over time.
+
+### FCP (Active) -> Active
+
+After at least one week in FCP:
+
+- Submit a PR changing the status to `Active` and setting the version to
+  `v1.0.0`.
 - A maintainer of the stellar-protocol repository will review the PR to ensure
   the changes are limited to changing the status and updating the version.
 
@@ -209,9 +227,10 @@ From there, the following process will happen:
 - Major changes, and breaking changes, should be considered with care as they
   may reduce interoperability.
 
-### FCP -> Final
+### FCP (Final) -> Final
 
-- The SEP is marked as `Final` and updated to version `v1.0.0`.
+- Submit a PR changing the status to `Final` and update the version to
+  `v1.0.0`.
 
 ### Final: No Further Iteration
 
