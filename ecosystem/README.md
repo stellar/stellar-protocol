@@ -186,7 +186,7 @@ From there, the following process will happen:
 - You should continue the discussion of the draft SEP on the [GitHub discussion
   forum], [Stellar Dev Discord], or [stellar-dev mailing list] to gather
   additional feedback. We welcome any additional PRs that iterate on the draft.
-- Keep the version of the SEP as a v0 version while in draft.
+- Keep the version of the SEP as a `v0.y.z` version while in draft.
 - Increment the minor or patch versions on each change while in draft. See [SEP
   Versioning].
 
