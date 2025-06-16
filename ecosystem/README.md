@@ -65,6 +65,8 @@
 | [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Standard | Active                                                            |
 | [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Standard | Active                                                            |
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Standard | Active                                                            |
+| [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Standard | Active                                                            |
+| [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Standard | Active                                                            |
 
 ### Draft Proposals
 
@@ -86,11 +88,12 @@
 | [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Standard      | Draft                |
 | [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Standard      | Draft                |
 | [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Standard      | Draft                |
-| [SEP-0046](sep-0046.md) | Contract Meta                                                  | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0048](sep-0048.md) | Contract Interface Specification                               | Leigh McCulloch                               | Standard      | Draft                |
 | [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
+| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Standard      | Draft                |
+| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Standard      | Draft                |
+| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu  | Standard      | Draft                |
 
 ### Rejected and Deprecated Proposals
 
@@ -118,8 +121,9 @@ Before contributing, consider the following:
   `Informational` SEP is much lower than one for a `Standard`, and allows you
   to promote the SEP independently to gain feedback and traction before
   creating a Standard out of it.
-- Gather feedback from discussion on the dev mailing list and other forums, and
-  utilize it to begin a draft proposal.
+- Gather feedback from discussion on the [GitHub discussion forum], [Stellar
+  Dev Discord], or [sellar-dev mailing list], and utilize it to begin a draft
+  proposal.
 - Follow the proposal process listed below. If you're having difficulty moving
   the proposal forward, talk to the buddy that's assigned the SEP; they'll
   often have guidance on how to move things forward, as well as feedback
@@ -130,9 +134,8 @@ Before contributing, consider the following:
 
 ### Pre-SEP (Initial Discussion)
 
-Introduce your idea on the
-[stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev)
-and other community forums dedicated to Stellar.
+Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord], or
+[sellar-dev mailing list] and other community forums dedicated to Stellar.
 
 - Make sure to gather feedback and alternative ideas — it's useful before
   putting together a formal draft!
@@ -172,9 +175,9 @@ From there, the following process will happen:
     merging in the PR.
   - They'll provide initial feedback, and help pull in any subject matter
     experts that will help in pushing the SEP towards a final disposition.
-- You should continue the discussion of the draft SEP on the mailing list to
-  gather additional feedback. We welcome any additional PRs that iterate on the
-  draft.
+- You should continue the discussion of the draft SEP on the [GitHub discussion
+  forum], [Stellar Dev Discord], or [sellar-dev mailing list] to gather
+  additional feedback. We welcome any additional PRs that iterate on the draft.
 - Keep the version of the SEP as a v0 version while in draft.
 - Increment the minor or patch versions on each change while in draft. See [SEP
   Versioning].
@@ -256,19 +259,10 @@ require version updates:
 - Updating broken links.
 - Updating links to implementations.
 
-## SEP Team Members
-
-- Justin Rice <@rice2000> (SDF)
-- Tomer Weller <@tomerweller> (SDF)
-- Nikhil Saraf<@nikhilsaraf> (SDF)
-- Leigh McCulloch <@leighmcculloch> (SDF)
-- Jake Urban <@JakeUrban> (SDF)
-- Alex Cordeiro <@accordeiro> (SDF)
-- Marcelo Salloum <@marcelosalloum> (SDF)
-- Orbit Lens <@orbitlens>
-- David Mazières <@stanford-scs> (SDF)
-- Jed McCaleb <@jedmccaleb> (SDF)
-
+[GitHub discussion forum]:
+  https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals
+[Stellar Dev Discord]: https://discord.gg/stellardev
+[stellar-dev mailing list]: https://groups.google.com/g/stellar-dev
 [ietf]: https://ietf.org/
 [semantic versioning]: https://semver.org/
 [SEP Versioning]: #sep-versioning
