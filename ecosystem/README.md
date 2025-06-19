@@ -23,9 +23,9 @@ All SEPs have individuals fulfilling the following roles:
 - **FCP** - A SEP that has entered a Final Comment Period (FCP). An author
   places their SEP in FCP when they wish to signal that they plan to cease
   making changes. After at least one week has passed the SEP's status should
-  move to `Active` or `Final`, or back to `Draft`. If changes are required, it
+  move to `Living` or `Final`, or back to `Draft`. If changes are required, it
   should be moved back to `Draft`.
-- **Active** - A SEP ready to be adopted, and the proposal is a living document
+- **Living** - A SEP ready to be adopted, and the proposal is a living document
   and may still receive changes. The author intends the SEP in its current form
   to be actively adopted. Changes can be made without changing the SEP number,
   although in the interest of growing an ecosystem of interopable participants
@@ -48,28 +48,28 @@ All SEPs have individuals fulfilling the following roles:
 
 | Number                  | Title                                                                  | Author                                                        | Status |
 | ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | ------ |
-| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | SDF                                                           | Active |
+| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | SDF                                                           | Living |
 | [SEP-0002](sep-0002.md) | Federation Protocol                                                    | SDF                                                           | Final  |
 | [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | SDF                                                           | Final  |
 | [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | SDF                                                           | Final  |
-| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | SDF                                                           | Active |
+| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | SDF                                                           | Living |
 | [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing                             | Interstellar                                                  | Final  |
 | [SEP-0008](sep-0008.md) | Regulated Assets                                                       | Interstellar                                                  | Final  |
-| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | SDF                                                           | Active |
-| [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Active |
-| [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Active |
-| [SEP-0012](sep-0012.md) | KYC API                                                                | Interstellar                                                  | Active |
+| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | SDF                                                           | Living |
+| [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Living |
+| [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Living |
+| [SEP-0012](sep-0012.md) | KYC API                                                                | Interstellar                                                  | Living |
 | [SEP-0014](sep-0014.md) | Dynamic Asset Metadata                                                 | OrbitLens, Paul Tiplady                                       | Draft  |
-| [SEP-0018](sep-0018.md) | Data Entry Namespaces                                                  | Mister.Ticot                                                  | Active |
-| [SEP-0020](sep-0020.md) | Self-verification of validator nodes                                   | Johan Stén                                                    | Active |
-| [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Active |
-| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | SDF                                                           | Active |
+| [SEP-0018](sep-0018.md) | Data Entry Namespaces                                                  | Mister.Ticot                                                  | Living |
+| [SEP-0020](sep-0020.md) | Self-verification of validator nodes                                   | Johan Stén                                                    | Living |
+| [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Living |
+| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | SDF                                                           | Living |
 | [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | SDF                                                           | Final  |
-| [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Active |
-| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Active |
-| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Active |
-| [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Active |
-| [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Active |
+| [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Living |
+| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Living |
+| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Living |
+| [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Living |
+| [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Living |
 
 ### Draft Proposals
 
@@ -87,7 +87,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Draft                |
 | [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                     | Draft                |
 | [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                | Draft                |
-| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                              | Active               |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                              | Living               |
 | [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Draft                |
 | [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Draft                |
 | [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Draft                |
@@ -194,34 +194,34 @@ From there, the following process will happen:
 
 When you're ready for others to adopt the proposal:
 
-- Decide if the proposal should be a living document and move to `Active`, or
+- Decide if the proposal should be a living document and move to `Living`, or
   an immutable document and move to `Final`.
 - Submit a PR changing the status in the draft to
-  `Final Comment Period (Active)` or `Final Comment Period (Final)`.
+  `Final Comment Period (Living)` or `Final Comment Period (Final)`.
 - Keep the proposal in FCP for at least one week, then submit a PR changing the
-  status to `Active`, `Final`, or back to `Draft`.
+  status to `Living`, `Final`, or back to `Draft`.
 
-#### Deciding Active vs Final
+#### Deciding Living vs Final
 
-You choose whether your proposal targets an Active or Final status.
+You choose whether your proposal targets an Living or Final status.
 
-Active proposals are living documents that the author intends to iterate on and
+Living proposals are living documents that the author intends to iterate on and
 maintain over time, such as a specification that expects evolution in a
 responsible manner with regards to backwards compatibility, and semver usage.
 
 Final documents are immutable documents that the author intends to write once,
 but do not intend to maintain over time.
 
-### FCP (Active) -> Active
+### FCP (Living) -> Living
 
 After at least one week in FCP:
 
-- Submit a PR changing the status to `Active` and setting the version to
+- Submit a PR changing the status to `Living` and setting the version to
   `v1.0.0`.
 - A maintainer of the stellar-protocol repository will review the PR to ensure
   the changes are limited to changing the status and updating the version.
 
-### Active: Further Iteration
+### Living: Further Iteration
 
 - Increment the major, minor, or patch versions on each change. See [SEP
   Versioning].
@@ -242,7 +242,7 @@ After at least one week in FCP:
 - No changes will be made to a finalized SEP aside from fixing errata.
 - Fixing errata should be so minor it is not accompanied by a version change.
 - Much consideration should be given before moving to Final status, it is OK
-  for SEPs to live in Draft or Active status for a long time.
+  for SEPs to live in Draft or Living status for a long time.
 - Any significant changes should be proposed as a new SEP.
 
 ## SEP Versioning
@@ -253,7 +253,7 @@ they are implementing or discussing. SEPs use [semantic versioning] in the form
 `vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
 
 During draft a SEP should have a major version of `0` to indicate that anything
-in the SEP may change at anytime. Once a SEP moves to Active it should be
+in the SEP may change at anytime. Once a SEP moves to Living it should be
 changed to `v1.0.0` and the rules of semantic versioning apply.
 
 All changes to a SEP should be accompanied by an update to its version, no
