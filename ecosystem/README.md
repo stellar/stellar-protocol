@@ -1,145 +1,151 @@
 # Stellar Ecosystem Proposals (SEPs)
 
-## SEP Tracks
+SEPs are ideas, standards, and specifications in the form of proposals that the
+author would like adopted by participants in the Stellar ecosystem.
 
-- **Informational** — A SEP on the `Informational` track is one that is open to
-  adoption by the ecosystem, but has not been formally standardized by SDF, and
-  is not endorsed by SDF for adoption. Typically a SEP can start as
-  `Informational` to gain traction within the ecosystem before moving to the
-  `Standards` track.
-- **Standard** — A SEP on the `Standards` track is one that aims for formal
-  standardization and endorsement by SDF for adoption. Typically a SEP Standard
-  has a higher bar towards acceptance, and it requires approval by 2 SDF
-  members of the SEP Team.
+## Roles
+
+All SEPs have individuals fulfilling the following roles:
+
+- **Author** - The author is the individual(s) who created the proposal. The
+  author is responsible for writing the SEP, encouraging adoption of the SEP,
+  and the general success of the SEP.
+- **Maintainer** - The maintainer is optional. If not present, the maintainer
+  is the author. The maintainer is responsible for reviewing changes to the
+  SEP. For SEPs that have ecosystem adoption, the SDF may identify or become a
+  maintainer of last resort. A maintainer of last resort steps in and acts as
+  the maintainer if the maintainer ceases to respond or engage.
 
 ## SEP Status Terms
 
-- **Draft** - A SEP that is currently open for consideration and actively being
-  discussed.
-- **Awaiting Decision** — A mature and ready SEP that is ready for approval by
-  the SEP Team. If enough the approval requirements are met by SEP team
-  members, the SEP will move towards `FCP`. Otherwise, it'll regress to a
-  `Draft`.
-- **FCP** — A SEP that has entered a Final Comment Period (FCP). After one week
-  has passed, during which any new concerns should be addressed, the SEP's
-  status will become `Active`.
-- **Active** - An actively maintained SEP that is intended for immediate
-  adoption by the entire ecosystem. Additional updates may be made without
-  changing the SEP number.
-- **Final** - A finalized SEP will not be changed aside from minor errata. For
-  a proposal to be a candidate to be made Final it must be being used in live
-  products.
+- **Draft** - A SEP that is currently open for consideration, iteration and
+  actively being discussed. It may change.
+- **FCP** - A SEP that has entered a Final Comment Period (FCP). An author
+  places their SEP in FCP to signal that they plan to cease making changes.
+  The author also decides whether they want a SEP considered for `Active` or
+  `Final` status. After at least one week passes for review and discussion, the
+  SEP's status either moves as elected or back to `Draft`, if it needs changes.
+- **Active** - A SEP ready to be adopted, and the proposal is a living document
+  which may still receive changes. The author intends the SEP in its current
+  form to be actively adopted. Changes can be made without changing the SEP
+  number, although in the interest of growing an ecosystem of interopable
+  participants the author should endeavor to make changes backwards compatible
+  so that participants who have already adopted the SEP can continue to
+  participate. Where changes cannot be backwards compatible, the major version
+  should be updated to clearly distinguish new incompatible versions.
+- **Final** - A SEP ready to be adopted, and the proposal is an immutable
+  document and will no longer receive changes, other than minor errata. The
+  author intends to make no further changes. Adopters can expect significant
+  changes to be proposed in a new SEP.
 
 ### Additional Statuses
 
-- **Deprecated** - A SEP that was previously on an active track but has been
-  deprecated and is no longer suggested for use. There may be legacy usage of a
-  deprecated SEP.
-- **Rejected** - A Standards SEP that has been formally rejected by the SEP
-  Team, and will not be implemented.
-- **Superseded: [New Final SEP]** - A SEP that which was previously final but
-  has been superseded by a new, final SEP. Both SEPs should reference each
-  other.
+- **Abandoned** - A SEP has been abandoned by the author. The SDF may approve
+  moving a SEP into this state if the SEP has no activity, no visible adoption,
+  and the author is not responsive.
 
-## List of Proposals
+## Proposals
 
-| Number                  | Title                                                                  | Author                                                        | Track    | Status                                                            |
-| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | -------- | ----------------------------------------------------------------- |
-| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | SDF                                                           | Standard | Active                                                            |
-| [SEP-0002](sep-0002.md) | Federation Protocol                                                    | SDF                                                           | Standard | Final                                                             |
-| [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | SDF                                                           | Standard | Final                                                             |
-| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | SDF                                                           | Standard | Final                                                             |
-| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | SDF                                                           | Standard | Active (Interactive components are deprecated in favor of SEP-24) |
-| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing                             | Interstellar                                                  | Standard | Final                                                             |
-| [SEP-0008](sep-0008.md) | Regulated Assets                                                       | Interstellar                                                  | Standard | Final                                                             |
-| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | SDF                                                           | Standard | Active                                                            |
-| [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Standard | Active                                                            |
-| [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Standard | Active                                                            |
-| [SEP-0012](sep-0012.md) | KYC API                                                                | Interstellar                                                  | Standard | Active                                                            |
-| [SEP-0014](sep-0014.md) | Dynamic Asset Metadata                                                 | OrbitLens, Paul Tiplady                                       | Standard | Draft                                                             |
-| [SEP-0018](sep-0018.md) | Data Entry Namespaces                                                  | Mister.Ticot                                                  | Standard | Active                                                            |
-| [SEP-0020](sep-0020.md) | Self-verification of validator nodes                                   | Johan Stén                                                    | Standard | Active                                                            |
-| [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Standard | Active                                                            |
-| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | SDF                                                           | Standard | Active                                                            |
-| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | SDF                                                           | Standard | Final                                                             |
-| [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Standard | Active                                                            |
-| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Standard | Active                                                            |
-| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Standard | Active                                                            |
-| [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Standard | Active                                                            |
-| [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Standard | Active                                                            |
+| Number                  | Title                                                                  | Author                                                        | Status |
+| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | ------ |
+| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | The SDF                                                       | Active |
+| [SEP-0002](sep-0002.md) | Federation Protocol                                                    | The SDF                                                       | Final  |
+| [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | The SDF                                                       | Final  |
+| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | The SDF                                                       | Final  |
+| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | The SDF                                                       | Active |
+| [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing                             | Interstellar                                                  | Final  |
+| [SEP-0008](sep-0008.md) | Regulated Assets                                                       | Interstellar                                                  | Final  |
+| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | The SDF                                                       | Active |
+| [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Active |
+| [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Active |
+| [SEP-0012](sep-0012.md) | KYC API                                                                | Interstellar                                                  | Active |
+| [SEP-0014](sep-0014.md) | Dynamic Asset Metadata                                                 | OrbitLens, Paul Tiplady                                       | Draft  |
+| [SEP-0018](sep-0018.md) | Data Entry Namespaces                                                  | Mister.Ticot                                                  | Active |
+| [SEP-0020](sep-0020.md) | Self-verification of validator nodes                                   | Johan Stén                                                    | Active |
+| [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Active |
+| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | The SDF                                                       | Active |
+| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | The SDF                                                       | Final  |
+| [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Active |
+| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | The SDF                                                       | Active |
+| [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Active |
+| [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Active |
+| [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Active |
 
 ### Draft Proposals
 
-| Number                  | Title                                                          | Author                                        | Track         | Status               |
-| ----------------------- | -------------------------------------------------------------- | --------------------------------------------- | ------------- | -------------------- |
-| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                  | Standard      | Draft                |
-| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                  | Standard      | Draft                |
-| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                    | Standard      | Draft                |
-| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                     | Standard      | Draft                |
-| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                  | Informational | Draft                |
-| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                          | Informational | Draft                |
-| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                  | Standard      | Draft                |
-| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                | Standard      | Final Comment Period |
-| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Standard      | Draft                |
-| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                     | Informational | Draft                |
-| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                | Standard      | Draft                |
-| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                              | Informational | Active               |
-| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Standard      | Draft                |
-| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Standard      | Draft                |
-| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Standard      | Draft                |
-| [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
-| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Standard      | Draft                |
-| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Standard      | Draft                |
-| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Standard      | Draft                |
+| Number                  | Title                                                          | Author                                        | Status               |
+| ----------------------- | -------------------------------------------------------------- | --------------------------------------------- | -------------------- |
+| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                  | Draft                |
+| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                  | Draft                |
+| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                    | Draft                |
+| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                     | Draft                |
+| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                  | Draft                |
+| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                          | Draft                |
+| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                  | Draft                |
+| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                               | Draft                |
+| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                | Final Comment Period |
+| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Draft                |
+| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                     | Draft                |
+| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                | Draft                |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | The SDF, Litemint.io                          | Active               |
+| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Draft                |
+| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Draft                |
+| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Draft                |
+| [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Draft                |
+| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
+| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
+| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Draft                |
+| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Draft                |
+| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu  | Draft                |
 
-### Rejected and Deprecated Proposals
+### Abandoned Proposals
 
-| Number                  | Title                                        | Author                                                   | Track         | Status     |
-| ----------------------- | -------------------------------------------- | -------------------------------------------------------- | ------------- | ---------- |
-| [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                      | Standard      | Deprecated |
-| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                            | Informational | Rejected   |
-| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Standard      | Rejected   |
+| Number                  | Title                                        | Author                                                       | Status    |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------ | --------- |
+| [SEP-0003](sep-0003.md) | Compliance Protocol                          | The SDF                                                      | Abandoned |
+| [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                                | Abandoned |
+| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | The SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Abandoned |
 
 # Contribution Process
 
-The Stellar Ecosystem, like most software ecosystems in the world, continues to
+The Stellar ecosystem, like most software ecosystems in the world, continues to
 evolve over time to meet the needs of our network's participants and to drive
 technology forward into new territory.
 
 Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are
-intended to be a more dynamic way of introducing standards and protocols
-utilized in the ecosystem that are built on top of the Stellar network. It
-attempts to take a more lightweight process for approval, and much of its
-process is inspired by the [IETF][ietf].
+a more dynamic way of introducing standards and protocols used in the ecosystem
+and built on top of the network. Thus it uses a lightweight pragmatism process.
+
+A SEP's author is responsible for a proposals adoption. Other ecosystem
+participants, including the SDF, may encourage adoption of a proposal, but
+authors should expect each proposal to stand on its own merits and authors and
+maintainers should plan to drive adoption themselves.
 
 Before contributing, consider the following:
 
-- Choose a track to propose your idea on. The bar for accepting an
-  `Informational` SEP is much lower than one for a `Standard`, and allows you
-  to promote the SEP independently to gain feedback and traction before
-  creating a Standard out of it.
 - Gather feedback from discussion on the [GitHub discussion forum], [Stellar
-  Dev Discord], or [sellar-dev mailing list], and utilize it to begin a draft
+  Dev Discord], or [stellar-dev mailing list], and utilize it to begin a draft
   proposal.
 - Follow the proposal process listed below. If you're having difficulty moving
-  the proposal forward, talk to the buddy that's assigned the SEP; they'll
-  often have guidance on how to move things forward, as well as feedback
-  regarding feasibility and how the proposal does or does not align with the
-  Stellar network's goals.
+  the proposal forward, talk to folks in the ecosystem, or folks at the SDF;
+  they'll often have guidance on how to move things forward, as well as
+  feedback regarding feasibility and how the proposal does or does not align
+  with the Stellar Network's goals.
 
 ## SEP Process
 
 ### Pre-SEP (Initial Discussion)
 
 Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord], or
-[sellar-dev mailing list] and other community forums dedicated to Stellar.
+[stellar-dev mailing list] and other community forums dedicated to Stellar.
 
 - Make sure to gather feedback and alternative ideas — it's useful before
   putting together a formal draft!
 - Consider contacting experts in a particular area for feedback while you're
   hashing out the details.
+- Prototype, demo, and build confidence in the idea.
+- Iterate as much as possible in this stage — making changes is easier before
+  participants start adopting.
 
 ### Creating a SEP Draft
 
@@ -153,65 +159,70 @@ following:
 - Include GitHub handles or emails for all authors listed. GitHub handles are
   preferred.
 - Set the version to `v0.0.1`.
-
-Finally, submit a PR of your draft via your fork of this repository.
+- Submit a PR of your draft via your fork of this repository.
+- Enable the GitHub feature `Maintainers are allowed to edit this pull request`
+  on the PR so that a maintainer can assign a SEP number and merge the PR.
+- A maintainer of the stellar-protocol repository will:
+  - Review the PR to ensure the SEP follows the template and does not introduce
+    any abuse to the repository.
+  - If the template is followed and the change does not introduce any abuse to
+    the repository:
+    - Assign a SEP number.
+    - Merge the PR.
 
 #### Additional Tips
 
 - If your SEP requires images or other supporting files, they should be
   included in a subdirectory of the `contents` folder for that SEP, such as
   `contents/sep_happycoder_b274f73c/`. Links should be relative, for example a
-  link to an image from SEP-X would be
+  link to an image from `SEP-X` would be
   `../contents/sep_happycoder_b274f73c/image.png`.
 
-### Draft: Merging & Further Iteration
+### Draft: Further Iteration
 
-From there, the following process will happen:
+Next, the SDF reccomends an iterative-feedback process with the community:
 
-- A SEP buddy is assigned and will merge your PR if you properly followed the
-  steps above.
-  - They'll rename the above files to the latest SEP draft number before
-    merging in the PR.
-  - They'll provide initial feedback, and help pull in any subject matter
-    experts that will help in pushing the SEP towards a final disposition.
-- You should continue the discussion of the draft SEP on the [GitHub discussion
-  forum], [Stellar Dev Discord], or [sellar-dev mailing list] to gather
-  additional feedback. We welcome any additional PRs that iterate on the draft.
-- Keep the version of the SEP as a v0 version while in draft.
+- Successful authors polish their designs with help from SEP users through a
+  discussion of the draft SEP on the [GitHub discussion forums], [Stellar Dev
+  Discord], or [stellar-dev mailing list] to gather additional feedback. The
+  SDF also welcomes any additional ecosystem PRs that iterate on the draft.
+- Keep the version of the SEP as a `v0.y.z` version while in draft.
 - Increment the minor or patch versions on each change while in draft. See [SEP
   Versioning].
 
-### Draft -> Awaiting Decision -> Final Comment Period (FCP)
+### Draft -> Final Comment Period (FCP)
 
-- When you're ready, you should submit a PR changing the status in the draft to
-  `Awaiting Decision`.
-- A SEP buddy is assigned from the SEP team. They'll provide any additional
-  feedback, and help pull in any subject matter experts and SEP team members
-  that will help in pushing the SEP towards a final disposition.
-  - For the Informational Track, the SEP enters FCP when 2 members of the SEP
-    Team approve the pull request.
-  - For the Standards Track, the SEP enters FCP when 3 members of the SEP team
-    approve the pull request, 2 of whom must be representatives of SDF.
-  - The SEP buddy (the PR assignee) is responsible for including members of the
-    SEP team who are subject experts on the SEP being discussed; however, you
-    are free to pull in feedback without going through your buddy. The SEP
-    buddy may also bring it up at an upcoming protocol meeting.
-  - If any SEP has major concerns (typically around security) from a SEP Team
-    or CAP Core Team member, the concerns must be addressed before moving it
-    forward; otherwise, it will be set back to `Draft`, or if fundamentally
-    broken, to `Rejected`.
-  - It should take no more than 2 weeks to move a SEP out of
-    `Awaiting Decision`.
-- Once a SEP has been approved, it goes into FCP which is broadcast to the
-  protocol meeting members along with the mailing list.
+When you're ready for others to adopt the proposal:
 
-### FCP -> Active
+- Decide if the proposal should be a living document and move to `Active`, or
+  an immutable document and move to `Final`.
+- Submit a PR changing the status in the draft to
+  `Final Comment Period (Active)` or `Final Comment Period (Final)`.
+- Keep the proposal in FCP for at least one week, then submit a PR changing the
+  status to `Active`, `Final`, or back to `Draft`.
 
-- If no major concerns are brought up, the SEP is marked as `Active` and
-  updated to version `v1.0.0` by your SEP buddy.
-- Ideally there will be a reference implementation exhibiting the behavior and
-  value of the SEP before moving to active state.
-- Active SEPs should be brought into production by ecosystem members.
+#### Deciding Active vs Final
+
+You choose whether your proposal targets an Active or Final status.
+
+Active proposals are living documents that the author intends to iterate on and
+maintain over time, such as a specification that expects evolution in a
+responsible manner with regards to backwards compatibility, and semver usage.
+
+Final documents are immutable documents that the author intends to write once,
+but do not intend to maintain over time.
+
+### FCP (Active) -> Active
+
+After at least one week in FCP:
+
+- Submit a PR changing the status to `Active` and setting the version to
+  `v1.0.0`.
+- A maintainer of the stellar-protocol repository will review the PR to ensure
+  the changes are limited to changing the status and updating the version.
+
+### Active: Further Iteration
+
 - Increment the major, minor, or patch versions on each change. See [SEP
   Versioning].
 - Patch changes may be made to address bugs, errors, clarifications, or to fix
@@ -221,30 +232,25 @@ From there, the following process will happen:
 - Major changes, and breaking changes, should be considered with care as they
   may reduce interoperability.
 
-### Active -> Final
+### FCP (Final) -> Final
 
-- Once the SEP team determines that an active SEP is complete, proven, and
-  won't be extended, the SEP can move to `Final` status.
-- This promotion can only occur once there are multiple live implementations
-  being used in production to ensure any edge cases or incompatibilities are
-  found.
+- Submit a PR changing the status to `Final` and update the version to
+  `v1.0.0`.
+
+### Final: No Further Iteration
+
 - No changes will be made to a finalized SEP aside from fixing errata.
-- Changes should increment the patch version number only.
+- Fixing errata should be so minor it is not accompanied by a version change.
 - Much consideration should be given before moving to Final status, it is OK
-  for SEPs to live in Active status for a long time.
-
-### Regression
-
-- It is possible for a SEP to move from `Active` to `Draft` or `Deprecated` if
-  it is never adopted, or is abandoned by the community.
-- Regression of an active SEP occurs via the same process as a proposal
-  (`Draft` -> `Awaiting Decision` -> `FCP` -> `Deprecated`)
+  for SEPs to live in Draft or Active status for a long time.
+- Any significant changes should be proposed as a new SEP.
 
 ## SEP Versioning
 
-Unlike CAPs, SEPs are assigned versions because they are dynamic and change
-over time. SEPs use [semantic versioning] in the form `vMAJOR.MINOR.PATCH` to
-determine an appropriate version for each change.
+SEPs may stay in `Draft` status for an extended period of time. They are are
+assigned versions so that the ecosystem can communicate about which version
+they are implementing or discussing. SEPs use [semantic versioning] in the form
+`vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
 
 During draft a SEP should have a major version of `0` to indicate that anything
 in the SEP may change at anytime. Once a SEP moves to Active it should be
@@ -257,6 +263,10 @@ require version updates:
 - Correcting metadata in the `Pragma` section.
 - Updating broken links.
 - Updating links to implementations.
+- Final SEPs where very minor errata is being corrected.
+
+Proposals in the `Final` status should not be changed and should not see their
+version number change once moved into the status.
 
 [GitHub discussion forum]:
   https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals
