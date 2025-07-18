@@ -73,7 +73,9 @@ struct LedgerCloseMetaBatch
 
 ### Key Format
 
-Keys follow a hierarchical directory structure, effectively acting as file paths within the data store. All the ledgers are stored under a configurable `/<ledgers-path>`. Within the `/<ledgers-path>` directory there are subdirectories which represent partitions. Each partition contains a fixed number of batches:
+Keys follow a hierarchical directory structure, effectively acting as file paths within the data store. All the ledgers
+are stored under a configurable `/<ledgers-path>`. Within the `/<ledgers-path>` directory there are subdirectories which
+represent partitions. Each partition contains a fixed number of batches:
 
 ```
 /<ledgers-path>/<partition>/<batch>.xdr.zst
@@ -91,7 +93,7 @@ If the partition size is 1, the partition is omitted, resulting in:
 fmt.Sprintf("%08X--%d-%d/", math.MaxUint32-partitionStartLedgerSequence, partitionStartLedgerSequence, partitionEndLedgerSequence)
 ```
 
-Example for `partitionStartLedgerSequence=0` and  `partitionEndLedgerSequence=15`: `FFFFFFFF--0-15`
+Example for `partitionStartLedgerSequence=0` and `partitionEndLedgerSequence=15`: `FFFFFFFF--0-15`
 
 #### Batch Format:
 
@@ -99,8 +101,7 @@ Example for `partitionStartLedgerSequence=0` and  `partitionEndLedgerSequence=15
  fmt.Sprintf("%08X--%d-%d.xdr.zst", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence, batchEndLedgerSequence)
 ```
 
-Example for `batchStartLedgerSequence=2` and  `batchEndLedgerSequence=3`: `FFFFFFFD--2-3.xdr.zst`
-
+Example for `batchStartLedgerSequence=2` and `batchEndLedgerSequence=3`: `FFFFFFFD--2-3.xdr.zst`
 
 If the batch size is 1, the format simplifies to:
 
@@ -109,7 +110,6 @@ If the batch size is 1, the format simplifies to:
 ```
 
 Example for `batchStartLedgerSequence=2`: `FFFFFFFD--2.xdr.zst`
-
 
 Note the `.zst` suffix is the filename extension defined in the [Zstandard]([https://facebook.github.io/zstd/)
 [RFC](https://datatracker.ietf.org/doc/html/rfc8478). If this SEP is extended to support another compression algorithm
@@ -145,7 +145,8 @@ following properties:
 
 ### Example Key Structure
 
-Below is an example list of keys (with `/<config-path>` set to  `/stellar/pubnet/config.json`) for ledger batches based on the above example configuration:
+Below is an example list of keys (with `/<config-path>` set to `/stellar/pubnet/config.json`) for ledger batches based
+on the above example configuration:
 
 ```
 /stellar/pubnet/config.json
