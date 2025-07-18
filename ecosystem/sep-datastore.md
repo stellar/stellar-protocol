@@ -6,7 +6,7 @@ Title: Ledger Metadata Storage
 Author: Tamir Sen <@tamirms>
 Status: Draft
 Created: 2025-03-11
-Version: 0.1.0
+Version: 0.2.0
 ```
 
 ## Simple Summary
@@ -73,17 +73,16 @@ struct LedgerCloseMetaBatch
 
 ### Key Format
 
-Keys follow a hierarchical directory structure. The root directory is `/ledgers`, and subdirectories represent
-partitions. Each partition contains a fixed number of batches:
+Keys follow a hierarchical directory structure, effectively acting as file paths within the data store. All the ledgers are stored under a configurable `/<ledgers-path>`. Within the `/<ledgers-path>` directory there are subdirectories which represent partitions. Each partition contains a fixed number of batches:
 
 ```
-/ledgers/<partition>/<batch>.xdr.zst
+/<ledgers-path>/<partition>/<batch>.xdr.zst
 ```
 
 If the partition size is 1, the partition is omitted, resulting in:
 
 ```
-/ledgers/<batch>.xdr.zst
+/<ledgers-path>/<batch>.xdr.zst
 ```
 
 #### Partition Format:
@@ -92,17 +91,25 @@ If the partition size is 1, the partition is omitted, resulting in:
 fmt.Sprintf("%08X--%d-%d/", math.MaxUint32-partitionStartLedgerSequence, partitionStartLedgerSequence, partitionEndLedgerSequence)
 ```
 
+Example for `partitionStartLedgerSequence=0` and  `partitionEndLedgerSequence=15`: `FFFFFFFF--0-15`
+
 #### Batch Format:
 
 ```go
  fmt.Sprintf("%08X--%d-%d.xdr.zst", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence, batchEndLedgerSequence)
 ```
 
+Example for `batchStartLedgerSequence=2` and  `batchEndLedgerSequence=3`: `FFFFFFFD--2-3.xdr.zst`
+
+
 If the batch size is 1, the format simplifies to:
 
 ```go
  fmt.Sprintf("%08X--%d.xdr.zst", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence)
 ```
+
+Example for `batchStartLedgerSequence=2`: `FFFFFFFD--2.xdr.zst`
+
 
 Note the `.zst` suffix is the filename extension defined in the [Zstandard]([https://facebook.github.io/zstd/)
 [RFC](https://datatracker.ietf.org/doc/html/rfc8478). If this SEP is extended to support another compression algorithm
@@ -112,10 +119,11 @@ then the standard filename extension for the given compression algorithm will be
 
 ### Configuration File
 
-The data store includes a configuration JSON object stored under the key `/config.json`. This file contains the
+The data store includes a configuration JSON object stored under the key `/<config-path>`. This file contains the
 following properties:
 
 - `networkPassphrase` - (string) the passphrase for the Stellar network associated with the ledgers.
+- `ledgersPath` - (string) the `/<ledgers-path>` directory which contains all the partitions and batches.
 - `compression` - (string) the compression algorithm used to compress ledger objects (currently only
   [`zstd`]([https://facebook.github.io/zstd/) is supported).
 - `ledgersPerBatch` - (integer) the number of ledgers bundled into each `LedgerCloseMetaBatch`.
@@ -126,6 +134,7 @@ following properties:
 ```json
 {
   "networkPassphrase": "Public Global Stellar Network ; September 2015",
+  "ledgersPath": "/stellar/pubnet/ledgers",
   "compression": "zstd",
   "ledgersPerBatch": 2,
   "batchesPerPartition": 8
@@ -136,18 +145,19 @@ following properties:
 
 ### Example Key Structure
 
-Below is an example list of keys for ledger batches based on the configuration above:
+Below is an example list of keys (with `/<config-path>` set to  `/stellar/pubnet/config.json`) for ledger batches based on the above example configuration:
 
 ```
-/ledgers/FFFFFFEF--16-31/FFFFFFED--18-19.xdr.zst
-/ledgers/FFFFFFEF--16-31/FFFFFFEF--16-17.xdr.zst
-/ledgers/FFFFFFFF--0-15/FFFFFFF1--14-15.xdr.zst
-/ledgers/FFFFFFFF--0-15/FFFFFFF3--12-13.xdr.zst
-/ledgers/FFFFFFFF--0-15/FFFFFFF5--10-11.xdr.zst
-/ledgers/FFFFFFFF--0-15/FFFFFFF7--8-9.xdr.zst
-/ledgers/FFFFFFFF--0-15/FFFFFFF9--6-7.xdr.zst
-/ledgers/FFFFFFFF--0-15/FFFFFFFB--4-5.xdr.zst
-/ledgers/FFFFFFFF--0-15/FFFFFFFD--2-3.xdr.zst
+/stellar/pubnet/config.json
+/stellar/pubnet/ledgers/FFFFFFEF--16-31/FFFFFFED--18-19.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFEF--16-31/FFFFFFEF--16-17.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFFF--0-15/FFFFFFF1--14-15.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFFF--0-15/FFFFFFF3--12-13.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFFF--0-15/FFFFFFF5--10-11.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFFF--0-15/FFFFFFF7--8-9.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFFF--0-15/FFFFFFF9--6-7.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFFF--0-15/FFFFFFFB--4-5.xdr.zst
+/stellar/pubnet/ledgers/FFFFFFFF--0-15/FFFFFFFD--2-3.xdr.zst
 ```
 
 [![](https://mermaid.ink/img/pako:eNpt0clugzAQBuBXQXPOhDokIeFQqYRy6L6dGjhYsQOR2GSM1DbKu3dq4raJ8MHC_B8zNt7DphYSAsgUb3LnLUoqh8bV2i2kyKRq3dRBvHTCdWzGdYzI5ugxNz1KE6-OcUzxBbKZTfs5NObGloioxALZcvwh1Pir1el_dXvaiPlnqp9Xxt7ZrozslNqe2V7dW-WRmiDzBtWDVTNSdAQ2qB6t8hEXaE5wkj_ZfIk4R3-wxrM1IeIUh_f8Yg39qwn-7RhGUEpV8p2gK9v_fJGAzmUpEwjoUcgt7wqdQFIdiPJO16-f1QYCrTo5AlV3WQ7BlhctrbpGcC2jHaerL3_fNrx6r2u7PnwDAJ6W4g?type=png)](https://mermaid-js.github.io/mermaid-live-editor/edit#pako:eNpt0clugzAQBuBXQXPOhDokIeFQqYRy6L6dGjhYsQOR2GSM1DbKu3dq4raJ8MHC_B8zNt7DphYSAsgUb3LnLUoqh8bV2i2kyKRq3dRBvHTCdWzGdYzI5ugxNz1KE6-OcUzxBbKZTfs5NObGloioxALZcvwh1Pir1el_dXvaiPlnqp9Xxt7ZrozslNqe2V7dW-WRmiDzBtWDVTNSdAQ2qB6t8hEXaE5wkj_ZfIk4R3-wxrM1IeIUh_f8Yg39qwn-7RhGUEpV8p2gK9v_fJGAzmUpEwjoUcgt7wqdQFIdiPJO16-f1QYCrTo5AlV3WQ7BlhctrbpGcC2jHaerL3_fNrx6r2u7PnwDAJ6W4g)
@@ -180,3 +190,4 @@ altered.
 ## Changelog
 
 - `v0.1.0`: Initial draft
+- `v0.2.0`: Make ledgers path and config path configurable
