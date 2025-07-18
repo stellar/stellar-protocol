@@ -11,8 +11,10 @@ Version: 0.2.0
 
 ## Simple Summary
 
-A standard for how [`LedgerCloseMeta`](https://github.com/stellar/stellar-xdr/blob/v22.0/Stellar-ledger.x#L539-L545)
-objects can be stored so that ledgers can be easily and efficiently ingested by downstream systems.
+A standard for how
+[`LedgerCloseMeta`](https://github.com/stellar/stellar-xdr/blob/v22.0/Stellar-ledger.x#L539-L545)
+objects can be stored so that ledgers can be easily and efficiently ingested by
+downstream systems.
 
 ## Dependencies
 
@@ -20,31 +22,37 @@ None.
 
 ## Motivation
 
-[galexie](https://github.com/stellar/go/tree/master/services/galexie) is a service which publishes
-[`LedgerCloseMeta`](https://github.com/stellar/stellar-xdr/blob/v22.0/Stellar-ledger.x#L539-L545) XDR objects to a GCS
-(Google Cloud Storage) bucket. However, the data format and layout of the XDR objects are not formally documented. This
-SEP aims to provide a comprehensive specification for storing LedgerCloseMeta objects, enabling third-party developers
-to build compatible data stores and clients for retrieving ledger metadata.
+[galexie](https://github.com/stellar/go/tree/master/services/galexie) is a
+service which publishes
+[`LedgerCloseMeta`](https://github.com/stellar/stellar-xdr/blob/v22.0/Stellar-ledger.x#L539-L545)
+XDR objects to a GCS (Google Cloud Storage) bucket. However, the data format
+and layout of the XDR objects are not formally documented. This SEP aims to
+provide a comprehensive specification for storing LedgerCloseMeta objects,
+enabling third-party developers to build compatible data stores and clients for
+retrieving ledger metadata.
 
 ## Specification
 
 The data store is a key-value store where:
 
 - **Keys** are strings following a specific hierarchical format.
-- **Values** are binary blobs representing compressed `LedgerCloseMetaBatch` XDR values.
+- **Values** are binary blobs representing compressed `LedgerCloseMetaBatch`
+  XDR values.
 
 The key-value store must support:
 
 - Efficient random access lookups on arbitrary keys.
 - Listing keys in lexicographic order, optionally filtered by a prefix.
 
-Examples of compatible key-value stores include Google Cloud Storage (GCS) and Amazon S3.
+Examples of compatible key-value stores include Google Cloud Storage (GCS) and
+Amazon S3.
 
 ---
 
 ### Value Format
 
-Each value in the key-value store is the [Zstandard]([https://facebook.github.io/zstd/) compressed binary encoding of
+Each value in the key-value store is the
+[Zstandard]([https://facebook.github.io/zstd/) compressed binary encoding of
 the following XDR structure:
 
 ```c++
@@ -62,20 +70,24 @@ struct LedgerCloseMetaBatch
 };
 ```
 
-- A LedgerCloseMetaBatch represents a contiguous range of one or more consecutive ledgers.
+- A LedgerCloseMetaBatch represents a contiguous range of one or more
+  consecutive ledgers.
 
 - All batches in a data store instance contain the same number of ledgers.
 
-- Currently only [Zstandard]([https://facebook.github.io/zstd/) compression is supported but it is possible to extend
-  the SEP in the future to allow other compression algorithms.
+- Currently only [Zstandard]([https://facebook.github.io/zstd/) compression is
+  supported but it is possible to extend the SEP in the future to allow other
+  compression algorithms.
 
 ---
 
 ### Key Format
 
-Keys follow a hierarchical directory structure, effectively acting as file paths within the data store. All the ledgers
-are stored under a configurable `/<ledgers-path>`. Within the `/<ledgers-path>` directory there are subdirectories which
-represent partitions. Each partition contains a fixed number of batches:
+Keys follow a hierarchical directory structure, effectively acting as file
+paths within the data store. All the ledgers are stored under a configurable
+`/<ledgers-path>`. Within the `/<ledgers-path>` directory there are
+subdirectories which represent partitions. Each partition contains a fixed
+number of batches:
 
 ```
 /<ledgers-path>/<partition>/<batch>.xdr.zst
@@ -93,7 +105,8 @@ If the partition size is 1, the partition is omitted, resulting in:
 fmt.Sprintf("%08X--%d-%d/", math.MaxUint32-partitionStartLedgerSequence, partitionStartLedgerSequence, partitionEndLedgerSequence)
 ```
 
-Example for `partitionStartLedgerSequence=0` and `partitionEndLedgerSequence=15`: `FFFFFFFF--0-15`
+Example for `partitionStartLedgerSequence=0` and
+`partitionEndLedgerSequence=15`: `FFFFFFFF--0-15`
 
 #### Batch Format:
 
@@ -101,7 +114,8 @@ Example for `partitionStartLedgerSequence=0` and `partitionEndLedgerSequence=15`
  fmt.Sprintf("%08X--%d-%d.xdr.zst", math.MaxUint32-batchStartLedgerSequence, batchStartLedgerSequence, batchEndLedgerSequence)
 ```
 
-Example for `batchStartLedgerSequence=2` and `batchEndLedgerSequence=3`: `FFFFFFFD--2-3.xdr.zst`
+Example for `batchStartLedgerSequence=2` and `batchEndLedgerSequence=3`:
+`FFFFFFFD--2-3.xdr.zst`
 
 If the batch size is 1, the format simplifies to:
 
@@ -111,22 +125,28 @@ If the batch size is 1, the format simplifies to:
 
 Example for `batchStartLedgerSequence=2`: `FFFFFFFD--2.xdr.zst`
 
-Note the `.zst` suffix is the filename extension defined in the [Zstandard]([https://facebook.github.io/zstd/)
-[RFC](https://datatracker.ietf.org/doc/html/rfc8478). If this SEP is extended to support another compression algorithm
-then the standard filename extension for the given compression algorithm will be used as a suffix in the batch name.
+Note the `.zst` suffix is the filename extension defined in the
+[Zstandard]([https://facebook.github.io/zstd/)
+[RFC](https://datatracker.ietf.org/doc/html/rfc8478). If this SEP is extended
+to support another compression algorithm then the standard filename extension
+for the given compression algorithm will be used as a suffix in the batch name.
 
 ---
 
 ### Configuration File
 
-The data store includes a configuration JSON object stored under the key `/<config-path>`. This file contains the
-following properties:
+The data store includes a configuration JSON object stored under the key
+`/<config-path>`. This file contains the following properties:
 
-- `networkPassphrase` - (string) the passphrase for the Stellar network associated with the ledgers.
-- `ledgersPath` - (string) the `/<ledgers-path>` directory which contains all the partitions and batches.
-- `compression` - (string) the compression algorithm used to compress ledger objects (currently only
-  [`zstd`]([https://facebook.github.io/zstd/) is supported).
-- `ledgersPerBatch` - (integer) the number of ledgers bundled into each `LedgerCloseMetaBatch`.
+- `networkPassphrase` - (string) the passphrase for the Stellar network
+  associated with the ledgers.
+- `ledgersPath` - (string) the `/<ledgers-path>` directory which contains all
+  the partitions and batches.
+- `compression` - (string) the compression algorithm used to compress ledger
+  objects (currently only [`zstd`]([https://facebook.github.io/zstd/) is
+  supported).
+- `ledgersPerBatch` - (integer) the number of ledgers bundled into each
+  `LedgerCloseMetaBatch`.
 - `batchesPerPartition` - (integer) the number of batches in a partition.
 
 #### Example Configuration:
@@ -145,8 +165,9 @@ following properties:
 
 ### Example Key Structure
 
-Below is an example list of keys (with `/<config-path>` set to `/stellar/pubnet/config.json`) for ledger batches based
-on the above example configuration:
+Below is an example list of keys (with `/<config-path>` set to
+`/stellar/pubnet/config.json`) for ledger batches based on the above example
+configuration:
 
 ```
 /stellar/pubnet/config.json
@@ -163,30 +184,33 @@ on the above example configuration:
 
 [![](https://mermaid.ink/img/pako:eNpt0clugzAQBuBXQXPOhDokIeFQqYRy6L6dGjhYsQOR2GSM1DbKu3dq4raJ8MHC_B8zNt7DphYSAsgUb3LnLUoqh8bV2i2kyKRq3dRBvHTCdWzGdYzI5ugxNz1KE6-OcUzxBbKZTfs5NObGloioxALZcvwh1Pir1el_dXvaiPlnqp9Xxt7ZrozslNqe2V7dW-WRmiDzBtWDVTNSdAQ2qB6t8hEXaE5wkj_ZfIk4R3-wxrM1IeIUh_f8Yg39qwn-7RhGUEpV8p2gK9v_fJGAzmUpEwjoUcgt7wqdQFIdiPJO16-f1QYCrTo5AlV3WQ7BlhctrbpGcC2jHaerL3_fNrx6r2u7PnwDAJ6W4g?type=png)](https://mermaid-js.github.io/mermaid-live-editor/edit#pako:eNpt0clugzAQBuBXQXPOhDokIeFQqYRy6L6dGjhYsQOR2GSM1DbKu3dq4raJ8MHC_B8zNt7DphYSAsgUb3LnLUoqh8bV2i2kyKRq3dRBvHTCdWzGdYzI5ugxNz1KE6-OcUzxBbKZTfs5NObGloioxALZcvwh1Pir1el_dXvaiPlnqp9Xxt7ZrozslNqe2V7dW-WRmiDzBtWDVTNSdAQ2qB6t8hEXaE5wkj_ZfIk4R3-wxrM1IeIUh_f8Yg39qwn-7RhGUEpV8p2gK9v_fJGAzmUpEwjoUcgt7wqdQFIdiPJO16-f1QYCrTo5AlV3WQ7BlhctrbpGcC2jHaerL3_fNrx6r2u7PnwDAJ6W4g)
 
-**Note:** The genesis ledger starts at sequence number 2, so the oldest batch must have a `batchStartLedgerSequence`
-of 2.
+**Note:** The genesis ledger starts at sequence number 2, so the oldest batch
+must have a `batchStartLedgerSequence` of 2.
 
 ## Design Rationale
 
 ### Key Encoding (Reversed Ledger Sequence)
 
-- **Lexicographic Order**: Many key-value stores (e.g., GCS, S3) optimize for listing keys in lexicographic order. By
-  encoding the most recent ledgers first, clients can efficiently retrieve the latest data without scanning the entire
-  dataset.
-- **Reversed Sequence**: Using `math.MaxUint32 - startLedger` ensures that newer ledgers (with higher sequence numbers)
-  appear before older ones when sorted lexicographically. This avoids the need for additional metadata or indexes to
-  determine the latest ledger.
+- **Lexicographic Order**: Many key-value stores (e.g., GCS, S3) optimize for
+  listing keys in lexicographic order. By encoding the most recent ledgers
+  first, clients can efficiently retrieve the latest data without scanning the
+  entire dataset.
+- **Reversed Sequence**: Using `math.MaxUint32 - startLedger` ensures that
+  newer ledgers (with higher sequence numbers) appear before older ones when
+  sorted lexicographically. This avoids the need for additional metadata or
+  indexes to determine the latest ledger.
 
 ### Compression Algorithm
 
-- `zstd` was chosen after evaluating `zstd`, `lz4`, and `gzip`. It provides the best balance between compression ratio
-  and decompression speed.
+- `zstd` was chosen after evaluating `zstd`, `lz4`, and `gzip`. It provides the
+  best balance between compression ratio and decompression speed.
 
 ## Security Concerns
 
-Verifying the validity of the ledgers contained within the data store is outside the scope of this SEP. In otherwords,
-this SEP does not provide any mechanism for validating that the ledgers obtained from a data store have not been
-altered.
+Verifying the validity of the ledgers contained within the data store is
+outside the scope of this SEP. In otherwords, this SEP does not provide any
+mechanism for validating that the ledgers obtained from a data store have not
+been altered.
 
 ## Changelog
 
