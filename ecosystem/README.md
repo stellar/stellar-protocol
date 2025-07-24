@@ -21,8 +21,8 @@ All SEPs have individuals fulfilling the following roles:
 - **Draft** - A SEP that is currently open for consideration, iteration and
   actively being discussed. It may change.
 - **FCP** - A SEP that has entered a Final Comment Period (FCP). An author
-  places their SEP in FCP to signal that they plan to cease making changes.
-  The author also decides whether they want a SEP considered for `Active` or
+  places their SEP in FCP to signal that they plan to cease making changes. The
+  author also decides whether they want a SEP considered for `Active` or
   `Final` status. After at least one week passes for review and discussion, the
   SEP's status either moves as elected or back to `Draft`, if it needs changes.
 - **Active** - A SEP ready to be adopted, and the proposal is a living document
@@ -112,8 +112,8 @@ The Stellar ecosystem, like most software ecosystems in the world, continues to
 evolve over time to meet the needs of our network's participants and to drive
 technology forward into new territory.
 
-Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are
-a more dynamic way of introducing standards and protocols used in the ecosystem
+Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are a
+more dynamic way of introducing standards and protocols used in the ecosystem
 and built on top of the network. Thus it uses a lightweight pragmatism process.
 
 A SEP's author is responsible for a proposals adoption. Other ecosystem
