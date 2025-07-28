@@ -91,7 +91,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Draft                |
 | [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Draft                |
 | [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Draft                |
-| [SEP-0047](sep-0047.md) | Standard Interface Discovery                                   | Leigh McCulloch                               | Draft                |
+| [SEP-0047](sep-0047.md) | Contract Interface Discovery                                   | Leigh McCulloch                               | Draft                |
 | [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
 | [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Draft                |
