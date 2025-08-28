@@ -3,7 +3,7 @@
 ```
 SEP: TBD
 Title: Contract Build Verification
-Authors: OrbitLens <@orbitlens>, Nando Vieira <@fnando>
+Authors: Nando Vieira <@fnando>
 Track: Standard
 Status: Draft
 Created: 2024-09-28
