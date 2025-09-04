@@ -8,7 +8,7 @@ Track: Standard
 Status: Draft
 Created: 2024-09-28
 Updated: 2025-03-12
-Version: 0.4.0
+Version: 0.4.1
 Discussion: https://github.com/stellar/stellar-protocol/discussions/1573
 ```
 
