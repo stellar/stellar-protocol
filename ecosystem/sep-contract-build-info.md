@@ -289,6 +289,11 @@ developer actions is out of the scope of this SEP – the primary goal is to
 provide unfalsifiable evidences that a contract has been compiled automatically
 using a particular GitHub repository.
 
+It's important to note that this process gathers information about the GitHub
+Actions run that is attested to have built the wasm, but does not verify the
+source code. The build run, its workflow, and source code must still be
+reviewed carefully.
+
 ## Changelog
 
 - `v0.4.1` - Update sample workflow to use the `wasm32v1-none` target.
