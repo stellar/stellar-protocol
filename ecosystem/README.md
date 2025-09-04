@@ -98,7 +98,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0052](sep-0052.md)               | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Draft                |
 | [SEP-0053](sep-0053.md)               | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu  | Draft                |
 | [SEP-0054](sep-0054.md)               | Ledger Metadata Storage                                        | Tamir Sen                                     | Draft                |
-| [SEP-TBD](sep-contract-build-info.md) | Contract Build Info                                            | OpenZeppelin, Nando Vieira                    | Draft                |
+| [SEP-TBD](sep-contract-build-info.md) | Contract Build Info                                            | Nando Vieira                                  | Draft                |
 
 ### Abandoned Proposals
 
