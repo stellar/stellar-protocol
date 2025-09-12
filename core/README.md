@@ -117,6 +117,7 @@
 | [CAP-0050](cap-0050.md) | Smart Contract Interactions | Jonathan Jove | Rejected |
 | [CAP-0052](cap-0052.md) | Smart Contract Host Functionality: Base64 Encoding/Decoding | Leigh McCulloch | Rejected |
 | [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Rejected |
+| [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 
 # Contribution Process
 
