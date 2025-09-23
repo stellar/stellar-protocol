@@ -102,7 +102,9 @@
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
-| [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Draft |
+| [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
+| [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
+| [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -117,6 +119,7 @@
 | [CAP-0050](cap-0050.md) | Smart Contract Interactions | Jonathan Jove | Rejected |
 | [CAP-0052](cap-0052.md) | Smart Contract Host Functionality: Base64 Encoding/Decoding | Leigh McCulloch | Rejected |
 | [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Rejected |
+| [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Rejected |
 
 # Contribution Process
 
