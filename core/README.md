@@ -304,4 +304,4 @@ the network have accepted the implementation, it will move to **Final**.
 
 ## CAP Team Members
 
-**CAP Core Team**: Nicolas (SDF), Jed (SDF), David (SDF)
+**CAP Core Team**: Anup (SDF), Nicolas (SDF), Tomer (SDF)
