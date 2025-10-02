@@ -105,6 +105,7 @@
 | [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances | Dmytro Kozhevin | Draft |
+| [CAP-0074](cap-0074.md) | Host functions for BN254 | Siddharth Suresh | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -304,4 +305,4 @@ the network have accepted the implementation, it will move to **Final**.
 
 ## CAP Team Members
 
-**CAP Core Team**: Nicolas (SDF), Jed (SDF), David (SDF)
+**CAP Core Team**: Anup (SDF), Nicolas (SDF), Tomer (SDF)
