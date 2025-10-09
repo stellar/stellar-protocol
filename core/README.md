@@ -82,6 +82,8 @@
 | [CAP-0068](cap-0068.md) | 23 | Host function for getting executable for `Address` | Dmytro Kozhevin | Implemented |
 | [CAP-0069](cap-0069.md) | 23 | String/Bytes conversion host functions | Dmytro Kozhevin | Implemented |
 | [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Implemented |
+| [CAP-0074](cap-0074.md) | Host functions for BN254 | Siddharth Suresh | Awaiting Decision |
+| [CAP-0075](cap-0075.md) | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Awaiting Decision |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -105,8 +107,6 @@
 | [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances | Dmytro Kozhevin | Draft |
-| [CAP-0074](cap-0074.md) | Host functions for BN254 | Siddharth Suresh | Draft |
-| [CAP-0075](cap-0075.md) | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
