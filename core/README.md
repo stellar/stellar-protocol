@@ -106,7 +106,7 @@
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances | Dmytro Kozhevin | Draft |
 | [CAP-0074](cap-0074.md) | Host functions for BN254 | Siddharth Suresh | Draft |
-| [CAP-0074](cap-0075.md) | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Draft |
+| [CAP-0075](cap-0075.md) | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
