@@ -16,4 +16,3 @@ jobs:
       - run: corepack prepare yarn@stable --activate
       - run: yarn install --frozen-lockfile
       - run: yarn sep-check
-      
