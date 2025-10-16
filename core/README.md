@@ -84,6 +84,7 @@
 | [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Implemented |
 | [CAP-0074](cap-0074.md) | Host functions for BN254 | Siddharth Suresh | Awaiting Decision |
 | [CAP-0075](cap-0075.md) | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Awaiting Decision |
+| [CAP-0076](cap-0076.md) | P23 State Archival bug remediation | Dmytro Kozhevin | Draft |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
