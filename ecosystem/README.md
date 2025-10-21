@@ -1,7 +1,7 @@
 # Stellar Ecosystem Proposals (SEPs)
 
 SEPs are ideas, standards, and specifications in the form of proposals that the
-author is intending to be adopted by participants in the Stellar ecosystem.
+author would like adopted by participants in the Stellar ecosystem.
 
 ## Roles
 
@@ -12,7 +12,7 @@ All SEPs have individuals fulfilling the following roles:
   and the general success of the SEP.
 - **Maintainer** - The maintainer is optional. If not present, the maintainer
   is the author. The maintainer is responsible for reviewing changes to the
-  SEP. For SEPs that have ecosystem adoption, SDF may identify or become a
+  SEP. For SEPs that have ecosystem adoption, the SDF may identify or become a
   maintainer of last resort. A maintainer of last resort steps in and acts as
   the maintainer if the maintainer ceases to respond or engage.
 
@@ -21,18 +21,18 @@ All SEPs have individuals fulfilling the following roles:
 - **Draft** - A SEP that is currently open for consideration, iteration and
   actively being discussed. It may change.
 - **FCP** - A SEP that has entered a Final Comment Period (FCP). An author
-  places their SEP in FCP when they wish to signal that they plan to cease
-  making changes. After at least one week has passed the SEP's status should
-  move to `Active` or `Final`, or back to `Draft`. If changes are required, it
-  should be moved back to `Draft`.
+  places their SEP in FCP to signal that they plan to cease making changes. The
+  author also decides whether they want a SEP considered for `Active` or
+  `Final` status. After at least one week passes for review and discussion, the
+  SEP's status either moves as elected or back to `Draft`, if it needs changes.
 - **Active** - A SEP ready to be adopted, and the proposal is a living document
-  and may still receive changes. The author intends the SEP in its current form
-  to be actively adopted. Changes can be made without changing the SEP number,
-  although in the interest of growing an ecosystem of interopable participants
-  the author should endeavor to make changes backwards compatible so that
-  participants who have already adopted the SEP can continue to participate.
-  Where changes cannot be backwards compatible, the major version should be
-  updated to clearly distinguish new incompatible versions.
+  which may still receive changes. The author intends the SEP in its current
+  form to be actively adopted. Changes can be made without changing the SEP
+  number, although in the interest of growing an ecosystem of interopable
+  participants the author should endeavor to make changes backwards compatible
+  so that participants who have already adopted the SEP can continue to
+  participate. Where changes cannot be backwards compatible, the major version
+  should be updated to clearly distinguish new incompatible versions.
 - **Final** - A SEP ready to be adopted, and the proposal is an immutable
   document and will no longer receive changes, other than minor errata. The
   author intends to make no further changes. Adopters can expect significant
@@ -40,9 +40,9 @@ All SEPs have individuals fulfilling the following roles:
 
 ### Additional Statuses
 
-- **Abandoned** - A SEP has been abandoned by the author. SDF may move a SEP
-  into this state if the SEP has no activity, no visible adoption, and the
-  author is not responsive.
+- **Abandoned** - A SEP has been abandoned by the author. The SDF may approve
+  moving a SEP into this state if the SEP has no activity, no visible adoption,
+  and the author is not responsive.
 
 ## Proposals
 
@@ -110,18 +110,17 @@ All SEPs have individuals fulfilling the following roles:
 
 # Contribution Process
 
-The Stellar Ecosystem, like most software ecosystems in the world, continues to
+The Stellar ecosystem, like most software ecosystems in the world, continues to
 evolve over time to meet the needs of our network's participants and to drive
 technology forward into new territory.
 
-Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are
-intended to be a more dynamic way of introducing standards and protocols
-utilized in the ecosystem that are built on top of the Stellar Network. It uses
-a lightweight process.
+Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are a
+more dynamic way of introducing standards and protocols used in the ecosystem
+and built on top of the network. Thus it uses a lightweight pragmatism process.
 
-A SEPs author is responsible for a proposals adoption. Other ecosystem
-participants, including SDF, may encourage adoption of a proposal, but authors
-should expect each proposal to stand on its own merits and authors and
+A SEP's author is responsible for a proposals adoption. Other ecosystem
+participants, including the SDF, may encourage adoption of a proposal, but
+authors should expect each proposal to stand on its own merits and authors and
 maintainers should plan to drive adoption themselves.
 
 Before contributing, consider the following:
@@ -130,7 +129,7 @@ Before contributing, consider the following:
   Dev Discord], or [stellar-dev mailing list], and utilize it to begin a draft
   proposal.
 - Follow the proposal process listed below. If you're having difficulty moving
-  the proposal forward, talk to folks in the ecosystem, or folks at SDF;
+  the proposal forward, talk to folks in the ecosystem, or folks at the SDF;
   they'll often have guidance on how to move things forward, as well as
   feedback regarding feasibility and how the proposal does or does not align
   with the Stellar Network's goals.
@@ -178,16 +177,17 @@ following:
 - If your SEP requires images or other supporting files, they should be
   included in a subdirectory of the `contents` folder for that SEP, such as
   `contents/sep_happycoder_b274f73c/`. Links should be relative, for example a
-  link to an image from SEP-X would be
+  link to an image from `SEP-X` would be
   `../contents/sep_happycoder_b274f73c/image.png`.
 
 ### Draft: Further Iteration
 
-From there, the following process will happen:
+Next, the SDF reccomends an iterative-feedback process with the community:
 
-- You should continue the discussion of the draft SEP on the [GitHub discussion
-  forum], [Stellar Dev Discord], or [stellar-dev mailing list] to gather
-  additional feedback. We welcome any additional PRs that iterate on the draft.
+- Successful authors polish their designs with help from SEP users through a
+  discussion of the draft SEP on the [GitHub discussion forums], [Stellar Dev
+  Discord], or [stellar-dev mailing list] to gather additional feedback. The
+  SDF also welcomes any additional ecosystem PRs that iterate on the draft.
 - Keep the version of the SEP as a `v0.y.z` version while in draft.
 - Increment the minor or patch versions on each change while in draft. See [SEP
   Versioning].
