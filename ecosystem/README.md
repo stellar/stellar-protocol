@@ -73,32 +73,33 @@ All SEPs have individuals fulfilling the following roles:
 
 ### Draft Proposals
 
-| Number                  | Title                                                          | Author                                        | Status               |
-| ----------------------- | -------------------------------------------------------------- | --------------------------------------------- | -------------------- |
-| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                  | Draft                |
-| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                  | Draft                |
-| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                    | Draft                |
-| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                     | Draft                |
-| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                  | Draft                |
-| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                          | Draft                |
-| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                  | Draft                |
-| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                               | Draft                |
-| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                | Final Comment Period |
-| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Draft                |
-| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                     | Draft                |
-| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                | Draft                |
-| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                              | Active               |
-| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Draft                |
-| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Draft                |
-| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Draft                |
-| [SEP-0047](sep-0047.md) | Contract Interface Discovery                                   | Leigh McCulloch                               | Draft                |
-| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
-| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk      | Draft                |
-| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                               | Draft                |
-| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                         | Draft                |
-| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu  | Draft                |
-| [SEP-0054](sep-0054.md) | Ledger Metadata Storage                                        | Tamir Sen                                     | Draft                |
-| [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                  | Draft                |
+| Number                  | Title                                                          | Author                                             | Status               |
+| ----------------------- | -------------------------------------------------------------- | -------------------------------------------------- | -------------------- |
+| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                       | Draft                |
+| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                       | Draft                |
+| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                         | Draft                |
+| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                          | Draft                |
+| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                       | Draft                |
+| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                               | Draft                |
+| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                       | Draft                |
+| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                                    | Draft                |
+| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                     | Final Comment Period |
+| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein      | Draft                |
+| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                          | Draft                |
+| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                     | Draft                |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                                   | Active               |
+| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna         | Draft                |
+| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh                    | Draft                |
+| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch       | Draft                |
+| [SEP-0047](sep-0047.md) | Contract Interface Discovery                                   | Leigh McCulloch                                    | Draft                |
+| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk           | Draft                |
+| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk           | Draft                |
+| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                    | Draft                |
+| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                              | Draft                |
+| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu       | Draft                |
+| [SEP-0054](sep-0054.md) | Ledger Metadata Storage                                        | Tamir Sen                                          | Draft                |
+| [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                       | Draft                |
+| [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel | Draft                |
 
 ### Abandoned Proposals
 
