@@ -1,23 +1,45 @@
-name: 'Stale Issues'
+name: Stale Issues Management
 
+# Schedule the workflow to run daily at 18:00 UTC (Coordinated Universal Time).
+# Cron syntax: minute (0-59), hour (0-23), day of month (1-31), month (1-12), day of week (0-6)
 on:
   schedule:
-    - cron: '0 18 * * *' # approx 9:30am daily
+    - cron: '0 18 * * *'
 
 jobs:
-  stale:
+  stale_issues:
+    name: Manage Stale Issues and Pull Requests
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/stale@v10.1.0
+      - name: Run Stale Action
+        # Using a major version tag (v10) for stability and minor updates
+        uses: actions/stale@v10
         with:
+          # Required token for API calls (usually provided automatically by GitHub)
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          debug-only: false
+          
+          # Set to 'true' to only log actions without performing them (useful for dry runs)
+          debug-only: false 
+          
+          # Issues/PRs considered stale if no activity for 30 days
           days-before-stale: 30
-          days-before-close: 30
-          stale-issue-message: 'This issue is stale because it has been open for 30 days with no activity. It will be closed in 30 days unless the stale label is removed.'
-          stale-pr-message: 'This pull request is stale because it has been open for 30 days with no activity. It will be closed in 30 days unless the stale label is removed.'
+          # Stale issues/PRs will be closed 30 days after being marked as stale
+          days-before-close: 30 
+          
+          # Message posted when an issue is marked as stale
+          stale-issue-message: 'This issue is stale because there has been no activity for 30 days. It will be automatically closed in 30 days unless updated.'
+          
+          # Message posted when a pull request is marked as stale
+          stale-pr-message: 'This pull request is stale because there has been no activity for 30 days. It will be automatically closed in 30 days unless updated.'
+          
+          # Label applied to issues/PRs that are marked as stale
           stale-issue-label: stale
           stale-pr-label: stale
+          
+          # Labels that exempt an issue/PR from being marked as stale
           exempt-issue-labels: 'needs draft,needs pilot,accepted,blocked'
           exempt-pr-labels: 'needs draft,needs pilot,accepted,blocked'
+          
+          # Automatically remove the stale label if the issue/PR receives new activity
           remove-stale-when-updated: true
