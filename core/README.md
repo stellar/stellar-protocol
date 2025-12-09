@@ -108,6 +108,7 @@
 | [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances | Dmytro Kozhevin | Draft |
+| [CAP-0077](cap-0077.md) | Ability to freeze ledger keys via network configuration | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
