@@ -70,7 +70,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Active |
 | [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Active |
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Active |
-| [SEP-0054](sep-0054.md) | Ledger Metadata Storage                                                | Leigh McCulloch                                               | Active |
+| [SEP-0054](sep-0054.md) | Ledger Metadata Storage                                                | Tamir Sen                                                     | Active |
 
 ### Draft Proposals
 
