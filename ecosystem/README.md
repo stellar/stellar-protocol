@@ -70,6 +70,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Active |
 | [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Active |
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Active |
+| [SEP-0054](sep-0054.md) | Ledger Metadata Storage                                                | Tamir Sen                                                     | Active |
 
 ### Draft Proposals
 
@@ -97,7 +98,6 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                            | Draft                |
 | [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                      | Draft                |
 | [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu               | Draft                |
-| [SEP-0054](sep-0054.md) | Ledger Metadata Storage                                        | Tamir Sen                                                  | Draft                |
 | [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                               | Draft                |
 | [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Draft                |
 | [SEP-0057](sep-0057.md) | T-REX (Token for Regulated EXchanges)                          | OpenZeppelin, Boyan Barakov, Özgün Özerk, Dennis O'Connell | Draft                |
