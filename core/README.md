@@ -110,6 +110,7 @@
 | [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances | Dmytro Kozhevin | Draft |
 | [CAP-0077](cap-0077.md) | Ability to freeze ledger keys via network configuration | Dmytro Kozhevin | Draft |
 | [CAP-0078](cap-0078.md) | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Draft |
+| [CAP-0079](cap-0079.md) | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
