@@ -86,6 +86,13 @@ To apply diffs, use the `git apply --reject --whitespace=fix` command.
 For large changes, it may be beneficial to link to actual XDR files copied
 in the relevant "contents" folder.
 
+#### XDR Example
+If this update to XDR or any logical change to meta will have any effect on Horizon, RPC, etc., include some base64-encoded `LedgerCloseMeta` examples. The examples should reflect the updated XDR structures for downstream testing purposes. The feasibility of generating this XDR will depend on the XDR change itself, but the CAP author should do their best to give downstream consumers enough to test with so they don't need to wait for the Stellar Core implementation before starting testing.
+
+The `stellar-xdr` CLI can convert between base64 XDR and JSON, so that can be used to modify an existing testnet or mainnet `LedgerCloseMeta` to use as an example. Note that you may need to build or install a version of `stellar-xdr` that contains the changes in this CAP.
+
+This section should be filled out by the time the XDR is agreed on in a protocol meeting.
+
 ### Semantics
 This section includes subsections, one for each logical change included in the XDR changes,
 that describes how each new or changed type functions and is used, and for new operations
