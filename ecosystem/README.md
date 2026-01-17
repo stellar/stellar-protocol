@@ -279,3 +279,10 @@ version number change once moved into the status.
 [ietf]: https://ietf.org/
 [semantic versioning]: https://semver.org/
 [SEP Versioning]: #sep-versioning
+stellar contract invoke `
+  --id CACDYF3CYMJEJTIVFESQYZTN67GO2R5D5IUABTCUG3HXQSRXCSOROBAN `
+  --source-account alice `
+  --network testnet `
+  -- `
+  hello `
+  --to RPC
