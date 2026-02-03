@@ -82,9 +82,10 @@
 | [CAP-0068](cap-0068.md) | 23 | Host function for getting executable for `Address` | Dmytro Kozhevin | Final |
 | [CAP-0069](cap-0069.md) | 23 | String/Bytes conversion host functions | Dmytro Kozhevin | Final |
 | [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Final |
-| [CAP-0074](cap-0074.md) | Host functions for BN254 | Siddharth Suresh | Awaiting Decision |
-| [CAP-0075](cap-0075.md) | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Awaiting Decision |
-| [CAP-0076](cap-0076.md) | P23 State Archival bug remediation | Dmytro Kozhevin | Final |
+| [CAP-0076](cap-0076.md) | 24 | P23 State Archival bug remediation | Dmytro Kozhevin | Final |
+| [CAP-0074](cap-0074.md) | 25 | Host functions for BN254 | Siddharth Suresh | Final |
+| [CAP-0075](cap-0075.md) | 25 | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Final |
+
 
 ### Draft Proposals
 | Number | Title | Author | Status |
