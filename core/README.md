@@ -112,6 +112,7 @@
 | [CAP-0078](cap-0078.md) | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Draft |
 | [CAP-0079](cap-0079.md) | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Draft |
 | [CAP-0080](cap-0080.md) | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Draft |
+| [CAP-0081](cap-0081.md) | TTL-Ordered Eviction | Garand Tyson | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
