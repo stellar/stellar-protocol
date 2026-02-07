@@ -140,8 +140,9 @@ Before contributing, consider the following:
 
 ### Pre-SEP (Initial Discussion)
 
-Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord], or
-[stellar-dev mailing list] and other community forums dedicated to Stellar.
+Introduce your idea on the [GitHub discussion forum], [Stellar Dev Discord],
+[stellar-dev mailing list], or any other community conversations spaces and
+boards dedicated to Stellar.
 
 - Make sure to gather feedback and alternative ideas — it's useful before
   putting together a formal draft!
@@ -187,7 +188,7 @@ following:
 Next, the SDF recommends an iterative-feedback process with the community:
 
 - Successful authors polish their designs with help from SEP users through a
-  discussion of the draft SEP on the [GitHub discussion forums], [Stellar Dev
+  discussion of the draft SEP on the [GitHub discussion forum], [Stellar Dev
   Discord], or [stellar-dev mailing list] to gather additional feedback. The
   SDF also welcomes any additional ecosystem PRs that iterate on the draft.
 - Keep the version of the SEP as a `v0.y.z` version while in draft.
