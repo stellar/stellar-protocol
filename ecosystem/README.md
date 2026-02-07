@@ -122,7 +122,7 @@ and built on top of the network. Thus it uses a lightweight, pragmatic process.
 
 A SEP's author is responsible for a proposal's adoption. Other ecosystem
 participants, including the SDF, may encourage adoption of a proposal, but
-authors should expect each proposal to stand on its own merits and authors and
+authors should expect each proposal to stand on its own merits. Authors and
 maintainers should plan to drive adoption themselves.
 
 Before contributing, consider the following:
