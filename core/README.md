@@ -35,107 +35,108 @@
 
 ## List of Proposals
 
-| Number | Protocol Version | Title | Author | Status |
-| ---- | --- | --- | --- | --- |
-| [CAP-0001](cap-0001.md) | 10 | Bump Sequence | Nicolas Barry | Final |
-| [CAP-0002](cap-0002.md) | 10 | Transaction level signature verification | Nicolas Barry | Final |
-| [CAP-0003](cap-0003.md) | 10 | Asset-backed offers | Jonathan Jove | Final |
-| [CAP-0004](cap-0004.md) | 10 | Improved Rounding for Cross Offer | Jonathan Jove | Final |
-| [CAP-0005](cap-0005.md) | 11 | Throttling and transaction pricing improvements | Nicolas Barry | Final |
-| [CAP-0006](cap-0006.md) | 11 | Add ManageBuyOffer Operation | Jonathan Jove | Final |
-| [CAP-0015](cap-0015.md) | 13 | Fee Bump Transactions | OrbitLens | Final |
-| [CAP-0017](cap-0017.md) | - | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified | Jonathan Jove | Accepted |
-| [CAP-0018](cap-0018.md) | 13 | Fine-Grained Control of Authorization | Jonathan Jove | Final |
-| [CAP-0019](cap-0019.md) | 13 | Future-upgradable TransactionEnvelope type | David Mazières | Final |
-| [CAP-0020](cap-0020.md) | 11 | Bucket Initial Entries | Graydon Hoare | Final |
-| [CAP-0021](cap-0021.md) | 19 | Generalized transaction preconditions | David Mazières | Final |
-| [CAP-0023](cap-0023.md) | 14 | Two-Part Payments with ClaimableBalanceEntry | Jonathan Jove | Final |
-| [CAP-0024](cap-0024.md) | 12 | Make PathPayment Symmetrical | Jed McCaleb | Final |
-| [CAP-0025](cap-0025.md) | 12 | Remove Bucket Shadowing | Marta Lokhava | Final |
-| [CAP-0026](cap-0026.md) | 12 | Disable Inflation Mechanism | OrbitLens | Final |
-| [CAP-0027](cap-0027.md) | 13 | First-class multiplexed accounts | David Mazières and Tomer Weller | Final |
-| [CAP-0028](cap-0028.md) | 13 | Clear pre-auth transaction signer on failed transactions | Siddharth Suresh | Final |
-| [CAP-0029](cap-0029.md) | 16 | AllowTrust when not AUTH_REQUIRED | Tomer Weller | Final |
-| [CAP-0030](cap-0030.md) | 13 | Remove NO_ISSUER Operation Results | Siddharth Suresh | Final |
-| [CAP-0033](cap-0033.md) | 14/15 | Sponsored Reserve with EphemeralSponsorshipEntry | Jonathan Jove | Final |
-| [CAP-0034](cap-0034.md) | 14 | Preserve Transaction-Set/Close-Time Affinity During Nomination | Terence Rokop | Final |
-| [CAP-0035](cap-0035.md) | 17 | Asset Clawback | Dan Doney | Final |
-| [CAP-0038](cap-0038.md) | 18 | Automated Market Makers | Jonathan Jove | Final |
-| [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Final |
-| [CAP-0042](cap-0042.md) | - | Multi-Part Transaction Sets | Nicolas Barry | Final |
-| [CAP-0046](cap-0046.md) | 20 |Soroban smart contract system overview | Graydon Hoare | Final |
-| [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | 20 | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Final |
-| [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | 20 | Smart Contract Lifecycle | Siddharth Suresh | Final |
-| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20 | Smart Contract Host Functons | Jay Geng | Final |
-| [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | 20 | Smart Contract Data | Graydon Hoare | Final |
-| [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | 20 | Smart Contract Standardized Asset | Jonathan Jove | Final |
-| [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | 20 | Fee model in smart contracts | Nicolas Barry | Final |
-| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | 20 |Smart Contract Logging | Siddharth Suresh | Final |
-| [CAP-0046-09](cap-0046-09.md) | 20 | Network Configuration Ledger Entries | Dmytro Kozhevin | Final |
-| [CAP-0046-10](cap-0046-10.md) | 20 | Smart Contract Budget Metering | Jay Geng | Final |
-| [CAP-0046-11](cap-0046-11.md) | 20 | Soroban Authorization Framework | Dmytro Kozhevin | Final |
-| [CAP-0046-12](cap-0046-12.md) | 20 | Soroban State Archival Interface | Garand Tyson | Final |
-| [CAP-0051](cap-0051.md) | 21 | Smart Contract Host Functionality: Secp256r1 Verification | Leigh McCulloch | Final |
-| [CAP-0053](cap-0053.md) | 21 | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti | Final |
-| [CAP-0054](cap-0054.md) | 21 | Soroban refined VM instantiation cost model | Graydon Hoare | Final |
-| [CAP-0055](cap-0055.md) | 21 | Soroban streamlined linking | Graydon Hoare | Final |
-| [CAP-0056](cap-0056.md) | 21 | Soroban intra-transaction module caching | Graydon Hoare | Final |
-| [CAP-0058](cap-0058.md) | 22 | Constructors for Soroban Contracts | Dmytro Kozhevin | Final |
-| [CAP-0059](cap-0059.md) | 22 | Host functions for BLS12-381 | Jay Geng | Final |
-| [CAP-0062](cap-0062.md) | 23 | Soroban Live State Prioritization | Garand Tyson | Final |
-| [CAP-0063](cap-0063.md) | 23 | Parallelism-friendly Transaction Scheduling | Dmytro Kozhevin | Final |
-| [CAP-0065](cap-0065.md) | 23 | Reusable Module Cache | Graydon Hoare | Final |
-| [CAP-0066](cap-0066.md) | 23 | Soroban In-memory Read Resource | Garand Tyson | Final |
-| [CAP-0067](cap-0067.md) | 23 | Unified Asset Events | Siddharth Suresh | Final |
-| [CAP-0068](cap-0068.md) | 23 | Host function for getting executable for `Address` | Dmytro Kozhevin | Final |
-| [CAP-0069](cap-0069.md) | 23 | String/Bytes conversion host functions | Dmytro Kozhevin | Final |
-| [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Final |
-| [CAP-0074](cap-0074.md) | Host functions for BN254 | Siddharth Suresh | Awaiting Decision |
-| [CAP-0075](cap-0075.md) | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Awaiting Decision |
-| [CAP-0076](cap-0076.md) | P23 State Archival bug remediation | Dmytro Kozhevin | Final |
+| Number                                        | Protocol Version                                               | Title                                                                             | Author                          | Status   |
+| --------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------- | -------- |
+| [CAP-0001](cap-0001.md)                       | 10                                                             | Bump Sequence                                                                     | Nicolas Barry                   | Final    |
+| [CAP-0002](cap-0002.md)                       | 10                                                             | Transaction level signature verification                                          | Nicolas Barry                   | Final    |
+| [CAP-0003](cap-0003.md)                       | 10                                                             | Asset-backed offers                                                               | Jonathan Jove                   | Final    |
+| [CAP-0004](cap-0004.md)                       | 10                                                             | Improved Rounding for Cross Offer                                                 | Jonathan Jove                   | Final    |
+| [CAP-0005](cap-0005.md)                       | 11                                                             | Throttling and transaction pricing improvements                                   | Nicolas Barry                   | Final    |
+| [CAP-0006](cap-0006.md)                       | 11                                                             | Add ManageBuyOffer Operation                                                      | Jonathan Jove                   | Final    |
+| [CAP-0015](cap-0015.md)                       | 13                                                             | Fee Bump Transactions                                                             | OrbitLens                       | Final    |
+| [CAP-0017](cap-0017.md)                       | -                                                              | Update LastModifiedLedgerSeq If and Only If LedgerEntry is Modified               | Jonathan Jove                   | Accepted |
+| [CAP-0018](cap-0018.md)                       | 13                                                             | Fine-Grained Control of Authorization                                             | Jonathan Jove                   | Final    |
+| [CAP-0019](cap-0019.md)                       | 13                                                             | Future-upgradable TransactionEnvelope type                                        | David Mazières                  | Final    |
+| [CAP-0020](cap-0020.md)                       | 11                                                             | Bucket Initial Entries                                                            | Graydon Hoare                   | Final    |
+| [CAP-0021](cap-0021.md)                       | 19                                                             | Generalized transaction preconditions                                             | David Mazières                  | Final    |
+| [CAP-0023](cap-0023.md)                       | 14                                                             | Two-Part Payments with ClaimableBalanceEntry                                      | Jonathan Jove                   | Final    |
+| [CAP-0024](cap-0024.md)                       | 12                                                             | Make PathPayment Symmetrical                                                      | Jed McCaleb                     | Final    |
+| [CAP-0025](cap-0025.md)                       | 12                                                             | Remove Bucket Shadowing                                                           | Marta Lokhava                   | Final    |
+| [CAP-0026](cap-0026.md)                       | 12                                                             | Disable Inflation Mechanism                                                       | OrbitLens                       | Final    |
+| [CAP-0027](cap-0027.md)                       | 13                                                             | First-class multiplexed accounts                                                  | David Mazières and Tomer Weller | Final    |
+| [CAP-0028](cap-0028.md)                       | 13                                                             | Clear pre-auth transaction signer on failed transactions                          | Siddharth Suresh                | Final    |
+| [CAP-0029](cap-0029.md)                       | 16                                                             | AllowTrust when not AUTH_REQUIRED                                                 | Tomer Weller                    | Final    |
+| [CAP-0030](cap-0030.md)                       | 13                                                             | Remove NO_ISSUER Operation Results                                                | Siddharth Suresh                | Final    |
+| [CAP-0033](cap-0033.md)                       | 14/15                                                          | Sponsored Reserve with EphemeralSponsorshipEntry                                  | Jonathan Jove                   | Final    |
+| [CAP-0034](cap-0034.md)                       | 14                                                             | Preserve Transaction-Set/Close-Time Affinity During Nomination                    | Terence Rokop                   | Final    |
+| [CAP-0035](cap-0035.md)                       | 17                                                             | Asset Clawback                                                                    | Dan Doney                       | Final    |
+| [CAP-0038](cap-0038.md)                       | 18                                                             | Automated Market Makers                                                           | Jonathan Jove                   | Final    |
+| [CAP-0040](cap-0040.md)                       | 19                                                             | Ed25519 Signed Payload Signer for Transaction Signature Disclosure                | Leigh McCulloch                 | Final    |
+| [CAP-0042](cap-0042.md)                       | -                                                              | Multi-Part Transaction Sets                                                       | Nicolas Barry                   | Final    |
+| [CAP-0046](cap-0046.md)                       | 20                                                             | Soroban smart contract system overview                                            | Graydon Hoare                   | Final    |
+| [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | 20                                                             | WebAssembly Smart Contract Runtime Environment                                    | Graydon Hoare                   | Final    |
+| [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | 20                                                             | Smart Contract Lifecycle                                                          | Siddharth Suresh                | Final    |
+| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20                                                             | Smart Contract Host Functons                                                      | Jay Geng                        | Final    |
+| [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | 20                                                             | Smart Contract Data                                                               | Graydon Hoare                   | Final    |
+| [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | 20                                                             | Smart Contract Standardized Asset                                                 | Jonathan Jove                   | Final    |
+| [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | 20                                                             | Fee model in smart contracts                                                      | Nicolas Barry                   | Final    |
+| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | 20                                                             | Smart Contract Logging                                                            | Siddharth Suresh                | Final    |
+| [CAP-0046-09](cap-0046-09.md)                 | 20                                                             | Network Configuration Ledger Entries                                              | Dmytro Kozhevin                 | Final    |
+| [CAP-0046-10](cap-0046-10.md)                 | 20                                                             | Smart Contract Budget Metering                                                    | Jay Geng                        | Final    |
+| [CAP-0046-11](cap-0046-11.md)                 | 20                                                             | Soroban Authorization Framework                                                   | Dmytro Kozhevin                 | Final    |
+| [CAP-0046-12](cap-0046-12.md)                 | 20                                                             | Soroban State Archival Interface                                                  | Garand Tyson                    | Final    |
+| [CAP-0051](cap-0051.md)                       | 21                                                             | Smart Contract Host Functionality: Secp256r1 Verification                         | Leigh McCulloch                 | Final    |
+| [CAP-0053](cap-0053.md)                       | 21                                                             | Separate host functions to extend the TTL for contract instance and contract code | Tommaso De Ponti                | Final    |
+| [CAP-0054](cap-0054.md)                       | 21                                                             | Soroban refined VM instantiation cost model                                       | Graydon Hoare                   | Final    |
+| [CAP-0055](cap-0055.md)                       | 21                                                             | Soroban streamlined linking                                                       | Graydon Hoare                   | Final    |
+| [CAP-0056](cap-0056.md)                       | 21                                                             | Soroban intra-transaction module caching                                          | Graydon Hoare                   | Final    |
+| [CAP-0058](cap-0058.md)                       | 22                                                             | Constructors for Soroban Contracts                                                | Dmytro Kozhevin                 | Final    |
+| [CAP-0059](cap-0059.md)                       | 22                                                             | Host functions for BLS12-381                                                      | Jay Geng                        | Final    |
+| [CAP-0062](cap-0062.md)                       | 23                                                             | Soroban Live State Prioritization                                                 | Garand Tyson                    | Final    |
+| [CAP-0063](cap-0063.md)                       | 23                                                             | Parallelism-friendly Transaction Scheduling                                       | Dmytro Kozhevin                 | Final    |
+| [CAP-0065](cap-0065.md)                       | 23                                                             | Reusable Module Cache                                                             | Graydon Hoare                   | Final    |
+| [CAP-0066](cap-0066.md)                       | 23                                                             | Soroban In-memory Read Resource                                                   | Garand Tyson                    | Final    |
+| [CAP-0067](cap-0067.md)                       | 23                                                             | Unified Asset Events                                                              | Siddharth Suresh                | Final    |
+| [CAP-0068](cap-0068.md)                       | 23                                                             | Host function for getting executable for `Address`                                | Dmytro Kozhevin                 | Final    |
+| [CAP-0069](cap-0069.md)                       | 23                                                             | String/Bytes conversion host functions                                            | Dmytro Kozhevin                 | Final    |
+| [CAP-0070](cap-0070.md)                       | 23                                                             | Configurable SCP Timing Parameters                                                | Garand Tyson                    | Final    |
+| [CAP-0074](cap-0074.md)                       | Host functions for BN254                                       | Siddharth Suresh                                                                  | Awaiting Decision               |
+| [CAP-0075](cap-0075.md)                       | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng                                                                          | Awaiting Decision               |
+| [CAP-0076](cap-0076.md)                       | P23 State Archival bug remediation                             | Dmytro Kozhevin                                                                   | Final                           |
 
 ### Draft Proposals
-| Number | Title | Author | Status |
-| --- | --- | --- | --- |
-| [CAP-0007](cap-0007.md) | Deterministic Account Creation | Jeremy Rubin | Draft |
-| [CAP-0008](cap-0008.md) | Self Identified Pre-Auth Transaction | Jeremy Rubin | Draft |
-| [CAP-0009](cap-0009.md) | Linear/Exterior Immutable Accounts | Jeremy Rubin | Draft |
-| [CAP-0010](cap-0010.md) | Fee Bump Account | Jeremy Rubin | Draft |
-| [CAP-0011](cap-0011.md) | Relative Account Freeze | Jeremy Rubin | Draft |
-| [CAP-0012](cap-0012.md) | Deterministic accounts and creatorTxID | David Mazières | Draft |
-| [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering | Jeremy Rubin | Draft |
-| [CAP-0022](cap-0022.md) | Invalid transactions must have no effects | David Mazières | Draft |
-| [CAP-0032](cap-0032.md) | Trustline Preauthorization | Jonathan Jove | Draft |
-| [CAP-0037](cap-0037.md) | Automated Market Makers | OrbitLens | Draft |
-| [CAP-0041](cap-0041.md) | Concurrent Transactions | Leigh McCulloch, David Mazières | Draft |
-| [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves | Leigh McCulloch | Draft |
-| [CAP-0044](cap-0044.md) | SPEEDEX - Configuration | Jonathan Jove | Draft |
-| [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
-| [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
-| [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
-| [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
-| [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
-| [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances | Dmytro Kozhevin | Draft |
-| [CAP-0077](cap-0077.md) | Ability to freeze ledger keys via network configuration | Dmytro Kozhevin | Draft |
-| [CAP-0078](cap-0078.md) | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Draft |
-| [CAP-0079](cap-0079.md) | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Draft |
-| [CAP-0080](cap-0080.md) | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Draft |
+
+| Number                  | Title                                                   | Author                          | Status   |
+| ----------------------- | ------------------------------------------------------- | ------------------------------- | -------- |
+| [CAP-0007](cap-0007.md) | Deterministic Account Creation                          | Jeremy Rubin                    | Draft    |
+| [CAP-0008](cap-0008.md) | Self Identified Pre-Auth Transaction                    | Jeremy Rubin                    | Draft    |
+| [CAP-0009](cap-0009.md) | Linear/Exterior Immutable Accounts                      | Jeremy Rubin                    | Draft    |
+| [CAP-0010](cap-0010.md) | Fee Bump Account                                        | Jeremy Rubin                    | Draft    |
+| [CAP-0011](cap-0011.md) | Relative Account Freeze                                 | Jeremy Rubin                    | Draft    |
+| [CAP-0012](cap-0012.md) | Deterministic accounts and creatorTxID                  | David Mazières                  | Draft    |
+| [CAP-0014](cap-0014.md) | Adversarial Transaction Set Ordering                    | Jeremy Rubin                    | Draft    |
+| [CAP-0022](cap-0022.md) | Invalid transactions must have no effects               | David Mazières                  | Draft    |
+| [CAP-0032](cap-0032.md) | Trustline Preauthorization                              | Jonathan Jove                   | Draft    |
+| [CAP-0037](cap-0037.md) | Automated Market Makers                                 | OrbitLens                       | Draft    |
+| [CAP-0041](cap-0041.md) | Concurrent Transactions                                 | Leigh McCulloch, David Mazières | Draft    |
+| [CAP-0043](cap-0043.md) | ECDSA Signers with P-256 and secp256k1 Curves           | Leigh McCulloch                 | Draft    |
+| [CAP-0044](cap-0044.md) | SPEEDEX - Configuration                                 | Jonathan Jove                   | Draft    |
+| [CAP-0045](cap-0045.md) | SPEEDEX - Pricing                                       | Jonathan Jove                   | Draft    |
+| [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction                | Garand Tyson                    | Draft    |
+| [CAP-0060](cap-0060.md) | Update to Wasmi register machine                        | Graydon Hoare                   | Accepted |
+| [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts           | Dmytro Kozhevin                 | Draft    |
+| [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts                   | Dmytro Kozhevin                 | Draft    |
+| [CAP-0073](cap-0073.md) | Allow SAC to create G-account balances                  | Dmytro Kozhevin                 | Draft    |
+| [CAP-0077](cap-0077.md) | Ability to freeze ledger keys via network configuration | Dmytro Kozhevin                 | Draft    |
+| [CAP-0078](cap-0078.md) | Host functions for performing limited TTL extensions    | Dmytro Kozhevin                 | Draft    |
+| [CAP-0079](cap-0079.md) | Host functions for muxed address strkey conversions     | Dmytro Kozhevin                 | Draft    |
+| [CAP-0080](cap-0080.md) | Host functions for efficient ZK BN254 use cases         | Siddharth Suresh                | Draft    |
 
 ### Rejected Proposals
 
-| Number                  | Title                                                       | Author          | Status   |
-| ----------------------- | ----------------------------------------------------------- | --------------- | -------- |
-| [CAP-0013](cap-0013.md) | Change Trustlines to Balances                               | Dan Robinson    | Rejected |
-| [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG                | David Mazières  | Rejected |
-| [CAP-0031](cap-0031.md) | Sponsored Reserve                                           | Jonathan Jove   | Rejected |
-| [CAP-0036](cap-0036.md) | Claimable Balance Clawback                                  | Leigh McCulloch | Rejected |
-| [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines                               | Leigh McCulloch | Rejected |
-| [CAP-0048](cap-0048.md) | Smart Contract Asset Interoperability                       | Jonathan Jove   | Rejected |
-| [CAP-0049](cap-0049.md) | Smart Contract Asset Interoperability with Wrapper          | Jonathan Jove   | Rejected |
-| [CAP-0050](cap-0050.md) | Smart Contract Interactions                                 | Jonathan Jove   | Rejected |
-| [CAP-0052](cap-0052.md) | Smart Contract Host Functionality: Base64 Encoding/Decoding | Leigh McCulloch | Rejected |
-| [CAP-0064](cap-0064.md) | Memo Authorization for Soroban | Dmytro Kozhevin | Rejected |
-| [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller | Rejected |
+| Number                  | Title                                                                      | Author          | Status   |
+| ----------------------- | -------------------------------------------------------------------------- | --------------- | -------- |
+| [CAP-0013](cap-0013.md) | Change Trustlines to Balances                                              | Dan Robinson    | Rejected |
+| [CAP-0016](cap-0016.md) | Cosigned assets: NopOp and COAUTHORIZED_FLAG                               | David Mazières  | Rejected |
+| [CAP-0031](cap-0031.md) | Sponsored Reserve                                                          | Jonathan Jove   | Rejected |
+| [CAP-0036](cap-0036.md) | Claimable Balance Clawback                                                 | Leigh McCulloch | Rejected |
+| [CAP-0039](cap-0039.md) | Not Auth Revocable Trustlines                                              | Leigh McCulloch | Rejected |
+| [CAP-0048](cap-0048.md) | Smart Contract Asset Interoperability                                      | Jonathan Jove   | Rejected |
+| [CAP-0049](cap-0049.md) | Smart Contract Asset Interoperability with Wrapper                         | Jonathan Jove   | Rejected |
+| [CAP-0050](cap-0050.md) | Smart Contract Interactions                                                | Jonathan Jove   | Rejected |
+| [CAP-0052](cap-0052.md) | Smart Contract Host Functionality: Base64 Encoding/Decoding                | Leigh McCulloch | Rejected |
+| [CAP-0064](cap-0064.md) | Memo Authorization for Soroban                                             | Dmytro Kozhevin | Rejected |
+| [CAP-0061](cap-0061.md) | Smart Contract Standardized Asset (Stellar Asset Contract) Extension: Memo | Tomer Weller    | Rejected |
 
 # Contribution Process
 
@@ -154,7 +155,7 @@ Stellar's protocol development forward adhere to the following:
   Advancement Proposal).
 - Follow the proposal process listed below.
 
-## Stellar network Goals
+## Stellar Network Goals
 
 - **The Stellar network should be secure and reliable, and should bias towards
   safety, simplicity, reliability, and performance over new functionality.**
