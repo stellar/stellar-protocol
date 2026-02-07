@@ -184,7 +184,7 @@ following:
 
 ### Draft: Further Iteration
 
-Next, the SDF reccomends an iterative-feedback process with the community:
+Next, the SDF recommends an iterative-feedback process with the community:
 
 - Successful authors polish their designs with help from SEP users through a
   discussion of the draft SEP on the [GitHub discussion forums], [Stellar Dev
