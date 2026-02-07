@@ -120,7 +120,7 @@ Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are a
 more dynamic way of introducing standards and protocols used in the ecosystem
 and built on top of the network. Thus it uses a lightweight, pragmatic process.
 
-A SEP's author is responsible for a proposals adoption. Other ecosystem
+A SEP's author is responsible for a proposal's adoption. Other ecosystem
 participants, including the SDF, may encourage adoption of a proposal, but
 authors should expect each proposal to stand on its own merits and authors and
 maintainers should plan to drive adoption themselves.
