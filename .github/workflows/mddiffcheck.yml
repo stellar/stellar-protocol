@@ -10,12 +10,14 @@ jobs:
   mddiffcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: ^1.24
-      - run: go install github.com/stellar/mddiffcheck@v1
-      - run: >
-          mddiffcheck -repo 'https://github.com/stellar/stellar-core
-          https://github.com/stellar/stellar-xdr' core/*.md
+    - uses: actions/checkout@v5
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: ^1.24
+    - run: go install github.com/stellar/mddiffcheck@v1
+    - run: >
+        mddiffcheck
+        -repo
+        'https://github.com/stellar/stellar-core https://github.com/stellar/stellar-xdr'
+        core/*.md
