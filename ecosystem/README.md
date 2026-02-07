@@ -48,14 +48,14 @@ All SEPs have individuals fulfilling the following roles:
 
 | Number                  | Title                                                                  | Author                                                        | Status |
 | ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- | ------ |
-| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | The SDF                                                       | Active |
-| [SEP-0002](sep-0002.md) | Federation Protocol                                                    | The SDF                                                       | Final  |
-| [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | The SDF                                                       | Final  |
-| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | The SDF                                                       | Final  |
-| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | The SDF                                                       | Active |
+| [SEP-0001](sep-0001.md) | Stellar Info File                                                      | SDF                                                           | Active |
+| [SEP-0002](sep-0002.md) | Federation Protocol                                                    | SDF                                                           | Final  |
+| [SEP-0004](sep-0004.md) | Tx Status Endpoint                                                     | SDF                                                           | Final  |
+| [SEP-0005](sep-0005.md) | Key Derivation Methods for Stellar Accounts                            | SDF                                                           | Final  |
+| [SEP-0006](sep-0006.md) | Deposit and Withdrawal API                                             | SDF                                                           | Active |
 | [SEP-0007](sep-0007.md) | URI Scheme to facilitate delegated signing                             | Interstellar                                                  | Final  |
 | [SEP-0008](sep-0008.md) | Regulated Assets                                                       | Interstellar                                                  | Final  |
-| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | The SDF                                                       | Active |
+| [SEP-0009](sep-0009.md) | Standard KYC Fields                                                    | SDF                                                           | Active |
 | [SEP-0010](sep-0010.md) | Stellar Authentication                                                 | Sergey Nebolsin, Tom Quisel                                   | Active |
 | [SEP-0011](sep-0011.md) | Txrep: Human-Readable Low-Level Representation of Stellar Transactions | David Mazières                                                | Active |
 | [SEP-0012](sep-0012.md) | KYC API                                                                | Interstellar                                                  | Active |
@@ -63,10 +63,10 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0018](sep-0018.md) | Data Entry Namespaces                                                  | Mister.Ticot                                                  | Active |
 | [SEP-0020](sep-0020.md) | Self-verification of validator nodes                                   | Johan Stén                                                    | Active |
 | [SEP-0023](sep-0023.md) | Muxed Account Strkeys                                                  | David Mazières, Tomer Weller, Leigh McCulloch, Alfonso Acosta | Active |
-| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | The SDF                                                       | Active |
-| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | The SDF                                                       | Final  |
+| [SEP-0024](sep-0024.md) | Hosted Deposit and Withdrawal                                          | SDF                                                           | Active |
+| [SEP-0028](sep-0028.md) | XDR Base64 Encoding                                                    | SDF                                                           | Final  |
 | [SEP-0029](sep-0029.md) | Account Memo Requirements                                              | OrbitLens, Tomer Weller, Leigh McCulloch, David Mazières      | Active |
-| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | The SDF                                                       | Active |
+| [SEP-0031](sep-0031.md) | Cross-Border Payments API                                              | SDF                                                           | Active |
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Active |
 | [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Active |
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Active |
@@ -87,7 +87,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein | Draft                |
 | [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                     | Draft                |
 | [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                | Draft                |
-| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | The SDF, Litemint.io                          | Active               |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                              | Active               |
 | [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna    | Draft                |
 | [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh               | Draft                |
 | [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch  | Draft                |
@@ -102,9 +102,9 @@ All SEPs have individuals fulfilling the following roles:
 
 | Number                  | Title                                        | Author                                                       | Status    |
 | ----------------------- | -------------------------------------------- | ------------------------------------------------------------ | --------- |
-| [SEP-0003](sep-0003.md) | Compliance Protocol                          | The SDF                                                      | Abandoned |
+| [SEP-0003](sep-0003.md) | Compliance Protocol                          | SDF                                                          | Abandoned |
 | [SEP-0013](sep-0013.md) | DEPOSIT_SERVER proposal                      | @no, @ant, @manran, @pacngfar                                | Abandoned |
-| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | The SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon) | Abandoned |
+| [SEP-0026](sep-0026.md) | Non-interactive Anchor/Wallet Asset Transfer | SDF, Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon)     | Abandoned |
 
 # Contribution Process
 
