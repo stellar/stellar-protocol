@@ -16,7 +16,7 @@
       "minLength": 5,
       "description": "Short descriptive title of the list"
     },
-    "network":{
+    "network": {
       "type": "string",
       "enum": ["public", "testnet"]
     },
@@ -106,32 +106,19 @@
             "description": "Alerts, messages, or other additional information specified by the provider"
           }
         },
-        "required": [
-          "name",
-          "org"
-        ],
+        "required": ["name", "org"],
         "anyOf": [
           {
-            "required": [
-              "contract"
-            ]
+            "required": ["contract"]
           },
           {
-            "required": [
-              "code",
-              "issuer"
-            ]
+            "required": ["code", "issuer"]
           }
         ],
         "additionalProperties": false
       }
     }
   },
-  "required": [
-    "name",
-    "provider",
-    "version",
-    "assets"
-  ],
+  "required": ["name", "provider", "version", "assets"],
   "additionalProperties": false
 }

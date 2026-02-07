@@ -1,8 +1,8 @@
-name: 'Stale Issues'
+name: "Stale Issues"
 
 on:
   schedule:
-    - cron: '0 18 * * *' # approx 9:30am daily
+    - cron: "0 18 * * *" # approx 9:30am daily
 
 jobs:
   stale:
@@ -14,10 +14,16 @@ jobs:
           debug-only: false
           days-before-stale: 30
           days-before-close: 30
-          stale-issue-message: 'This issue is stale because it has been open for 30 days with no activity. It will be closed in 30 days unless the stale label is removed.'
-          stale-pr-message: 'This pull request is stale because it has been open for 30 days with no activity. It will be closed in 30 days unless the stale label is removed.'
+          stale-issue-message:
+            "This issue is stale because it has been open for 30 days with no
+            activity. It will be closed in 30 days unless the stale label is
+            removed."
+          stale-pr-message:
+            "This pull request is stale because it has been open for 30 days
+            with no activity. It will be closed in 30 days unless the stale
+            label is removed."
           stale-issue-label: stale
           stale-pr-label: stale
-          exempt-issue-labels: 'needs draft,needs pilot,accepted,blocked'
-          exempt-pr-labels: 'needs draft,needs pilot,accepted,blocked'
+          exempt-issue-labels: "needs draft,needs pilot,accepted,blocked"
+          exempt-pr-labels: "needs draft,needs pilot,accepted,blocked"
           remove-stale-when-updated: true

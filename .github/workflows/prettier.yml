@@ -1,4 +1,4 @@
-name: 'Prettier for SEP files'
+name: "Prettier for SEP files"
 
 on:
   pull_request:
