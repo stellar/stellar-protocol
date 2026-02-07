@@ -28,7 +28,7 @@ All SEPs have individuals fulfilling the following roles:
 - **Active** - A SEP ready to be adopted, and the proposal is a living document
   which may still receive changes. The author intends the SEP in its current
   form to be actively adopted. Changes can be made without changing the SEP
-  number, although in the interest of growing an ecosystem of interopable
+  number, although in the interest of growing an ecosystem of interoperable
   participants the author should endeavor to make changes backwards compatible
   so that participants who have already adopted the SEP can continue to
   participate. Where changes cannot be backwards compatible, the major version
