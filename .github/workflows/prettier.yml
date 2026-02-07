@@ -13,6 +13,5 @@ jobs:
         with:
           node-version: 24
       - run: corepack enable
-      - run: corepack prepare yarn@stable --activate
       - run: yarn install --frozen-lockfile
       - run: yarn sep-check
