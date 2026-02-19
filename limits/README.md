@@ -202,3 +202,68 @@ The evaluation may have several outcomes:
 
 **Step 4 \- Nominate the proposal**  
 In case if the proposal has gone through evaluation, it can be nominated for the vote by the validators. The nomination can be supported by the evaluation results summary.  
+
+# Contribution Process
+
+Users of the network are encouraged to propose changes to Soroban resource limits through the Stellar
+Limits Proposal (SLP) process. Unlike CAPs, SLPs are focused specifically on adjusting smart
+contract resource limits (mostly increases) and follow a streamlined process tailored to that scope.
+
+## Pre-SLP (Initial Discussion)
+Introduce your idea in [GitHub Discussions](https://github.com/stellar/stellar-protocol/discussions) where you should:
+- Clearly describe which resource limit(s) you would like to see changed and why.
+- Gather feedback from the community — others may have encountered the same limitation or have
+  alternative suggestions.
+
+## Creating an SLP Draft
+Draft a formal proposal and submit a PR to this repository. Your proposal should include:
+
+- **Motivation** — Demonstrate the necessity of the increase:
+  - How the use case aligns with [Stellar Network goals](../core/README.md#stellar-network-goals).
+  - Why the existing limits are not sufficient (e.g. your protocol's resource requirements clearly
+    exceed the current limit).
+- **Proposed Changes** — Specify the resource(s) and the desired new limit value(s). If you are
+  proposing a per-transaction limit increase, consider whether the corresponding ledger-wide limit
+  also needs to be raised to maintain a healthy ledger/transaction ratio (see
+  [Transactions per ledger ratio](#transactions-per-ledger-ratio)).
+- **Impact Assessment** — To the extent possible, describe the expected impact of the change on the
+  network and downstream systems (indexers, RPC providers, block explorers, etc.). Refer to the
+  [Key considerations for increasing the limits](#key-considerations-for-increasing-the-limits)
+  section for guidance on what to consider.
+
+Place the draft in the `limits/` folder and name it `slp-TBD.md`. Submit a PR via your fork of
+this repository.
+
+### Additional Tips
+- You do **not** need to perform benchmarking yourself. The Core team will handle benchmarking and
+  technical evaluation of proposed limit changes as part of the review process (see Step 3 in
+  [Process for increasing the limits](#process-for-increasing-the-limits)).
+- Focus your proposal on clearly articulating the demand and justification — a well-motivated
+  proposal with concrete data is more likely to move forward.
+- If your proposal affects per-transaction limits, keep in mind that these increases are
+  essentially irreversible (see [Reducing the limits](#reducing-the-limits)), so proposals should
+  be well-justified.
+
+## SLP Review Process
+
+### Draft: Merging & Iteration
+If the proposal follows the guidelines above, it will be merged as a draft SLP (the file will be
+renamed to its assigned SLP number before merging). You can continue iterating on the draft based
+on community and Core team's feedback.
+
+### Evaluation
+Once the proposal is sufficiently mature, the Core team will evaluate the proposed numbers against
+the network's actual capabilities. This includes:
+
+- Running apply-time benchmarks for ledger-wide limit changes.
+- Assessing flooding and Supercluster test results for transaction size changes.
+- Evaluating long-term impact on protocol development.
+- Coordinating with downstream teams (indexers, RPC providers, etc.) if the changes significantly
+  affect them.
+
+The evaluation may result in the proposal being accepted as-is, accepted with modified numbers, or
+rejected if the network cannot safely support the increase at this time.
+
+### Nomination
+If the proposal passes evaluation, it can be nominated for a vote by the validators, supported by
+a summary of the evaluation results.
