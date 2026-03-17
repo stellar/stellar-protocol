@@ -114,6 +114,7 @@
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
+| [CAP-0083](cap-0083.md) | Add `StellarValue` type representing a skipped leger | Brett Boston | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
