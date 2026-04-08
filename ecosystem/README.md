@@ -121,7 +121,7 @@ intended to be a more dynamic way of introducing standards and protocols
 utilized in the ecosystem that are built on top of the Stellar Network. It uses
 a lightweight process.
 
-A SEPs author is responsible for a proposals adoption. Other ecosystem
+A SEP's author is responsible for a proposal's adoption. Other ecosystem
 participants, including SDF, may encourage adoption of a proposal, but authors
 should expect each proposal to stand on its own merits and authors and
 maintainers should plan to drive adoption themselves.
