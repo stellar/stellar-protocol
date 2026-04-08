@@ -28,7 +28,7 @@ All SEPs have individuals fulfilling the following roles:
 - **Active** - A SEP ready to be adopted, and the proposal is a living document
   and may still receive changes. The author intends the SEP in its current form
   to be actively adopted. Changes can be made without changing the SEP number,
-  although in the interest of growing an ecosystem of interopable participants
+  although in the interest of growing an ecosystem of interoperable participants
   the author should endeavor to make changes backwards compatible so that
   participants who have already adopted the SEP can continue to participate.
   Where changes cannot be backwards compatible, the major version should be
@@ -251,13 +251,13 @@ After at least one week in FCP:
 
 ## SEP Versioning
 
-SEPs may stay in `Draft` status for an extended period of time. They are are
+SEPs may stay in `Draft` status for an extended period of time. They are
 assigned versions so that the ecosystem can communicate about which version
 they are implementing or discussing. SEPs use [semantic versioning] in the form
 `vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
 
 During draft a SEP should have a major version of `0` to indicate that anything
-in the SEP may change at anytime. Once a SEP moves to Active it should be
+in the SEP may change at any time. Once a SEP moves to Active it should be
 changed to `v1.0.0` and the rules of semantic versioning apply.
 
 All changes to a SEP should be accompanied by an update to its version, no
