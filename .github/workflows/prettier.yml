@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'ecosystem/*.md'
-      - '.github/workflows/prettier.yml'
       - 'package.json'
       - 'yarn.lock'
 
