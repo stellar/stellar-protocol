@@ -16,8 +16,6 @@ All SEPs have individuals fulfilling the following roles:
   maintainer of last resort. A maintainer of last resort steps in and acts as
   the maintainer if the maintainer ceases to respond or engage.
 
-test change 
-
 ## SEP Status Terms
 
 - **Draft** - A SEP that is currently open for consideration, iteration and
