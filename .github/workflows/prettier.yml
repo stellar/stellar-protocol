@@ -8,11 +8,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: sep-changes
+        shell: bash
+        run: |
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" | grep -Eq '^ecosystem/[^/]+\.md$'; then
+            echo 'sep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'sep=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: sep-check
+        if: steps.sep-changes.outputs.sep == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: corepack enable
-      - run: corepack prepare yarn@stable --activate
-      - run: yarn install --frozen-lockfile
-      - run: yarn sep-check
+      - name: Run SEP Prettier Check
+        if: steps.sep-changes.outputs.sep == 'true'
+        run: |
+          corepack enable
+          corepack prepare yarn@stable --activate
+          yarn install --frozen-lockfile
+          yarn sep-check
+      - if: steps.sep-changes.outputs.sep != 'true'
+        run: echo 'No SEP markdown changes; skipping Prettier check.'
