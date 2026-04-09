@@ -3,8 +3,6 @@
 SEPs are ideas, standards, and specifications in the form of proposals that the
 author is intending to be adopted by participants in the Stellar ecosystem.
 
-test anup 
-
 ## Roles
 
 All SEPs have individuals fulfilling the following roles:
