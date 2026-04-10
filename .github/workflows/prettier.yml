@@ -2,6 +2,10 @@ name: 'Prettier for SEP files'
 
 on:
   pull_request:
+    paths:
+      - 'ecosystem/*.md'
+      - 'package.json'
+      - 'yarn.lock'
 
 jobs:
   prettier:
@@ -12,7 +16,9 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: corepack enable
-      - run: corepack prepare yarn@stable --activate
-      - run: yarn install --frozen-lockfile
-      - run: yarn sep-check
+      - name: Run SEP Prettier Check
+        run: |
+          corepack enable
+          corepack prepare yarn@stable --activate
+          yarn install --frozen-lockfile
+          yarn sep-check
