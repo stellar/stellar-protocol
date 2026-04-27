@@ -86,7 +86,7 @@
 | [CAP-0074](cap-0074.md) | 25 | Host functions for BN254 | Siddharth Suresh | Final |
 | [CAP-0075](cap-0075.md) | 25 | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Final |
 | [CAP-0076](cap-0076.md) | 24 | P23 State Archival bug remediation | Dmytro Kozhevin | Final |
-| [CAP-0077](cap-0077.md) | TBD | Ability to freeze ledger keys via network configuration | Dmytro Kozhevin | Accepted |
+| [CAP-0077](cap-0077.md) | TBD | Freeze Ledger Entries via Network Configuration | Dmytro Kozhevin | Accepted |
 | [CAP-0078](cap-0078.md) | TBD | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Accepted |
 | [CAP-0079](cap-0079.md) | TBD | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Accepted |
 | [CAP-0080](cap-0080.md) | TBD | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Accepted |
