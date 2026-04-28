@@ -118,7 +118,7 @@ technology forward into new territory.
 
 Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are
 intended to be a more dynamic way of introducing standards and protocols
-utilized in the ecosystem that are built on top of the Stellar Network. It uses
+utilized in the ecosystem that are built on top of the Stellar network. It uses
 a lightweight process.
 
 A SEPs author is responsible for a proposals adoption. Other ecosystem
@@ -135,7 +135,7 @@ Before contributing, consider the following:
   the proposal forward, talk to folks in the ecosystem, or folks at SDF;
   they'll often have guidance on how to move things forward, as well as
   feedback regarding feasibility and how the proposal does or does not align
-  with the Stellar Network's goals.
+  with the Stellar network's goals.
 
 ## SEP Process
 
