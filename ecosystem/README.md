@@ -28,11 +28,11 @@ All SEPs have individuals fulfilling the following roles:
 - **Active** - A SEP ready to be adopted, and the proposal is a living document
   and may still receive changes. The author intends the SEP in its current form
   to be actively adopted. Changes can be made without changing the SEP number,
-  although in the interest of growing an ecosystem of interopable participants
-  the author should endeavor to make changes backwards compatible so that
-  participants who have already adopted the SEP can continue to participate.
-  Where changes cannot be backwards compatible, the major version should be
-  updated to clearly distinguish new incompatible versions.
+  although in the interest of growing an ecosystem of interoperable
+  participants the author should endeavor to make changes backwards compatible
+  so that participants who have already adopted the SEP can continue to
+  participate. Where changes cannot be backwards compatible, the major version
+  should be updated to clearly distinguish new incompatible versions.
 - **Final** - A SEP ready to be adopted, and the proposal is an immutable
   document and will no longer receive changes, other than minor errata. The
   author intends to make no further changes. Adopters can expect significant
@@ -121,7 +121,7 @@ intended to be a more dynamic way of introducing standards and protocols
 utilized in the ecosystem that are built on top of the Stellar Network. It uses
 a lightweight process.
 
-A SEPs author is responsible for a proposals adoption. Other ecosystem
+A SEP's author is responsible for a proposal's adoption. Other ecosystem
 participants, including SDF, may encourage adoption of a proposal, but authors
 should expect each proposal to stand on its own merits and authors and
 maintainers should plan to drive adoption themselves.
@@ -251,13 +251,13 @@ After at least one week in FCP:
 
 ## SEP Versioning
 
-SEPs may stay in `Draft` status for an extended period of time. They are are
+SEPs may stay in `Draft` status for an extended period of time. They are
 assigned versions so that the ecosystem can communicate about which version
 they are implementing or discussing. SEPs use [semantic versioning] in the form
 `vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
 
 During draft a SEP should have a major version of `0` to indicate that anything
-in the SEP may change at anytime. Once a SEP moves to Active it should be
+in the SEP may change at any time. Once a SEP moves to Active it should be
 changed to `v1.0.0` and the rules of semantic versioning apply.
 
 All changes to a SEP should be accompanied by an update to its version, no

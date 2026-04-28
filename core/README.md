@@ -58,7 +58,7 @@
 | [CAP-0046](cap-0046.md) | 20 |Soroban smart contract system overview | Graydon Hoare | Final |
 | [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | 20 | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Final |
 | [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | 20 | Smart Contract Lifecycle | Siddharth Suresh | Final |
-| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20 | Smart Contract Host Functons | Jay Geng | Final |
+| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20 | Smart Contract Host Functions | Jay Geng | Final |
 | [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | 20 | Smart Contract Data | Graydon Hoare | Final |
 | [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | 20 | Smart Contract Standardized Asset | Jonathan Jove | Final |
 | [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | 20 | Fee model in smart contracts | Nicolas Barry | Final |
