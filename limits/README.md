@@ -2,7 +2,13 @@
 
 ## Summary
 
-This document list the considerations that go into smart contract resource limit updates (mostly increases) and introduces a proposal process for performing the resource limit updates, similar to the CAP/SEP processes.
+This document introduces the proposal process for performing smart contract resource limit updates
+(mostly increases), similar to the CAP/SEP processes.
+
+The technical considerations that go into evaluating a limit change — what each resource impacts,
+how to choose appropriate values, the ledger/transaction ratio, and how proposals are
+benchmarked — live in [`slp-template.md`](../slp-template.md). Authors of an SLP should read the
+template in full before drafting; this README focuses on process.
 
 ## Limits Overview
 
