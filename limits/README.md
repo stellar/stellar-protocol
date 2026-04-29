@@ -260,7 +260,6 @@ to create a Stellar Limit Proposal (SLP).
 Introduce your idea in one of
 * [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev)
 * [Stellar Protocol Discussion](https://github.com/stellar/stellar-protocol/discussions)
-* A new thread in [Stellar Discord -> developers -> soroban-itself](https://discord.com/channels/897514728459468821/1037073682599780494)
 
 You should:
 - Clearly describe which resource limit(s) you would like to see changed and why.
