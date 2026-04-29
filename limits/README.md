@@ -214,16 +214,16 @@ In case if the proposal has gone through evaluation, it can be nominated for the
 Users of the network are encouraged to propose changes to Soroban resource limits through the Stellar
 Limits Proposal (SLP) process. Unlike CAPs, SLPs are focused specifically on adjusting smart
 contract resource limits (mostly increases) and follow a streamlined process tailored to that scope. 
-The process to approve SLPs is a modified version of the [CAP-Process]( ../core/README.md#contribution-process ).
-From a technical standpoint, network settings are easier to understand than CAP changes but still require a well balanced panel of reviewers and participants.
+The process to approve SLPs is a modified version of the [CAP-Process](../core/README.md#contribution-process).
+From a technical standpoint, network settings are easier to understand than CAP changes but still require a well-balanced panel of reviewers and participants.
  
 The Stellar Protocol, like most software in the world, continues to evolve over time to meet the
 needs of our network's participants and to drive technology forward into new territory. Given the
 importance of the reliability and safety of the network, we ask that all of those who have ideas
 towards pushing Stellar's protocol development forward adhere to the following:
  
-- Consider your idea and how it serves the fundamental [Stellar Network Goals](https://github.com/stellar/stellar-protocol/blob/master/core/README.md#stellar-network-goals) and aligns with
-  [Stellar Protocol Values](https://github.com/stellar/stellar-protocol/blob/master/core/README.md#stellar-protocol-development-values). If you cannot show how your proposal
+- Consider your idea and how it serves the fundamental [Stellar Network Goals](../core/README.md#stellar-network-goals) and aligns with
+  [Stellar Protocol Values](../core/README.md#stellar-protocol-development-values). If you cannot show how your proposal
   aligns with those goals and values, it's unlikely to ever be implemented.
 - Gather feedback from discussion on the dev mailing list and other forums, and utilize it to begin
   a draft SLP proposal.
@@ -259,8 +259,8 @@ to create a Stellar Limit Proposal (SLP).
 
 Introduce your idea in one of
 * [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev)
-* [Stellar Protocol Discussion]( https://github.com/stellar/stellar-protocol/discussions)
-* A new thread in [Stellar Discord -> developers -> soroban-itself]( https://discord.com/channels/897514728459468821/1037073682599780494 )
+* [Stellar Protocol Discussion](https://github.com/stellar/stellar-protocol/discussions)
+* A new thread in [Stellar Discord -> developers -> soroban-itself](https://discord.com/channels/897514728459468821/1037073682599780494)
 
 You should:
 - Clearly describe which resource limit(s) you would like to see changed and why.
@@ -269,13 +269,13 @@ You should:
 - Consider contacting experts in a particular area for feedback while you're hashing out the
   details.
 
-## Creating a SLP Draft
+### Creating a SLP Draft
 Draft a formal proposal and submit a PR to this repository. Your proposal should adhere to the following:
 - Make sure to place the draft in the `limits/` folder.
-- Your SLP should be named `slp-TBD.md`where TBD should be the next available SLP number.
+- Your SLP should be named `slp-TBD.md` where TBD should be the next available SLP number.
 - If your SLP requires images or other supporting files, they should be included in a sub-directory
   of the `contents` folder for that SLP, such as `contents/slp-TBD/`. Links
-  should be relative, for example a link to an image from your CAP would be
+  should be relative, for example a link to an image from your SLP would be
   `../contents/slp-TBD/image.png`.
 - **Motivation** — Demonstrate the necessity of the increase:
   - How the use case aligns with [Stellar Network goals](../core/README.md#stellar-network-goals).
@@ -297,15 +297,15 @@ Finally, submit a PR of your draft via your fork of this repository.
 From there, the following process will happen.
 
 #### SLP gets merged
-If you properly followed the steps above, your PR will get merged.
+If you properly followed the steps above and the PR meets the documented requirements, it can be merged after review by the appropriate maintainers.
 
 #### Iterating on the SLP
  You should continue the discussion of the draft SLP at the location referenced from the “Discussion” contained in the SLP
 with an attempt at reaching consensus.
 
 When opening PRs to modify the draft:
-- Changes have to either be submitted by one of the authors (Recommender or Owner) or signed off by the authors
-- Avoid discussions in the PR itself as it makes it more difficult for future contributors to understand the rational for changes.
+- Changes have to either be submitted by one of the authors or signed off by the authors.
+- Avoid discussions in the PR itself as it makes it more difficult for future contributors to understand the rationale for changes.
   - Best is to always discuss in the mailing list.
   - Alternatively, a recap of the discussion that happened in the PR could be posted in the mailing list (but it's easy to forget to do this).
 
