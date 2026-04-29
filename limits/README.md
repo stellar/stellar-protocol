@@ -209,7 +209,7 @@ The evaluation may have several outcomes:
 **Step 4 \- Nominate the proposal**  
 In case if the proposal has gone through evaluation, it can be nominated for the vote by the validators. The nomination can be supported by the evaluation results summary.  
 
-# Contribution Process
+## Contribution Process
 
 Users of the network are encouraged to propose changes to Soroban resource limits through the Stellar
 Limits Proposal (SLP) process. Unlike CAPs, SLPs are focused specifically on adjusting smart
@@ -309,9 +309,23 @@ When opening PRs to modify the draft:
   - Best is to always discuss in the mailing list.
   - Alternatively, a recap of the discussion that happened in the PR could be posted in the mailing list (but it's easy to forget to do this).
 
-### Draft -> Awaiting Decision
+### Draft -> Awaiting Evaluation
+Once the proposal receives sufficient feedback from the community, the Core team will evaluate the proposed numbers against
+the network's actual capabilities. This includes:
+
+- Running apply-time benchmarks for ledger-wide limit changes.
+- Assessing flooding and Supercluster test results for transaction size changes.
+- Evaluating long-term impact on protocol development.
+- Coordinating with downstream teams (indexers, RPC providers, etc.) if the changes significantly
+  affect them.
+
+The evaluation may result in the proposal being accepted as-is, accepted with modified numbers, or
+rejected if the network cannot safely support the increase at this time.
+
+
+### Awaiting Evaluation -> Awaiting Decision
  
-When your SLP receives sufficient feedback from the community,
+When your SLP has undergone technical evaluation by the Core team,
 you'll need to present it to the SLP Committee for review.
  
 For that, when you're ready, you should
@@ -330,21 +344,8 @@ At some point, the SLP committee:
 * votes FOR the proposal, in which case its status is modified to “Accepted”. This signals validators to organize a vote to deploy changes to the public network.
 * votes AGAINST the proposal, in which case its status is modified to “Rejected”. The SLP will not be discussed further by the committee.
 
-### Awaiting Decision -> Awaiting Evaluation
-Once the proposal is "Accepted", the Core team will evaluate the proposed numbers against
-the network's actual capabilities. This includes:
 
-- Running apply-time benchmarks for ledger-wide limit changes.
-- Assessing flooding and Supercluster test results for transaction size changes.
-- Evaluating long-term impact on protocol development.
-- Coordinating with downstream teams (indexers, RPC providers, etc.) if the changes significantly
-  affect them.
-
-The evaluation may result in the proposal being accepted as-is, accepted with modified numbers, or
-rejected if the network cannot safely support the increase at this time.
-
-
-### SLP Finalization: “Awaiting Evaluation -> Final”
+### SLP Finalization: “Awaiting Decision -> Final”
 Once an implemented SLP has been successfully ratified on the public network, it should be updated with a status of **Final** with the ledger number that corresponds to the vote.
 
 
