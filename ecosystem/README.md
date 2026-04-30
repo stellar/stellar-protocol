@@ -96,7 +96,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk                   | Draft                |
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk                   | Draft                |
 | [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                            | Draft                |
-| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                      | Draft                |
+| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                      | Final Comment Period (Final)       |
 | [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu               | Draft                |
 | [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                               | Draft                |
 | [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Draft                |
