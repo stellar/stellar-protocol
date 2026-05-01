@@ -44,9 +44,9 @@ towards pushing Stellar's protocol development forward adhere to the following:
 ## SLP Committee
 Before limits get voted on by validators, an SLP needs to be signed-off by the SLP committee.
 Committee members have the following roles and responsibilities:
-* vote for/against an SLP, taking into account alignment to Stellar Network Goals, Protocol Development Values and critical parties such as validator operators and domain experts.
-* review an SLP.
-* provide feedback on SLP, especially when voting against a proposal.
+* review the SLP.
+* provide feedback on the SLP, especially when voting against a proposal.
+* vote for/against a SLP, taking into account alignment to [Stellar Network Goals](../core/README.md#stellar-network-goals), [Stellar Protocol Values](../core/README.md#stellar-protocol-development-values) and critical parties such as validator operators and domain experts.
  
 Votes for/against should be recorded in a publicly accessible location.
  
@@ -54,9 +54,9 @@ This will be achieved by sending messages to the developer mailing list alongsid
  
 ### SLP Committee Members
  
-As the goal of the committee is to maximize the chances of success for proposals, members will be individuals representing each “tier 1” organization as calculated at the time of the decision.
+As the goal of the committee is to maximize the chances of success for proposals, members will be individuals representing each “tier 1” validator organization as calculated at the time of the decision. You can see the current members of the “tier 1” validator organizations in the left pane under the [Organizations](https://radar.withobsrvr.com/) section.
  
-Each organization will be represented by one individual during meetings and will identify themselves as such.
+Each “tier 1” validator organization will be represented by one individual during meetings and will identify themselves as such.
  
 ### SLP Committee consensus
 The committee will reach decisions based on simple majority voting.
