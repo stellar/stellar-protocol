@@ -9,7 +9,7 @@ Working Group:
     Consulted: <List of comma separated name/email address/github alias>
 Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
-Discussion: <link to where discussion for this SLP is taking place, typically the mailing list>
+Discussion: <link to SLP discussion https://github.com/orgs/stellar/discussions/categories/stellar-limits-proposals>
 Protocol version: TBD
 ```
 
@@ -205,7 +205,7 @@ If the proposal restricts ledger keys using the mechanism introduced in
   for pool share trustlines and issuer trustlines. Please specify:
 
 - The reason for putting restrictions on the ledger keys. For example, To remediate data corruption, or, To Limit the blast radius of a security vulnerability exploit.
-- Provide links to where this is being discussed.
+- Provide links to the [Github SLP Discussion](https://github.com/orgs/stellar/discussions/categories/stellar-limits-proposals) page where this is being discussed. 
 - Whether the limit applies to `keysToFreeze`, `keysToUnfreeze`, or both.
 
 

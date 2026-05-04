@@ -37,7 +37,7 @@ towards pushing Stellar's protocol development forward adhere to the following:
 - Consider your idea and how it serves the fundamental [Stellar Network Goals](../core/README.md#stellar-network-goals) and aligns with
   [Stellar Protocol Values](../core/README.md#stellar-protocol-development-values). If you cannot show how your proposal
   aligns with those goals and values, it's unlikely to ever be implemented.
-- Gather feedback from discussion on the dev mailing list and other forums, and utilize it to begin
+- Gather feedback from the discussion in the [Github SLP Discussion](https://github.com/orgs/stellar/discussions/categories/stellar-limits-proposals) page and other forums, and utilize it to begin
   a draft SLP proposal.
 - Follow the proposal process listed below.
 
@@ -50,7 +50,7 @@ Committee members have the following roles and responsibilities:
  
 Votes for/against should be recorded in a publicly accessible location.
  
-This will be achieved by sending messages to the developer mailing list alongside feedback.
+This will be achieved by sending messages to the [Github SLP Discussion](https://github.com/orgs/stellar/discussions/categories/stellar-limits-proposals) page alongside feedback.
  
 ### SLP Committee Members
  
@@ -69,9 +69,7 @@ to create a Stellar Limit Proposal (SLP).
 
 ### Pre-SLP (Initial Discussion)
 
-Introduce your idea in one of
-* [stellar-dev mailing list](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!forum/stellar-dev)
-* [Stellar Protocol Discussion](https://github.com/stellar/stellar-protocol/discussions)
+Introduce your idea by starting a new topic in [Stellar Protocol Discussion](https://github.com/stellar/stellar-protocol/discussions).
 
 You should:
 - Clearly describe which resource limit(s) you would like to see changed and why.
@@ -117,8 +115,7 @@ with an attempt at reaching consensus.
 When opening PRs to modify the draft:
 - Changes have to either be submitted by one of the authors or signed off by the authors.
 - Avoid discussions in the PR itself as it makes it more difficult for future contributors to understand the rationale for changes.
-  - Best is to always discuss in the mailing list.
-  - Alternatively, a recap of the discussion that happened in the PR could be posted in the mailing list (but it's easy to forget to do this).
+  - A recap of the discussion that happened in the PR could be posted in the [Github SLP Discussion](https://github.com/orgs/stellar/discussions/categories/stellar-limits-proposals) page.
 
 ### Draft -> Awaiting Evaluation
 Once the proposal receives sufficient feedback from the community, the Core team will evaluate the proposed numbers against
@@ -139,9 +136,7 @@ rejected if the network cannot safely support the increase at this time.
 When your SLP has undergone technical evaluation by the Core team,
 you'll need to present it to the SLP Committee for review.
  
-For that, when you're ready, you should
-1. submit a PR changing the status in the draft to `Awaiting Decision`.
-2. send an email to the developer mailing list with a subject line starting with “SLP TBD: Ready for review”
+For that, when you're ready, you should submit a PR changing the status in the draft to `Awaiting Decision`.
  
 At this point the SLP committee will:
 * review the SLP
