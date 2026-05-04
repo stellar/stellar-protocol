@@ -1,12 +1,13 @@
 ---
 Title: Hierarchical Mandate Tokens for Autonomous Agent Authority
+SEP: To Be Assigned
 Author: Felipe Nunes Oliveira <@felipezolvency>
 Track: Standard
 Status: Draft
 Created: 2026-05-01
 Updated: 2026-05-01
-Version: 0.1.0
-Discussion: [https://github.com/orgs/stellar/discussions/1925]
+Version: 0.0.1
+Discussion: https://github.com/orgs/stellar/discussions/1925
 ---
 
 ## Simple Summary
@@ -237,16 +238,31 @@ fn is_valid(env: Env, mandate_id: u64) -> bool;
 
 ### V. Required Events
 
-Implementations MUST emit the following events to allow off-chain indexers and monitoring tools to track the authority lifecycle.
+Implementations MUST emit the following Soroban events to allow off-chain indexers and monitoring tools to track the authority lifecycle. For interoperability, the `topics` layout, topic order, and `data` fields are normative and MUST match this specification exactly.
 
 ```rust
 // Emitted when a Mandate is issued
-event: "mandate_issued"
-data: { mandate_id: u64, anchor: Address, agent: Address, ttl: u64 }
+// topics: (Symbol("mandate"), Symbol("issued"), u64 mandate_id)
+// data:   { anchor: Address, agent: Address, ttl: u64 }
+//
+// Topic 0 MUST be the Symbol "mandate".
+// Topic 1 MUST be the Symbol "issued".
+// Topic 2 MUST be the Mandate identifier as u64.
+// The data payload MUST contain exactly:
+// - anchor: Address
+// - agent: Address
+// - ttl: u64
 
 // Emitted when a Mandate is revoked
-event: "mandate_revoked"
-data: { mandate_id: u64, anchor: Address, revoked_at: u64 }
+// topics: (Symbol("mandate"), Symbol("revoked"), u64 mandate_id)
+// data:   { anchor: Address, revoked_at: u64 }
+//
+// Topic 0 MUST be the Symbol "mandate".
+// Topic 1 MUST be the Symbol "revoked".
+// Topic 2 MUST be the Mandate identifier as u64.
+// The data payload MUST contain exactly:
+// - anchor: Address
+// - revoked_at: u64
 ```
 
 ---
