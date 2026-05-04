@@ -81,7 +81,7 @@ You should:
   details.
 
 ### Creating a SLP Draft
-Draft a formal proposal and submit a PR to this repository. Your proposal should adhere to the following:
+Draft a formal proposal using the [`slp-template`](../slp-template.md) and submit a PR to this repository. Your proposal should adhere to the following:
 - Make sure to place the draft in the `limits/` folder.
 - Your SLP should be named `slp-TBD.md` where TBD should be the next available SLP number.
 - If your SLP requires images or other supporting files, they should be included in a sub-directory
