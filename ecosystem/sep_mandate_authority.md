@@ -14,6 +14,10 @@ Discussion: https://github.com/orgs/stellar/discussions/1925
 
 A standard interface for issuing non-transferable, revocable **Mandate tokens** that allow a sovereign identity (**Anchor**) to delegate programmable, scoped authority to AI agents or automated systems — without sharing private keys.
 
+## Dependencies
+
+N/A
+
 ---
 
 ## Abstract
@@ -126,24 +130,38 @@ Issued by an Anchor to authorize an agent.
 /// * `scope`        - The Scope defining the boundaries of the authority.
 /// * `can_delegate` - Whether this agent may issue Sub-Mandates.
 ///
+/// # Arguments
+/// * `agent` - The address receiving the newly issued Mandate.
+/// * `scope` - The authority granted by the newly issued Mandate.
+/// * `can_delegate` - Whether the newly issued Mandate may itself issue Sub-Mandates.
+/// * `parent_mandate_id` - The parent Mandate from which authority is being delegated.
+///   This MUST be `Some(id)` when the caller is a Mandate holder issuing a
+///   Sub-Mandate, and MUST be `None` when the caller is the root Anchor issuing
+///   a top-level Mandate.
+///
 /// # Returns
 /// * The unique `mandate_id` of the newly issued Mandate.
 ///
 /// # Authorization
 /// * Requires authorization from the calling Anchor address.
-/// * If the caller is a Mandate holder (not a root Anchor), 
-///   `can_delegate` must be `true` on the caller's Mandate,
-///   and the new Scope must be equal to or narrower than the caller's Scope.
+/// * If the caller is a Mandate holder (not a root Anchor), `parent_mandate_id`
+///   MUST identify a Mandate held by the caller, `can_delegate` must be `true`
+///   on that parent Mandate, and the new Scope must be equal to or narrower
+///   than the explicitly identified parent Mandate's Scope.
 ///
 /// # Errors
 /// * Panics if the Anchor is not authorized.
-/// * Panics if a Sub-Mandate Scope exceeds the parent Mandate Scope.
+/// * Panics if `parent_mandate_id` is `None` for a Sub-Mandate issuance.
+/// * Panics if `parent_mandate_id` does not identify a Mandate held by the caller.
+/// * Panics if the identified parent Mandate does not permit delegation.
+/// * Panics if a Sub-Mandate Scope exceeds the identified parent Mandate Scope.
 /// * Panics if `ttl` is in the past.
 fn issue_mandate(
     env: Env,
     agent: Address,
     scope: Scope,
     can_delegate: bool,
+    parent_mandate_id: Option<u64>,
 ) -> u64;
 ```
 
@@ -310,7 +328,7 @@ This standard is additive and does not modify any existing Soroban or Stellar pr
 
 ---
 
-## Security Considerations
+## Security Concerns
 
 ### Atomic Revocation
 
@@ -341,6 +359,12 @@ This standard does not define Sybil resistance for Anchors. Implementations that
 ## Reference Implementation
 
 The first reference implementation of this standard is provided by the **Zolvency protocol** on the Stellar Soroban network. In the Zolvency ecosystem, Mandates are branded as **Wills** — authority tokens issued by a sovereign **Soul** identity to AI agents operating within the Zolvency Nexus registry.
+
+---
+
+## Changelog
+
+- v0.0.1: Initial draft
 
 ---
 
