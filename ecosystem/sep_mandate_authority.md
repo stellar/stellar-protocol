@@ -1,373 +1,650 @@
----
+## Preamble
+
+```
+SEP: XXXX
 Title: Hierarchical Mandate Tokens for Autonomous Agent Authority
-SEP: To Be Assigned
-Author: Felipe Nunes Oliveira <@felipezolvency>
+Authors: Felipe Nunes Oliveira <@felipezolvency>
 Track: Standard
 Status: Draft
 Created: 2026-05-01
-Updated: 2026-05-01
-Version: 0.0.1
+Updated: 2026-05-05
+Version: 0.3.0
 Discussion: https://github.com/orgs/stellar/discussions/1925
----
+```
 
 ## Simple Summary
 
-A standard interface for issuing non-transferable, revocable **Mandate tokens** that allow a sovereign identity (**Anchor**) to delegate programmable, scoped authority to AI agents or automated systems — without sharing private keys.
-
-## Dependencies
-
-N/A
-
----
-
-## Abstract
-
-This proposal defines a contract interface for hierarchical, non-transferable authority tokens on the Stellar network (Soroban). The standard separates **Sovereign Identity** (who owns the authority) from **Operational Authority** (what can be done with it).
-
-A **Mandate** is a Soulbound Token (SBT) issued by an **Anchor** to an agent's address. It contains a cryptographically enforced **Scope** that defines the temporal and operational boundaries of the delegated authority. Third parties (dApps, protocols, other agents) can verify the validity and scope of a Mandate by querying the **Nexus** — the on-chain registry contract that maps and validates the parent-child relationships between Anchors and Mandates.
-
-An Anchor may optionally permit a Mandate holder to issue sub-Mandates to other agents, always with an equal or narrower Scope than the parent Mandate.
-
----
+A standardized Soroban contract interface for issuing non-transferable, revocable
+**Mandate tokens** that allow a sovereign identity (**Root Anchor**) to delegate
+programmable, scoped, and auditable authority to AI agents or automated systems —
+without sharing private keys.
 
 ## Motivation
 
-The emerging agentic economy requires AI agents to execute financial transactions, sign contracts, and interact with decentralized protocols autonomously. Current approaches present two critical failure modes:
+The emergence of agentic AI systems on Stellar creates a fundamental trust problem:
+how can a human grant an autonomous agent the ability to act on their behalf without
+handing over their private key?
 
-**1. Custody Risk:** Giving an AI agent full private key access exposes the entire principal account. A compromised or misbehaving agent can drain funds, sign unauthorized transactions, or interact with malicious contracts without limit.
+Current approaches are inadequate:
 
-**2. Identity Vacuum:** AI agents currently have no on-chain identity of their own, nor a verifiable link to the human or institution that authorized them. There is no standard way for a dApp to answer: *"Is this agent authorized to perform this action, and by whom?"*
+- **Key sharing** is dangerous — a compromised agent gains unlimited authority forever.
+- **Multisig schemes** require coordination overhead and do not encode spending limits
+  or contract restrictions at the protocol level.
+- **Off-chain permission systems** are invisible to smart contracts and cannot be
+  verified by third-party dApps in a trustless manner.
 
-The Mandate standard solves both problems by creating a **programmable power of attorney**: the agent can only act within a pre-defined Scope, and the Anchor retains full, instant revocation rights. Any counterparty can verify the authorization chain on-chain before executing a transaction.
+This SEP defines a primitive that fills this gap: a cryptographically-enforced,
+on-chain delegation standard that any Soroban contract can integrate to verify
+whether an agent is authorized to act — and within what bounds.
 
-This standard is especially relevant as the Stellar ecosystem grows to include agentic use cases, micropayment protocols (such as x402), and cross-chain identity infrastructure.
+## Abstract
 
----
+This proposal defines a Soroban contract interface for hierarchical, non-transferable
+authority tokens on the Stellar network. The standard separates **Sovereign Identity**
+(who holds the authority) from **Operational Authority** (what actions are permitted).
+
+A **Mandate** is a Soulbound Token (SBT) that encodes a cryptographically enforced
+**Scope**. Mandates are registered in the **Nexus**, an on-chain registry that
+third-party contracts can query to verify an agent's authority in a single call.
+
+The standard introduces four interlocking mechanisms:
+
+1. **Authority Epochs** — a single-transaction revocation mechanism for entire mandate
+   trees, eliminating the gas cost of individual revocations.
+2. **DelegationPolicy** — granular sub-delegation rules that prevent budget exhaustion
+   through cascading sub-agents.
+3. **Bounded Verification** — a depth cap and epoch-keyed cache that gives
+   `verify_authority` a predictable, auditable gas cost.
+4. **SEP-45 Remote Issuance** — allowing off-chain signers (hardware wallets, mobile
+   signers) to issue Mandates without ever exposing their key to the contract
+   environment.
+
+## Dependencies
+
+- **[SEP-41](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md)**
+  (Soroban Token Interface): Token structure baseline.
+- **[SEP-10](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0010.md)**
+  (Stellar Web Authentication): Authentication for Root Anchor operations performed
+  via web clients.
+- **[SEP-45](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0045.md)**
+  (Stellar Remote Authentication): Foundation for the `MandateRequest` remote
+  issuance flow defined in Section VI of this SEP.
 
 ## Terminology
 
-- **Anchor:** The sovereign root identity that holds the authority to issue Mandates. An Anchor is any valid Soroban `Address` (account or contract). Implementations MAY require the Anchor to hold a specific credential (e.g., a Soulbound identity token) as a prerequisite for issuing Mandates.
-- **Mandate:** A non-transferable, revocable token issued by an Anchor to an agent's address. It encodes the Scope of delegated authority and a reference to its parent Anchor.
-- **Scope:** The set of rules and constraints embedded in a Mandate. At minimum, a Scope MUST include a temporal expiration (`ttl`). Additional constraints are defined as optional extensions in this standard.
-- **Nexus:** The registry smart contract that stores and validates the parent-child relationships between Anchors and Mandates. Third parties query the Nexus to verify authority.
-- **Agent:** Any address (account or contract) that receives a Mandate and operates within its Scope.
-- **Sub-Mandate:** A Mandate issued by a Mandate holder to a downstream agent. Only possible if the parent Mandate has `can_delegate: true`. A Sub-Mandate's Scope must be equal to or narrower than the parent Mandate's Scope.
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHOULD", "SHOULD NOT",
+"RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as
+described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
----
+| Term | Definition |
+|---|---|
+| **Root Anchor** | The original sovereign identity (e.g., a SoulID) that holds primary authority over a mandate tree. |
+| **Issuer** | The address that signs and submits a `issue_mandate` transaction. May be the Root Anchor or an authorized Agent. |
+| **Agent** | The address that receives a Mandate and may act within its Scope. |
+| **Mandate** | A non-transferable, revocable token encoding delegated authority. Called **Wills** in the Zolvency ecosystem. |
+| **Scope** | The immutable set of rules (TTL, budget, allowlists) attached to a Mandate at issuance. |
+| **MandateState** | The mutable runtime state of a Mandate (spent budget, revocation flag), maintained separately by the Nexus. |
+| **Nexus** | The central Soroban smart contract that registers, validates, and caches Mandates. |
+| **Authority Epoch** | A monotonic counter on the Root Anchor. Incrementing it globally invalidates all Mandates issued under prior epochs. |
+| **Verification Cache** | An epoch-keyed, on-chain cache that reduces `verify_authority` cost from O(depth) to O(1) on cache hit. |
+| **Delegation Depth** | The level of a Mandate in the delegation tree. Root Anchor is depth 0; each sub-delegation increments by 1. |
 
 ## Specification
 
-### I. The Mandate Data Structure
+### I. Data Structures
 
-Every Mandate MUST contain the following fields:
+#### 1.1 Mandate
 
 ```rust
 pub struct Mandate {
-    // Unique identifier for this Mandate
+    /// Unique identifier assigned by the Nexus at issuance.
     pub id: u64,
-
-    // The Soroban Address of the issuing Anchor
-    pub anchor: Address,
-
-    // The Soroban Address of the authorized agent
+    /// The sovereign identity at the root of this delegation chain.
+    pub root_anchor: Address,
+    /// The address that issued this specific Mandate (Root Anchor or Agent).
+    pub issuer: Address,
+    /// The address authorized to act under this Mandate.
     pub agent: Address,
-
-    // The Scope defining the boundaries of this authority
+    /// Immutable rules governing the Agent's authority. See Section I.2.
     pub scope: Scope,
-
-    // The ledger timestamp at which this Mandate was issued
-    pub issued_at: u64,
-
-    // Whether the agent may issue Sub-Mandates to other agents
-    // Sub-Mandates must have a Scope equal to or narrower than this Mandate
-    pub can_delegate: bool,
-
-    // Optional: ID of the parent Mandate, if this is a Sub-Mandate
-    // None if issued directly by an Anchor account
+    /// The Authority Epoch of the Root Anchor at the time of issuance.
+    /// If root_anchor.current_epoch > issued_at_epoch, this Mandate is invalid.
+    pub issued_at_epoch: u64,
+    /// Controls whether and how this Agent may sub-delegate. See Section I.3.
+    pub delegation_policy: DelegationPolicy,
+    /// The id of the parent Mandate, if this is a sub-delegation.
     pub parent_mandate_id: Option<u64>,
+    /// Depth of this Mandate in the delegation tree (Root Anchor = 0).
+    pub depth: u8,
 }
 ```
 
-### II. The Scope Data Structure
+#### 1.2 Scope
 
-A Scope defines the authority boundaries of a Mandate. The `ttl` field is **mandatory**. All other fields are optional extensions.
+The `Scope` struct is **immutable** after issuance. It represents the
+"promise" made at delegation time. Runtime state (spent budget, revocation)
+is tracked separately in `MandateState`.
 
 ```rust
 pub struct Scope {
-    // REQUIRED: Unix timestamp after which this Mandate is no longer valid
+    /// REQUIRED. Unix timestamp after which this Mandate expires.
     pub ttl: u64,
 
-    // OPTIONAL EXTENSION: List of contract addresses this agent is permitted to invoke
-    // If None, the agent may invoke any contract (subject to Anchor policy)
+    /// OPTIONAL. Maximum cumulative value (in stroops) this Agent may transfer.
+    /// The Nexus tracks spending against this limit in MandateState.
+    pub transfer_limit: Option<i128>,
+
+    /// OPTIONAL. Hash commitment over this Scope for ZKP-based private
+    /// verification. The scheme for generating and verifying this commitment
+    /// is out of scope for this SEP and SHOULD be defined in a companion SEP.
+    pub scope_commitment: Option<BytesN<32>>,
+
+    /// OPTIONAL. If set, the Agent may only invoke contracts in this list.
     pub contract_allowlist: Option<Vec<Address>>,
 
-    // OPTIONAL EXTENSION: List of function names this agent is permitted to call
-    // If None, no function-level restriction applies
+    /// OPTIONAL. If set, the Agent may only call functions in this list.
+    /// Function names are matched as exact strings.
     pub function_allowlist: Option<Vec<String>>,
-
-    // Implementations MAY define additional Scope fields as needed.
-    // Future extensions (e.g., financial limits, reputation thresholds) 
-    // should be proposed as amendments to this SEP.
 }
 ```
 
-### III. Core Interface
+#### 1.3 DelegationPolicy
 
-Implementations of this standard MUST expose the following three functions. The Nexus contract MUST implement all three.
+Replaces the previous `can_delegate: bool` field. Encodes granular constraints
+on how an Agent may sub-delegate its authority.
+
+```rust
+pub enum DelegationPolicy {
+    /// This Agent MUST NOT delegate authority to any other address.
+    None,
+
+    /// This Agent MAY delegate its full Scope without additional restrictions.
+    Full,
+
+    /// This Agent MAY delegate, subject to the rules in DelegationRules.
+    Restricted(DelegationRules),
+}
+
+pub struct DelegationRules {
+    /// Maximum number of additional delegation levels below this Mandate.
+    /// 0 means the Agent may issue Mandates to direct sub-agents, but those
+    /// sub-agents cannot delegate further.
+    pub max_subdepth: u8,
+
+    /// Restricts which Scope fields may be included in a sub-Mandate.
+    /// If None, all fields from the parent Scope may be re-delegated
+    /// (subject to the invariant that sub-Scope ≤ parent Scope).
+    pub allowed_scope_tags: Option<Vec<ScopeTag>>,
+
+    /// Maximum fraction of transfer_limit that may be allocated to a single
+    /// child Mandate, expressed as a percentage (0–100).
+    /// The Nexus additionally enforces that the SUM of all active child
+    /// transfer_limit values does not exceed parent.transfer_limit.
+    pub budget_fraction: Option<u8>,
+}
+
+pub enum ScopeTag {
+    TransferLimit,
+    ContractAllowlist,
+    FunctionAllowlist,
+    ScopeCommitment,
+}
+```
+
+#### 1.4 MandateState
+
+Mutable runtime state maintained by the Nexus. Separated from `Scope` to
+preserve the immutability of the issuance record.
+
+```rust
+pub struct MandateState {
+    pub mandate_id: u64,
+    /// Cumulative value spent under this Mandate (in stroops).
+    /// Updated by the Nexus each time verify_authority approves a transfer.
+    pub spent_budget: i128,
+    /// Set to true by revoke_mandate or when the Root Anchor increments its epoch.
+    pub is_revoked: bool,
+}
+```
+
+#### 1.5 VerificationCache
+
+Reduces the gas cost of repeated `verify_authority` calls within the same
+Authority Epoch.
+
+```rust
+pub struct VerificationCache {
+    pub mandate_id: u64,
+    /// Epoch value at the time this entry was written.
+    /// Stale if root_anchor.current_epoch != epoch_at_cache.
+    pub epoch_at_cache: u64,
+    pub is_valid: bool,
+    pub cached_at_ledger: u32,
+}
+```
 
 ---
 
+### II. Network Constants
+
+| Constant | Default | Description |
+|---|---|---|
+| `MAX_DELEGATION_DEPTH` | `8` | Maximum depth of any Mandate in a delegation tree. Enforced at issuance. |
+| `CACHE_TTL_LEDGERS` | `100` | Number of ledgers a VerificationCache entry remains valid. After expiry, `verify_authority` re-traverses the chain. |
+
+---
+
+### III. Core Interface
+
 #### `issue_mandate`
 
-Issued by an Anchor to authorize an agent.
-
 ```rust
-/// Issues a new Mandate from the caller (Anchor) to a target agent.
-///
-/// # Arguments
-/// * `env`          - The Soroban environment.
-/// * `agent`        - The address of the agent receiving authority.
-/// * `scope`        - The Scope defining the boundaries of the authority.
-/// * `can_delegate` - Whether this agent may issue Sub-Mandates.
-///
-/// # Arguments
-/// * `agent` - The address receiving the newly issued Mandate.
-/// * `scope` - The authority granted by the newly issued Mandate.
-/// * `can_delegate` - Whether the newly issued Mandate may itself issue Sub-Mandates.
-/// * `parent_mandate_id` - The parent Mandate from which authority is being delegated.
-///   This MUST be `Some(id)` when the caller is a Mandate holder issuing a
-///   Sub-Mandate, and MUST be `None` when the caller is the root Anchor issuing
-///   a top-level Mandate.
-///
-/// # Returns
-/// * The unique `mandate_id` of the newly issued Mandate.
-///
-/// # Authorization
-/// * Requires authorization from the calling Anchor address.
-/// * If the caller is a Mandate holder (not a root Anchor), `parent_mandate_id`
-///   MUST identify a Mandate held by the caller, `can_delegate` must be `true`
-///   on that parent Mandate, and the new Scope must be equal to or narrower
-///   than the explicitly identified parent Mandate's Scope.
-///
-/// # Errors
-/// * Panics if the Anchor is not authorized.
-/// * Panics if `parent_mandate_id` is `None` for a Sub-Mandate issuance.
-/// * Panics if `parent_mandate_id` does not identify a Mandate held by the caller.
-/// * Panics if the identified parent Mandate does not permit delegation.
-/// * Panics if a Sub-Mandate Scope exceeds the identified parent Mandate Scope.
-/// * Panics if `ttl` is in the past.
 fn issue_mandate(
     env: Env,
+    issuer: Address,
     agent: Address,
     scope: Scope,
-    can_delegate: bool,
+    delegation_policy: DelegationPolicy,
     parent_mandate_id: Option<u64>,
-) -> u64;
+) -> Result<u64, MandateError>;
 ```
+
+Issues a new Mandate. The Nexus MUST enforce all of the following before
+persisting the Mandate:
+
+1. **Issuer authorization**: `issuer` MUST have invoked this function (auth check
+   via `issuer.require_auth()`).
+2. **Parent validation**: If `parent_mandate_id` is `Some(id)`:
+   - The parent Mandate MUST be valid (not revoked, not expired, epoch current).
+   - The parent's `delegation_policy` MUST NOT be `None`.
+   - If `Restricted(rules)`, the `budget_fraction` and `allowed_scope_tags`
+     invariants MUST be satisfied.
+   - The new Mandate's `scope` MUST be equal to or more restrictive than the
+     parent's `scope` in every dimension.
+3. **Depth cap**: `parent.depth + 1` MUST NOT exceed `MAX_DELEGATION_DEPTH`.
+4. **Budget cap**: If `transfer_limit` is set, the sum of all active child
+   `transfer_limit` values for the parent MUST NOT exceed the parent's
+   `transfer_limit` after this issuance.
+
+Returns the new Mandate's `id` on success.
 
 ---
 
 #### `revoke_mandate`
 
-Called by the Anchor to immediately cancel a Mandate. Revocation MUST be atomic — the Mandate must be invalidated within the same ledger as the revocation transaction.
-
 ```rust
-/// Revokes an existing Mandate, immediately cancelling the agent's authority.
-///
-/// # Arguments
-/// * `env`        - The Soroban environment.
-/// * `mandate_id` - The unique ID of the Mandate to revoke.
-///
-/// # Authorization
-/// * Only the original Anchor that issued this Mandate may revoke it.
-/// * An Anchor MAY also revoke any Sub-Mandate in its chain.
-///
-/// # Behavior
-/// * Revocation is atomic: after this call, `is_valid(mandate_id)` MUST return false.
-/// * Revoking a parent Mandate MUST cascade and invalidate all child Sub-Mandates.
-///
-/// # Errors
-/// * Panics if the caller is not the Anchor of this Mandate.
-/// * Panics if `mandate_id` does not exist.
-fn revoke_mandate(env: Env, mandate_id: u64);
+fn revoke_mandate(
+    env: Env,
+    caller: Address,
+    mandate_id: u64,
+) -> Result<(), MandateError>;
 ```
+
+Invalidates the specified Mandate and all of its descendants atomically.
+
+- `caller` MUST be either the `root_anchor` of the mandate tree or the
+  direct `issuer` of the target Mandate.
+- The Nexus MUST set `MandateState.is_revoked = true` for the target and all
+  descendant Mandates in a single atomic operation.
+- All `VerificationCache` entries for affected Mandates MUST be invalidated.
 
 ---
 
 #### `verify_authority`
 
-Called by any third party (dApp, protocol, agent) to check whether a given Mandate is valid and whether the intended action falls within the Mandate's Scope.
-
 ```rust
-/// Verifies whether a Mandate is currently valid and authorizes a specific action.
-///
-/// # Arguments
-/// * `env`             - The Soroban environment.
-/// * `mandate_id`      - The unique ID of the Mandate to verify.
-/// * `action_context`  - The context of the action being authorized 
-///                       (e.g., target contract address, function name).
-///
-/// # Returns
-/// * `true`  if the Mandate is valid, not expired, not revoked, 
-///           and the action is within Scope.
-/// * `false` in any other case. Implementations MUST NOT panic — 
-///           they MUST return false for invalid or expired Mandates.
-///
-/// # Behavior
-/// * MUST check that the Anchor is still active (not itself revoked, if applicable).
-/// * MUST check that the current ledger timestamp is before `scope.ttl`.
-/// * MUST check that the action_context is permitted by `scope.contract_allowlist`
-///   and `scope.function_allowlist`, if those fields are set.
-/// * For Sub-Mandates, MUST also verify the parent Mandate is valid.
 fn verify_authority(
     env: Env,
     mandate_id: u64,
-    action_context: ActionContext,
-) -> bool;
+    contract: Address,
+    function: Symbol,
+    transfer_amount: Option<i128>,
+) -> Result<bool, MandateError>;
 ```
 
-#### `ActionContext` Structure
+The primary integration point for third-party Soroban contracts. Verifies that
+a Mandate is currently authorized to perform the requested action.
 
-`ActionContext` is the argument passed to `verify_authority` to describe the action the agent intends to perform. The Nexus contract evaluates this against the Mandate's Scope before returning a result.
+**Verification algorithm:**
+
+```
+1. Load root_anchor.current_epoch (E).
+
+2. Check VerificationCache for (mandate_id, E):
+   - HIT (and not expired): return cached result.        → O(1)
+   - MISS: proceed to step 3.
+
+3. Traverse the chain from mandate_id up to root_anchor,
+   bounded by MAX_DELEGATION_DEPTH:
+   a. For each node, verify:
+      - issued_at_epoch == E               (epoch current)
+      - MandateState.is_revoked == false   (not revoked)
+      - scope.ttl >= env.ledger().timestamp() (not expired)
+   b. At the leaf node, additionally verify:
+      - contract is in scope.contract_allowlist (if set)
+      - function is in scope.function_allowlist (if set)
+      - MandateState.spent_budget + transfer_amount
+        <= scope.transfer_limit            (if set)
+
+4. Write result to VerificationCache keyed by (mandate_id, E).
+
+5. If valid and transfer_amount is Some(v):
+   - Atomically increment MandateState.spent_budget by v.
+
+6. Return result.
+```
+
+> **Gas bound**: Steps 1–4 traverse at most `MAX_DELEGATION_DEPTH` nodes
+> (default 8). The worst-case gas cost is therefore a fixed, auditable constant
+> regardless of ecosystem-wide tree size.
+
+---
+
+#### `increment_epoch`
 
 ```rust
-pub struct ActionContext {
-    // The contract address the agent intends to invoke
-    pub target_contract: Address,
+fn increment_epoch(env: Env, root_anchor: Address) -> Result<u64, MandateError>;
+```
 
-    // The function name the agent intends to call
-    pub function_name: String,
+- `root_anchor` MUST invoke this function (`root_anchor.require_auth()`).
+- Atomically increments `root_anchor.current_epoch` by 1.
+- All previously issued Mandates referencing the old epoch are immediately
+  invalid from the perspective of `verify_authority` (step 3a above).
+- The Nexus MAY clear the consumed-nonce set for this Root Anchor, as all
+  prior `MandateRequest` nonces are rendered unreplayable by the epoch change.
+- Returns the new epoch value.
+
+---
+
+### IV. SEP-45 Remote Mandate Issuance
+
+SEP-45 is used when the Root Anchor resides off-chain (e.g., a hardware wallet,
+mobile signer, or cross-chain address) and cannot submit Soroban transactions
+directly. A relayer submits the signed request on the Root Anchor's behalf.
+
+#### Flow
+
+```
+┌─────────────┐        ┌──────────────┐        ┌─────────────┐
+│  Root Anchor│        │   Relayer    │        │    Nexus    │
+│ (off-chain) │        │  (any party) │        │  (Soroban)  │
+└──────┬──────┘        └──────┬───────┘        └──────┬──────┘
+       │                      │                       │
+       │  1. Build & sign      │                       │
+       │  MandateRequest via   │                       │
+       │  SEP-45 challenge     │                       │
+       │─────────────────────>│                       │
+       │                      │  2. Submit signed     │
+       │                      │  MandateRequest       │
+       │                      │──────────────────────>│
+       │                      │                       │ 3. Validate SEP-45
+       │                      │                       │    signature
+       │                      │                       │ 4. Check epoch & nonce
+       │                      │                       │ 5. issue_mandate(...)
+       │                      │  6. Return mandate_id │
+       │                      │<─────────────────────-│
+```
+
+#### MandateRequest Structure
+
+```rust
+pub struct MandateRequest {
+    /// The sovereign identity authorizing this issuance.
+    pub root_anchor: Address,
+    /// The agent that will receive the Mandate.
+    pub agent: Address,
+    /// The scope to be granted.
+    pub scope: Scope,
+    /// The delegation policy to be granted.
+    pub delegation_policy: DelegationPolicy,
+    /// MUST match root_anchor.current_epoch at the time of Nexus processing.
+    /// Prevents replay of this request after the Root Anchor increments its epoch.
+    pub epoch: u64,
+    /// A random nonce. The Nexus MUST reject any MandateRequest whose nonce
+    /// has already been consumed for this Root Anchor in the current epoch.
+    pub nonce: BytesN<32>,
+    /// SEP-45 signature over the canonical encoding of all fields above.
+    pub sep45_signature: BytesN<64>,
 }
 ```
 
+The Nexus MUST maintain a consumed-nonce set per Root Anchor per epoch and
+MUST reject duplicate nonces. This set MAY be cleared when `increment_epoch`
+is called, as the epoch change renders prior nonces irreplayable.
+
 ---
 
-### IV. The `is_valid` Helper
-
-Implementations SHOULD also expose a simple validity check:
+### V. Error Types
 
 ```rust
-/// Returns true if the Mandate exists, is not revoked, and has not expired.
-/// This is a lightweight check that does not evaluate Scope constraints.
-fn is_valid(env: Env, mandate_id: u64) -> bool;
+pub enum MandateError {
+    Unauthorized,              // caller lacks permission
+    MandateNotFound,           // mandate_id does not exist
+    MandateRevoked,            // mandate or ancestor has been revoked
+    MandateExpired,            // scope.ttl has passed
+    EpochMismatch,             // issued_at_epoch < root_anchor.current_epoch
+    BudgetExceeded,            // transfer would exceed scope.transfer_limit
+    ContractNotAllowed,        // contract not in scope.contract_allowlist
+    FunctionNotAllowed,        // function not in scope.function_allowlist
+    DepthExceeded,             // sub-delegation would exceed MAX_DELEGATION_DEPTH
+    DelegationNotAllowed,      // parent delegation_policy is None
+    ScopeViolation,            // child scope is broader than parent scope
+    BudgetFractionViolated,    // child transfer_limit exceeds budget_fraction
+    NonceAlreadyConsumed,      // MandateRequest nonce has been used
+    InvalidSep45Signature,     // SEP-45 signature verification failed
+}
 ```
+---
+
+### VI. Normative Events
+
+The Nexus MUST emit the following events to ensure off-chain observability:
+
+    mandate_issued: [Symbol("mandate"), Symbol("issued"), mandate_id, agent]
+
+    mandate_revoked: [Symbol("mandate"), Symbol("revoked"), mandate_id]
+
+    budget_spent: [Symbol("mandate"), Symbol("spend"), mandate_id, amount]
+
+    epoch_incremented: [Symbol("anchor"), Symbol("epoch_inc"), root_anchor, new_epoch]
 
 ---
 
-### V. Required Events
+### VII. Usage Example — Third-Party Integration
 
-Implementations MUST emit the following Soroban events to allow off-chain indexers and monitoring tools to track the authority lifecycle. For interoperability, the `topics` layout, topic order, and `data` fields are normative and MUST match this specification exactly.
+The following example shows how a lending protocol on Soroban would call the
+Nexus to verify that an AI agent (`agent_address`) is authorized to borrow
+on behalf of a user (`user_address`).
 
 ```rust
-// Emitted when a Mandate is issued
-// topics: (Symbol("mandate"), Symbol("issued"), u64 mandate_id)
-// data:   { anchor: Address, agent: Address, ttl: u64 }
-//
-// Topic 0 MUST be the Symbol "mandate".
-// Topic 1 MUST be the Symbol "issued".
-// Topic 2 MUST be the Mandate identifier as u64.
-// The data payload MUST contain exactly:
-// - anchor: Address
-// - agent: Address
-// - ttl: u64
+// lending_protocol/src/lib.rs
 
-// Emitted when a Mandate is revoked
-// topics: (Symbol("mandate"), Symbol("revoked"), u64 mandate_id)
-// data:   { anchor: Address, revoked_at: u64 }
-//
-// Topic 0 MUST be the Symbol "mandate".
-// Topic 1 MUST be the Symbol "revoked".
-// Topic 2 MUST be the Mandate identifier as u64.
-// The data payload MUST contain exactly:
-// - anchor: Address
-// - revoked_at: u64
+use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
+
+// Import the Nexus client (generated from its contract interface)
+use nexus_client::NexusClient;
+
+#[contract]
+pub struct LendingProtocol;
+
+#[contractimpl]
+impl LendingProtocol {
+    /// Called by an AI agent to borrow on behalf of a user.
+    ///
+    /// # Arguments
+    /// * `mandate_id` - The Mandate the agent is acting under.
+    /// * `agent`      - The agent's address (must match Mandate.agent).
+    /// * `amount`     - Amount to borrow in stroops.
+    pub fn borrow(
+        env: Env,
+        mandate_id: u64,
+        agent: Address,
+        amount: i128,
+    ) -> Result<(), LendingError> {
+        // 1. Require the agent to have signed this transaction.
+        agent.require_auth();
+
+        // 2. Instantiate the Nexus client using its deployed contract address.
+        let nexus_address = Address::from_str(
+            &env,
+            "Cnexus...ADDRESSHERE",
+        );
+        let nexus = NexusClient::new(&env, &nexus_address);
+
+        // 3. Verify authority. The Nexus checks epoch, TTL, budget, and allowlists.
+        //    It also atomically increments spent_budget if the call is approved.
+        let authorized = nexus.verify_authority(
+            &mandate_id,
+            &env.current_contract_address(), // this contract
+            &Symbol::new(&env, "borrow"),    // this function
+            &Some(amount),                   // transfer amount for budget tracking
+        );
+
+        match authorized {
+            Ok(true) => { /* proceed */ }
+            Ok(false) => return Err(LendingError::AgentNotAuthorized),
+            Err(e) => return Err(LendingError::NexusError(e)),
+        }
+
+        // 4. Execute the borrow logic.
+        Self::execute_borrow(&env, mandate_id, amount)?;
+
+        Ok(())
+    }
+
+    fn execute_borrow(env: &Env, mandate_id: u64, amount: i128) -> Result<(), LendingError> {
+        // ... borrow implementation ...
+        Ok(())
+    }
+}
 ```
 
----
+**What this demonstrates:**
 
-### VI. Scope Narrowing Rule (for Sub-Mandates)
-
-When `can_delegate: true`, a Mandate holder may call `issue_mandate` to create a Sub-Mandate. The following rules MUST be enforced by the Nexus contract:
-
-- The Sub-Mandate's `ttl` MUST be less than or equal to the parent Mandate's `ttl`.
-- If the parent Mandate defines a `contract_allowlist`, the Sub-Mandate's allowlist MUST be a subset of the parent's.
-- If the parent Mandate defines a `function_allowlist`, the Sub-Mandate's allowlist MUST be a subset of the parent's.
-- A Sub-Mandate MUST NOT grant permissions that the parent Mandate does not have.
-
----
-
-## Rationale
-
-### Why a new token standard, not multisig?
-
-Multisig accounts allow multiple signers to approve transactions, but they do not encode *what* those signers are permitted to do, nor do they create a portable, verifiable, revocable authority record. A 2-of-3 multisig cannot tell a dApp: *"This agent is authorized to interact with contracts A and B until timestamp T, on behalf of identity X."*
-
-Mandates are also **portable reputation carriers**: an agent operating under a Mandate can access the trust and credit history of its Anchor (e.g., a Zenith-level reputation score), enabling AI agents to access services that would otherwise require high collateral for new, unestablished accounts. Multisig accounts cannot carry this identity context.
-
-### Why is TTL the only mandatory Scope field?
-
-Maximizing adoption requires minimizing the implementation burden. A Mandate with only a TTL is already significantly safer than sharing a private key — it expires automatically and can be revoked at any time. More complex Scope constraints (financial limits, allowlists) are opt-in extensions. This follows the same design philosophy as ERC-20, which defined the minimum viable interface and allowed the ecosystem to build on top of it.
-
-### Why is `verify_authority` a required function?
-
-Third-party verifiability is the core value proposition of this standard. Without a standard verification interface, every dApp would need to implement its own logic for reading Mandate state from the Nexus. By standardizing `verify_authority`, any protocol on Stellar can verify agent authority with a single contract call, without understanding the internal structure of the Nexus.
-
-### Why is cascading revocation required?
-
-An Anchor that revokes a Mandate must be able to trust that all downstream authority derived from that Mandate is also cancelled. Without cascading revocation, a bad actor could create a chain of Sub-Mandates and retain authority even after the parent is revoked. Atomic, cascading revocation is a security requirement, not a convenience feature.
+- The lending protocol has **zero knowledge** of the user's private key.
+- The Nexus enforces all budget limits, TTL, contract allowlists, and epoch
+  validity transparently.
+- The protocol only needs to know the Nexus contract address — it does not need
+  to implement any delegation logic itself.
+- Any protocol can integrate the same Nexus, creating a composable trust layer
+  across the Stellar ecosystem.
 
 ---
 
-## Backwards Compatibility
+## Design Rationale
 
-This standard is additive and does not modify any existing Soroban or Stellar protocol primitives. It is designed to be compatible with and composable alongside:
+### Immutable Scope, Mutable State
 
-- **SEP-41** (Soroban Token Interface): Mandate tokens are non-transferable and do not implement the SEP-41 transfer interface. However, the Nexus contract MAY be deployed alongside SEP-41 token contracts.
-- **SEP-10 / SEP-45** (Web Authentication): Anchors may use SEP-10 or SEP-45 authentication to prove identity before issuing Mandates to agents.
-- Future payment delegation standards (e.g., based on the x402 protocol) are explicitly intended as Scope extensions to this standard and may be proposed as a follow-up SEP.
+Separating `Scope` (immutable) from `MandateState` (mutable) is a deliberate
+design choice. The `Scope` is the cryptographic commitment made at issuance — it
+forms the basis of any ZK-proof and MUST NOT change. The `MandateState` tracks
+runtime facts (spending, revocation) that evolve over time. Conflating them (as
+in v0.3.0's `spent_budget` inside `Scope`) would invalidate cached proofs and
+make the issuance record untrustworthy as an audit artifact.
+
+### DelegationPolicy over `can_delegate: bool`
+
+A boolean flag cannot express the constraints needed in real agentic systems.
+An orchestrator agent needs to spawn specialized sub-agents, but only with a
+fraction of its budget and a narrower contract allowlist. `DelegationPolicy::Restricted`
+encodes these constraints at the protocol level, removing the need for off-chain
+coordination and making them auditable on-chain.
+
+### Authority Epoch for Mass Revocation
+
+Individually revoking thousands of Mandates (e.g., when rotating a key after a
+suspected compromise) would require one transaction per Mandate — prohibitive in
+gas and latency. A single `increment_epoch` transaction renders every prior
+Mandate invalid instantly. This is analogous to rotating a certificate authority
+root: all previously issued certificates become untrusted without needing to touch
+each one individually.
+
+### Bounded Gas via Depth Cap and Cache
+
+Without a depth cap, a malicious actor could create a chain of `MAX_U8` levels
+to make `verify_authority` run out of gas, creating a denial-of-service vector
+against any protocol that integrates the Nexus. `MAX_DELEGATION_DEPTH = 8`
+bounds worst-case gas. The `VerificationCache` further reduces the amortized
+cost to O(1) for repeated checks of the same Mandate within an epoch.
+
+### SEP-45 for Remote Issuance
+
+Requiring the Root Anchor to be a live Soroban account would exclude sovereign
+identities managed by hardware wallets, mobile signers, or cross-chain bridges.
+The `MandateRequest` flow delegates on-chain submission to a stateless relayer,
+while the Nexus enforces all security properties. This is consistent with the
+trust model of SEP-45: the relayer cannot forge a signature and cannot replay
+a request across epochs.
+
+### Relation to Existing Standards
+
+| Standard | Relationship |
+|---|---|
+| **SEP-41** | Mandates follow the token interface for discoverability, but are non-transferable (no `transfer` function). |
+| **SEP-10** | Used for Root Anchor authentication in web-client issuance flows. |
+| **SEP-45** | Used for off-chain issuance via `MandateRequest`. |
+| **EIP-4973 (Ethereum)** | Conceptual ancestor (Account-Bound Tokens / SBTs). This SEP extends the concept with hierarchical delegation and financial limits for the agentic economy. |
 
 ---
 
 ## Security Concerns
 
-### Atomic Revocation
+### Cascading Revocation Atomicity
 
-Revocation MUST be processed atomically. The Nexus contract MUST invalidate the Mandate within the same ledger in which the revocation transaction is submitted. Implementations MUST NOT use asynchronous or delayed revocation mechanisms.
+The Nexus MUST ensure that revoking a parent Mandate invalidates all descendants
+atomically at the verification level. Implementations MUST NOT rely solely on the
+`VerificationCache` for revocation propagation. On a cache miss, the full chain
+MUST be re-traversed to detect revocation of any ancestor node.
 
-### Cascading Revocation
+### Budget Exhaustion via Sub-delegation
 
-As specified in Section III, revoking a parent Mandate MUST cascade to all child Sub-Mandates in the delegation chain. Nexus implementations MUST maintain a mapping from each Mandate to its children to enforce this.
+Without `budget_fraction`, a compromised intermediate agent could issue
+sub-Mandates whose aggregate `transfer_limit` exceeds the original budget,
+enabling fund drainage across multiple agents acting in parallel. The Nexus MUST
+enforce at issuance time that the sum of all active child `transfer_limit` values
+does not exceed the parent's `transfer_limit`.
 
-### Scope Narrowing Enforcement
+### Replay Attacks on MandateRequest
 
-The Nexus contract MUST enforce Scope narrowing at the time of Sub-Mandate issuance. It MUST NOT rely on agents self-reporting their Scope constraints.
+The `epoch` field prevents replay of a captured `MandateRequest` after the Root
+Anchor increments its epoch. The `nonce` field prevents replay within the same
+epoch. The Nexus MUST maintain a consumed-nonce set per Root Anchor per epoch
+and MUST reject duplicate nonces before performing any other validation.
 
-### Anchor Liveness
+### Depth Limit Enforcement Timing
 
-If an Anchor account is itself revoked, deactivated, or otherwise invalidated (depending on the identity system used), all Mandates issued by that Anchor MUST also be considered invalid. The `verify_authority` function MUST check Anchor liveness as part of its verification logic.
+`MAX_DELEGATION_DEPTH` MUST be enforced at **issuance time**, not at verification
+time. Enforcing only at verification creates a window where an over-depth chain
+exists on-chain but cannot be verified without running out of gas — a latent DoS
+vector. Rejecting at issuance prevents the chain from being created.
 
-### Privacy Considerations
+### Scope Monotonicity Enforcement
 
-The full delegation structure of an Anchor — which agents it authorizes and with what Scope — is visible on-chain by default. Implementations that require confidential delegation SHOULD consider using Zero-Knowledge Proofs (ZKPs) to allow `verify_authority` to confirm that an action is within Scope without revealing the full Scope to the verifier. This is a recommended enhancement and is not required by this standard.
+The Nexus MUST verify at issuance that the child Scope is strictly less than or
+equal to the parent Scope in every dimension: TTL, transfer_limit, contract_allowlist,
+and function_allowlist. A child MUST NOT be able to grant itself permissions the
+parent does not have. This invariant is the foundation of the trust model.
 
-### Sybil Resistance
+### ZK-Commitment Integrity
 
-This standard does not define Sybil resistance for Anchors. Implementations that require Anchor uniqueness (e.g., one Anchor per human) SHOULD combine this standard with a Proof-of-Personhood or hardware-bound identity mechanism.
-
----
-
-## Reference Implementation
-
-The first reference implementation of this standard is provided by the **Zolvency protocol** on the Stellar Soroban network. In the Zolvency ecosystem, Mandates are branded as **Wills** — authority tokens issued by a sovereign **Soul** identity to AI agents operating within the Zolvency Nexus registry.
+The `scope_commitment` field is informational within this SEP — the Nexus does
+not verify ZK proofs natively. Implementations that use `scope_commitment` for
+private verification SHOULD define a companion SEP specifying the proving system,
+verification key management, and on-chain verifier contract interface.
 
 ---
 
 ## Changelog
 
-- v0.0.1: Initial draft
+| Version | Date | Changes |
+|---|---|---|
+| `0.1.0` | 2026-05-01 | Initial draft. Core Mandate structure, Scope, Nexus concept, Authority Epoch. |
+| `0.2.0` | 2026-05-05 | Added `DelegationRules`, `VerificationCache`, depth bounding, SEP-45 `MandateRequest` with epoch+nonce anti-replay. |
+| `0.3.0` | 2026-05-05 | Extracted `spent_budget` and `is_revoked` into separate `MandateState` struct to preserve `Scope` immutability. (2) Restored full `DelegationRules` struct lost in 0.3.0. (3) Returned document language to English per Stellar SEP repository standard. (4) Added `MandateError` enum. (5) Added Usage Example (Section VI) demonstrating third-party Nexus integration in Rust. (6) Added Motivation section per SEP template requirements. (7) Added Design Rationale subsection comparing to EIP-4973. |
 
 ---
 
 ## Copyright
 
-This SEP is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+This SEP is licensed under the
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
