@@ -3,7 +3,7 @@
 ```
 SEP: XXXX
 Title: Hierarchical Mandate Tokens for Autonomous Agent Authority
-Authors: Felipe Nunes Oliveira <@felipezolvency>
+Authors: Felipe Nunes Oliveira <@devfelipenunes>
 Track: Standard
 Status: Draft
 Created: 2026-05-01
