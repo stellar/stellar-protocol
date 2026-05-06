@@ -1,3 +1,4 @@
+```
 SEP: XXXX
 Title: Hierarchical Mandate Tokens for Autonomous Agent Authority
 Authors: Felipe Nunes Oliveira <@devfelipenunes>
@@ -7,6 +8,7 @@ Created: 2026-05-01
 Updated: 2026-05-06
 Version: 0.4.0
 Discussion: https://github.com/orgs/stellar/discussions/1925
+```
 
 ## Simple Summary
 
