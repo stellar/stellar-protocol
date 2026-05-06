@@ -144,7 +144,7 @@ pub struct Scope {
 
     /// OPTIONAL. If set, the Agent may only call functions in this list.
     /// Function names are matched as exact strings.
-    pub function_allowlist: Option<Vec<String>>,
+    pub function_allowlist: Option<Vec<Symbol>>,
 }
 ```
 
@@ -203,6 +203,7 @@ pub struct MandateState {
     /// Updated by the Nexus each time verify_authority approves a transfer.
     pub spent_budget: i128,
     /// Set to true by revoke_mandate or when the Root Anchor increments its epoch.
+    pub allocated_to_children: i128,
     pub is_revoked: bool,
 }
 ```
@@ -262,9 +263,9 @@ persisting the Mandate:
    - The new Mandate's `scope` MUST be equal to or more restrictive than the
      parent's `scope` in every dimension.
 3. **Depth cap**: `parent.depth + 1` MUST NOT exceed `MAX_DELEGATION_DEPTH`.
-4. **Budget cap**: If `transfer_limit` is set, the sum of all active child
-   `transfer_limit` values for the parent MUST NOT exceed the parent's
-   `transfer_limit` after this issuance.
+4. **Budget cap**: If `transfer_limit` is set, the parent's `MandateState.allocated_to_children`
+     plus the new Mandate's `transfer_limit` MUST NOT exceed the parent's
+     `scope.transfer_limit` after this issuance.
 
 Returns the new Mandate's `id` on success.
 
@@ -485,10 +486,8 @@ impl LendingProtocol {
         agent.require_auth();
 
         // 2. Instantiate the Nexus client using its deployed contract address.
-        let nexus_address = Address::from_str(
-            &env,
-            "Cnexus...ADDRESSHERE",
-        );
+        let nexus_address = Address::from_str(&env, "Cnexus...ADDRESSHERE")
+          .expect("Invalid Nexus address");
         let nexus = NexusClient::new(&env, &nexus_address);
 
         // 3. Verify authority. The Nexus checks epoch, TTL, budget, and allowlists.
@@ -503,7 +502,7 @@ impl LendingProtocol {
         match authorized {
             Ok(true) => { /* proceed */ }
             Ok(false) => return Err(LendingError::AgentNotAuthorized),
-            Err(e) => return Err(LendingError::NexusError(e)),
+            Err(_) => return Err(LendingError::NexusError),
         }
 
         // 4. Execute the borrow logic.
