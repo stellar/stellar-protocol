@@ -82,16 +82,20 @@
 | [CAP-0068](cap-0068.md) | 23 | Host function for getting executable for `Address` | Dmytro Kozhevin | Final |
 | [CAP-0069](cap-0069.md) | 23 | String/Bytes conversion host functions | Dmytro Kozhevin | Final |
 | [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Final |
-| [CAP-0073](cap-0073.md) | TBD | Allow SAC to create G-account balances | Dmytro Kozhevin | Accepted |
+| [CAP-0071](cap-0071.md) | TBD | Authentication delegation and address-bound Soroban credentials | Dmytro Kozhevin | Awaiting Decision |
+| [CAP-0071-01](cap-0071-01.md) | TBD | Authentication delegation for custom accounts | Dmytro Kozhevin | Awaiting Decision |
+| [CAP-0071-02](cap-0071-02.md) | TBD | Address-bound Soroban address credentials | Dmytro Kozhevin | Awaiting Decision |
+| [CAP-0073](cap-0073.md) | 26 | Allow SAC to create G-account balances | Dmytro Kozhevin | Implemented |
 | [CAP-0074](cap-0074.md) | 25 | Host functions for BN254 | Siddharth Suresh | Final |
 | [CAP-0075](cap-0075.md) | 25 | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Final |
 | [CAP-0076](cap-0076.md) | 24 | P23 State Archival bug remediation | Dmytro Kozhevin | Final |
-| [CAP-0077](cap-0077.md) | TBD | Freeze Ledger Entries via Network Configuration | Dmytro Kozhevin | Accepted |
-| [CAP-0078](cap-0078.md) | TBD | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Accepted |
-| [CAP-0079](cap-0079.md) | TBD | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Accepted |
-| [CAP-0080](cap-0080.md) | TBD | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Accepted |
+| [CAP-0077](cap-0077.md) | 26 | Freeze Ledger Entries via Network Configuration | Dmytro Kozhevin | Implemented |
+| [CAP-0078](cap-0078.md) | 26 | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Implemented |
+| [CAP-0079](cap-0079.md) | 26 | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Implemented |
+| [CAP-0080](cap-0080.md) | 26 | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Implemented |
 | [CAP-0081](cap-0081.md) | TBD | TTL-Ordered Eviction | Garand Tyson | Accepted |
-| [CAP-0082](cap-0082.md) | TBD | Checked 256-bit integer arithmetic host functions | Jay Geng | Accepted |
+| [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Implemented |
+| [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to skip the current ledger | Brett Boston | Awaiting Decision |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -112,9 +116,7 @@
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
-| [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
-| [CAP-0083](cap-0083.md) | Allow validators to vote to skip the current ledger | Brett Boston | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
