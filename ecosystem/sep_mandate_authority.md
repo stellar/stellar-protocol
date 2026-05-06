@@ -1,23 +1,20 @@
-## Preamble
-
-```
 SEP: XXXX
 Title: Hierarchical Mandate Tokens for Autonomous Agent Authority
 Authors: Felipe Nunes Oliveira <@devfelipenunes>
 Track: Standard
 Status: Draft
 Created: 2026-05-01
-Updated: 2026-05-05
-Version: 0.3.0
+Updated: 2026-05-06
+Version: 0.4.0
 Discussion: https://github.com/orgs/stellar/discussions/1925
-```
 
 ## Simple Summary
 
 A standardized Soroban contract interface for issuing non-transferable, revocable
 **Mandate tokens** that allow a sovereign identity (**Root Anchor**) to delegate
 programmable, scoped, and auditable authority to AI agents or automated systems —
-without sharing private keys.
+without sharing private keys. Now including support for **Autonomous Subscriptions** 
+via recurring periodic budgets.
 
 ## Motivation
 
@@ -132,7 +129,12 @@ pub struct Scope {
 
     /// OPTIONAL. Maximum cumulative value (in stroops) this Agent may transfer.
     /// The Nexus tracks spending against this limit in MandateState.
+    /// If renewal_period is set, this limit applies to each period.
     pub transfer_limit: Option<i128>,
+
+    /// OPTIONAL. If set, the transfer_limit resets every renewal_period seconds.
+    /// Enables "Autonomous Subscriptions" (e.g., $50/month).
+    pub renewal_period: Option<u64>,
 
     /// OPTIONAL. Hash commitment over this Scope for ZKP-based private
     /// verification. The scheme for generating and verifying this commitment
@@ -143,7 +145,7 @@ pub struct Scope {
     pub contract_allowlist: Option<Vec<Address>>,
 
     /// OPTIONAL. If set, the Agent may only call functions in this list.
-    /// Function names are matched as exact strings.
+    /// Function names are matched as symbols.
     pub function_allowlist: Option<Vec<Symbol>>,
 }
 ```
@@ -199,11 +201,16 @@ preserve the immutability of the issuance record.
 ```rust
 pub struct MandateState {
     pub mandate_id: u64,
-    /// Cumulative value spent under this Mandate (in stroops).
+    /// Cumulative value spent under this Mandate (in stroops) within the current period.
     /// Updated by the Nexus each time verify_authority approves a transfer.
     pub spent_budget: i128,
-    /// Set to true by revoke_mandate or when the Root Anchor increments its epoch.
+    /// Unix timestamp of the start of the current budget period.
+    /// Used only if scope.renewal_period is Some.
+    pub current_period_start: u64,
+    /// Sum of all transfer_limits granted to child mandates.
+    /// Ensures aggregate sub-delegation does not exceed parent limit.
     pub allocated_to_children: i128,
+    /// Set to true by revoke_mandate or when the Root Anchor increments its epoch.
     pub is_revoked: bool,
 }
 ```
@@ -263,9 +270,7 @@ persisting the Mandate:
    - The new Mandate's `scope` MUST be equal to or more restrictive than the
      parent's `scope` in every dimension.
 3. **Depth cap**: `parent.depth + 1` MUST NOT exceed `MAX_DELEGATION_DEPTH`.
-4. **Budget cap**: If `transfer_limit` is set, the parent's `MandateState.allocated_to_children`
-     plus the new Mandate's `transfer_limit` MUST NOT exceed the parent's
-     `scope.transfer_limit` after this issuance.
+4. **Budget cap**: If `transfer_limit` is set, the parent's `MandateState.allocated_to_children` plus the new Mandate's `transfer_limit` MUST NOT exceed the parent's `scope.transfer_limit` after this issuance.
 
 Returns the new Mandate's `id` on success.
 
@@ -324,6 +329,11 @@ a Mandate is currently authorized to perform the requested action.
    b. At the leaf node, additionally verify:
       - contract is in scope.contract_allowlist (if set)
       - function is in scope.function_allowlist (if set)
+      - Check/Reset Recurring Budget:
+        - If scope.renewal_period is Some(P):
+          - While env.ledger().timestamp() >= MandateState.current_period_start + P:
+            - Reset MandateState.spent_budget = 0
+            - Increment MandateState.current_period_start by P
       - MandateState.spent_budget + transfer_amount
         <= scope.transfer_limit            (if set)
 
@@ -487,7 +497,7 @@ impl LendingProtocol {
 
         // 2. Instantiate the Nexus client using its deployed contract address.
         let nexus_address = Address::from_str(&env, "Cnexus...ADDRESSHERE")
-          .expect("Invalid Nexus address");
+            .expect("Invalid Nexus address");
         let nexus = NexusClient::new(&env, &nexus_address);
 
         // 3. Verify authority. The Nexus checks epoch, TTL, budget, and allowlists.
