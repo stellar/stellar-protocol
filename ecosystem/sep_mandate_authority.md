@@ -5,8 +5,8 @@ Authors: Felipe Nunes Oliveira <@devfelipenunes>
 Track: Standard
 Status: Draft
 Created: 2026-05-01
-Updated: 2026-05-06
-Version: 0.4.0
+Updated: 2026-05-13
+Version: 0.4.1
 Discussion: https://github.com/orgs/stellar/discussions/1925
 ```
 
@@ -114,7 +114,7 @@ pub struct Mandate {
     /// The id of the parent Mandate, if this is a sub-delegation.
     pub parent_mandate_id: Option<u64>,
     /// Depth of this Mandate in the delegation tree (Root Anchor = 0).
-    pub depth: u8,
+    pub depth: u32,
 }
 ```
 
@@ -130,24 +130,28 @@ pub struct Scope {
     pub ttl: u64,
 
     /// OPTIONAL. Maximum cumulative value (in stroops) this Agent may transfer.
-    /// The Nexus tracks spending against this limit in MandateState.
-    /// If renewal_period is set, this limit applies to each period.
+    /// If token is Some(Address), this limit applies only to that token.
     pub transfer_limit: Option<i128>,
 
+    /// OPTIONAL. The token address (contract ID) this mandate applies to.
+    /// If None, the mandate is asset-agnostic (caller contract defines asset).
+    pub token: Option<Address>,
+
     /// OPTIONAL. If set, the transfer_limit resets every renewal_period seconds.
-    /// Enables "Autonomous Subscriptions" (e.g., $50/month).
     pub renewal_period: Option<u64>,
 
+    /// OPTIONAL. External URI (IPFS/HTTPS) containing human-readable purpose 
+    /// or additional structured metadata for the agent.
+    pub metadata_uri: Option<String>,
+
     /// OPTIONAL. Hash commitment over this Scope for ZKP-based private
-    /// verification. The scheme for generating and verifying this commitment
-    /// is out of scope for this SEP and SHOULD be defined in a companion SEP.
+    /// verification.
     pub scope_commitment: Option<BytesN<32>>,
 
     /// OPTIONAL. If set, the Agent may only invoke contracts in this list.
     pub contract_allowlist: Option<Vec<Address>>,
 
     /// OPTIONAL. If set, the Agent may only call functions in this list.
-    /// Function names are matched as symbols.
     pub function_allowlist: Option<Vec<Symbol>>,
 }
 ```
@@ -173,7 +177,7 @@ pub struct DelegationRules {
     /// Maximum number of additional delegation levels below this Mandate.
     /// 0 means the Agent may issue Mandates to direct sub-agents, but those
     /// sub-agents cannot delegate further.
-    pub max_subdepth: u8,
+    pub max_subdepth: u32,
 
     /// Restricts which Scope fields may be included in a sub-Mandate.
     /// If None, all fields from the parent Scope may be re-delegated
@@ -184,7 +188,7 @@ pub struct DelegationRules {
     /// child Mandate, expressed as a percentage (0–100).
     /// The Nexus additionally enforces that the SUM of all active child
     /// transfer_limit values does not exceed parent.transfer_limit.
-    pub budget_fraction: Option<u8>,
+    pub budget_fraction: Option<u32>,
 }
 
 pub enum ScopeTag {
@@ -304,6 +308,7 @@ Invalidates the specified Mandate and all of its descendants atomically.
 fn verify_authority(
     env: Env,
     mandate_id: u64,
+    agent: Address,
     contract: Address,
     function: Symbol,
     transfer_amount: Option<i128>,
@@ -311,13 +316,16 @@ fn verify_authority(
 ```
 
 The primary integration point for third-party Soroban contracts. Verifies that
-a Mandate is currently authorized to perform the requested action.
+a Mandate is currently authorized to perform the requested action and that
+the caller (Agent) is the legitimate holder of the Mandate.
 
 **Verification algorithm:**
 
 ```
-1. Load root_anchor.current_epoch (E).
+1. Load Mandate (M). Verify M.agent == agent.
 
+2. Load root_anchor.current_epoch (E).
+...
 2. Check VerificationCache for (mandate_id, E):
    - HIT (and not expired): return cached result.        → O(1)
    - MISS: proceed to step 3.
@@ -502,10 +510,11 @@ impl LendingProtocol {
             .expect("Invalid Nexus address");
         let nexus = NexusClient::new(&env, &nexus_address);
 
-        // 3. Verify authority. The Nexus checks epoch, TTL, budget, and allowlists.
+        // 3. Verify authority. The Nexus checks agent identity, epoch, TTL, budget, and allowlists.
         //    It also atomically increments spent_budget if the call is approved.
         let authorized = nexus.verify_authority(
             &mandate_id,
+            &agent,
             &env.current_contract_address(), // this contract
             &Symbol::new(&env, "borrow"),    // this function
             &Some(amount),                   // transfer amount for budget tracking
@@ -651,7 +660,9 @@ verification key management, and on-chain verifier contract interface.
 |---|---|---|
 | `0.1.0` | 2026-05-01 | Initial draft. Core Mandate structure, Scope, Nexus concept, Authority Epoch. |
 | `0.2.0` | 2026-05-05 | Added `DelegationRules`, `VerificationCache`, depth bounding, SEP-45 `MandateRequest` with epoch+nonce anti-replay. |
-| `0.3.0` | 2026-05-05 | Extracted `spent_budget` and `is_revoked` into separate `MandateState` struct to preserve `Scope` immutability. (2) Restored full `DelegationRules` struct lost in 0.3.0. (3) Returned document language to English per Stellar SEP repository standard. (4) Added `MandateError` enum. (5) Added Usage Example (Section VI) demonstrating third-party Nexus integration in Rust. (6) Added Motivation section per SEP template requirements. (7) Added Design Rationale subsection comparing to EIP-4973. |
+| `0.3.0` | 2026-05-05 | Extracted `spent_budget` into `MandateState`, added `MandateError`. |
+| `0.4.0` | 2026-05-06 | Added `renewal_period` for Autonomous Subscriptions. |
+| `0.4.1` | 2026-05-13 | Added `token` and `metadata_uri` to `Scope`. Aligned types to `u32`. |
 
 ---
 
