@@ -5,7 +5,7 @@ Authors: Felipe Nunes Oliveira <@devfelipenunes>
 Track: Standard
 Status: Draft
 Created: 2026-05-01
-Updated: 2026-05-13
+Updated: 2026-05-06
 Version: 0.4.1
 Discussion: https://github.com/orgs/stellar/discussions/1925
 ```
@@ -77,7 +77,7 @@ described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
 | Term | Definition |
 |---|---|
-| **Root Anchor** | The original sovereign identity (e.g., a SoulID) that holds primary authority over a mandate tree. |
+| **Root Anchor** | The original sovereign identity (e.g., a Soroban account or a Smart Wallet) that holds primary authority over a mandate tree. |
 | **Issuer** | The address that signs and submits a `issue_mandate` transaction. May be the Root Anchor or an authorized Agent. |
 | **Agent** | The address that receives a Mandate and may act within its Scope. |
 | **Mandate** | A non-transferable, revocable token encoding delegated authority. Called **Wills** in the Zolvency ecosystem. |
@@ -129,7 +129,7 @@ pub struct Scope {
     /// REQUIRED. Unix timestamp after which this Mandate expires.
     pub ttl: u64,
 
-    /// OPTIONAL. Maximum cumulative value (in stroops) this Agent may transfer.
+    /// OPTIONAL. Maximum cumulative value (in the asset's smallest indivisible unit) this Agent may transfer.
     /// If token is Some(Address), this limit applies only to that token.
     pub transfer_limit: Option<i128>,
 
@@ -185,7 +185,8 @@ pub struct DelegationRules {
     pub allowed_scope_tags: Option<Vec<ScopeTag>>,
 
     /// Maximum fraction of transfer_limit that may be allocated to a single
-    /// child Mandate, expressed as a percentage (0–100).
+    /// child Mandate, expressed in Basis Points (0–10000).
+    /// 10000 = 100%.
     /// The Nexus additionally enforces that the SUM of all active child
     /// transfer_limit values does not exceed parent.transfer_limit.
     pub budget_fraction: Option<u32>,
@@ -207,7 +208,7 @@ preserve the immutability of the issuance record.
 ```rust
 pub struct MandateState {
     pub mandate_id: u64,
-    /// Cumulative value spent under this Mandate (in stroops) within the current period.
+    /// Cumulative value spent under this Mandate (in the asset's smallest indivisible unit) within the current period.
     /// Updated by the Nexus each time verify_authority approves a transfer.
     pub spent_budget: i128,
     /// Unix timestamp of the start of the current budget period.
@@ -292,13 +293,37 @@ fn revoke_mandate(
 ) -> Result<(), MandateError>;
 ```
 
-Invalidates the specified Mandate and all of its descendants atomically.
+Invalidates the specified Mandate. 
 
 - `caller` MUST be either the `root_anchor` of the mandate tree or the
   direct `issuer` of the target Mandate.
-- The Nexus MUST set `MandateState.is_revoked = true` for the target and all
-  descendant Mandates in a single atomic operation.
-- All `VerificationCache` entries for affected Mandates MUST be invalidated.
+- The Nexus MUST set `MandateState.is_revoked = true` for the target Mandate.
+- **Lazy Revocation:** Descendant mandates are implicitly invalidated. The `verify_authority` 
+  function MUST detect this by traversing the ancestry chain.
+- All `VerificationCache` entries for the target Mandate MUST be invalidated.
+
+---
+
+#### `reclaim_budget`
+
+```rust
+fn reclaim_budget(
+    env: Env,
+    caller: Address,
+    child_mandate_id: u64,
+) -> Result<(), MandateError>;
+```
+
+Allows an Issuer to reclaim the allocated budget from a child Mandate that has 
+either expired or been revoked.
+
+- `caller` MUST be the `issuer` of the target `child_mandate_id`.
+- The child Mandate MUST be either revoked (`is_revoked == true`) or expired 
+  (`ttl < now`).
+- The Nexus MUST subtract `child.scope.transfer_limit` from the parent's 
+  `MandateState.allocated_to_children`.
+- This ensures that delegation capacity is not permanently lost due to 
+  short-lived or failed sub-agents.
 
 ---
 
@@ -312,6 +337,7 @@ fn verify_authority(
     contract: Address,
     function: Symbol,
     transfer_amount: Option<i128>,
+    token: Option<Address>,
 ) -> Result<bool, MandateError>;
 ```
 
@@ -339,6 +365,7 @@ the caller (Agent) is the legitimate holder of the Mandate.
    b. At the leaf node, additionally verify:
       - contract is in scope.contract_allowlist (if set)
       - function is in scope.function_allowlist (if set)
+      - If token is Some(T), verify T == scope.token (if scope.token is set).
       - Check/Reset Recurring Budget:
         - If scope.renewal_period is Some(P):
           - While env.ledger().timestamp() >= MandateState.current_period_start + P:
@@ -423,9 +450,10 @@ pub struct MandateRequest {
     pub epoch: u64,
     /// A random nonce. The Nexus MUST reject any MandateRequest whose nonce
     /// has already been consumed for this Root Anchor in the current epoch.
-    pub nonce: BytesN<32>,
+    pub nonce: Bytes,
     /// SEP-45 signature over the canonical encoding of all fields above.
-    pub sep45_signature: BytesN<64>,
+    /// Uses dynamic Bytes to support diverse signing algorithms (Ed25519, Passkeys, Smart Accounts).
+    pub sep45_signature: Bytes,
 }
 ```
 
@@ -467,11 +495,29 @@ The Nexus MUST emit the following events to ensure off-chain observability:
 
     budget_spent: [Symbol("mandate"), Symbol("spend"), mandate_id, amount]
 
+    budget_reclaimed: [Symbol("mandate"), Symbol("reclaim"), mandate_id, amount]
+
     epoch_incremented: [Symbol("anchor"), Symbol("epoch_inc"), root_anchor, new_epoch]
 
 ---
 
-### VII. Usage Example — Third-Party Integration
+### VII. Optional Identity Verification Hooks
+
+To support diverse compliance and security needs, the Nexus MAY implement a hook to external identity verifiers. This allows specific deployments of this SEP to enforce that a **Root Anchor** holds a valid credential (e.g., a KYC token, a SoulID, or a Passkey attestation) before being allowed to issue Mandates.
+
+#### Interface (Informational)
+
+Verifiers SHOULD implement a simple check function:
+
+```rust
+fn is_authorized_anchor(env: Env, anchor: Address) -> bool;
+```
+
+The Nexus implementation MAY call this function during `issue_mandate`. If the verifier returns `false`, the Nexus MUST reject the issuance with an `UnauthorizedAnchor` error. This mechanism ensures that the standard remains extensible without prescribing a specific identity technology.
+
+---
+
+### VIII. Usage Example — Third-Party Integration
 
 The following example shows how a lending protocol on Soroban would call the
 Nexus to verify that an AI agent (`agent_address`) is authorized to borrow
@@ -495,7 +541,7 @@ impl LendingProtocol {
     /// # Arguments
     /// * `mandate_id` - The Mandate the agent is acting under.
     /// * `agent`      - The agent's address (must match Mandate.agent).
-    /// * `amount`     - Amount to borrow in stroops.
+    /// * `amount`     - Amount to borrow in the asset's smallest indivisible unit.
     pub fn borrow(
         env: Env,
         mandate_id: u64,
@@ -609,12 +655,23 @@ a request across epochs.
 
 ## Security Concerns
 
-### Cascading Revocation Atomicity
+### Lazy Revocation and Chain Integrity
 
-The Nexus MUST ensure that revoking a parent Mandate invalidates all descendants
-atomically at the verification level. Implementations MUST NOT rely solely on the
-`VerificationCache` for revocation propagation. On a cache miss, the full chain
-MUST be re-traversed to detect revocation of any ancestor node.
+The Nexus MUST ensure that revoking a parent Mandate implicitly invalidates all 
+descendants. This is achieved through **Lazy Revocation**: the `revoke_mandate` 
+function only modifies the target node, but the `verify_authority` function MUST 
+perform a recursive check of the ancestry chain up to the Root Anchor. 
+
+This design prevents **Denial of Service (DoS)** attacks where an attacker 
+creates a massive delegation tree that exceeds Soroban gas limits during an 
+atomic revocation attempt.
+
+### Budget Reclamation Safety
+
+The `reclaim_budget` function MUST only be callable for child Mandates that are 
+objectively invalid (either revoked or expired). This prevents an Issuer from 
+arbitrarily reducing a child's active budget without first revoking the 
+authority. 
 
 ### Budget Exhaustion via Sub-delegation
 
