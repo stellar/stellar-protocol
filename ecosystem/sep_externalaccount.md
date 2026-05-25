@@ -27,30 +27,33 @@ and is intended to receive off-chain or external-network deposits that settle
 to that wallet.
 
 This SEP uses bearer authentication obtained via [SEP-10](sep-0010.md) for
-classic (G...) and muxed (M...) accounts, or [SEP-45](sep-0045.md) for
-contract (C...) accounts. Providers supporting all Stellar account types must
-implement both authentication protocols.
+classic (G...) and muxed (M...) accounts, or [SEP-45](sep-0045.md) for contract
+(C...) accounts. Providers supporting all Stellar account types must implement
+both authentication protocols.
 
-This SEP is independent from [SEP-6](sep-0006.md) and [SEP-24](sep-0024.md).
-It provisions an account resource. It does not create a deposit transaction.
+This SEP is independent from [SEP-6](sep-0006.md) and [SEP-24](sep-0024.md). It
+provisions an account resource. It does not create a deposit transaction.
 
 ## Dependencies
 
 - [SEP-1: stellar.toml](sep-0001.md) — service discovery
-- [SEP-6: Deposit and Withdrawal API](sep-0006.md) — `instructions` payload shape, callback signature scheme
+- [SEP-6: Deposit and Withdrawal API](sep-0006.md) — `instructions` payload
+  shape, callback signature scheme
 - [SEP-9: Standard KYC Fields](sep-0009.md) — credential field names
-- [SEP-10: Stellar Web Authentication](sep-0010.md) — authentication for classic (G...) and muxed (M...) accounts
+- [SEP-10: Stellar Web Authentication](sep-0010.md) — authentication for
+  classic (G...) and muxed (M...) accounts
 - [SEP-11: Txrep](sep-0011.md) — Stellar asset format
 - [SEP-12: KYC API](sep-0012.md) — KYC remediation flow
-- [SEP-45: Stellar Web Authentication for Contract Accounts](sep-0045.md) — authentication for contract (C...) accounts
+- [SEP-45: Stellar Web Authentication for Contract Accounts](sep-0045.md) —
+  authentication for contract (C...) accounts
 
 ## Motivation
 
 [SEP-6](sep-0006.md) already allows anchors to return deposit instructions, but
 those instructions are transaction-scoped: the wallet asks for instructions to
-complete a specific deposit flow, and the anchor returns credentials for *that*
-deposit. Many providers also need a standard way to provision reusable receiving
-instruments outside a specific deposit or withdrawal flow.
+complete a specific deposit flow, and the anchor returns credentials for _that_
+deposit. Many providers also need a standard way to provision reusable
+receiving instruments outside a specific deposit or withdrawal flow.
 
 This SEP standardizes that simpler object:
 
@@ -69,23 +72,23 @@ The design stays close to existing Stellar conventions:
 
 ### Why Not Extend SEP-6?
 
-[SEP-6](sep-0006.md) models deposits as transactions. Each `GET /deposit`
-call creates a new transaction with its own `id`, `status`, and lifecycle.
-Some anchors have worked around this by returning the same deposit address
-across multiple SEP-6 transactions
+[SEP-6](sep-0006.md) models deposits as transactions. Each `GET /deposit` call
+creates a new transaction with its own `id`, `status`, and lifecycle. Some
+anchors have worked around this by returning the same deposit address across
+multiple SEP-6 transactions
 ([stellar-protocol#1341](https://github.com/stellar/stellar-protocol/issues/1341)),
 but this creates ambiguity: the client expects a transaction, the anchor
 returns a reusable account, and reconciliation becomes unclear.
 
 The core difference is resource identity:
 
-| Concern | SEP-6 | SEP-58 |
-|---------|-------|--------|
-| Resource | Transaction (one-time deposit flow) | Account (reusable receiving instrument) |
-| Lifecycle | `incomplete` -> `pending_user_transfer_start` -> `completed` | `pending` -> `active` -> `deactivated` |
-| Credential scope | Bound to one transaction | Bound to one user, reusable across deposits |
-| Idempotency | Each call may create a new transaction | Same params return the same account |
-| `GET /transactions` | Lists deposit/withdrawal history | N/A -- accounts are not transactions |
+| Concern             | SEP-6                                                        | SEP-58                                      |
+| ------------------- | ------------------------------------------------------------ | ------------------------------------------- |
+| Resource            | Transaction (one-time deposit flow)                          | Account (reusable receiving instrument)     |
+| Lifecycle           | `incomplete` -> `pending_user_transfer_start` -> `completed` | `pending` -> `active` -> `deactivated`      |
+| Credential scope    | Bound to one transaction                                     | Bound to one user, reusable across deposits |
+| Idempotency         | Each call may create a new transaction                       | Same params return the same account         |
+| `GET /transactions` | Lists deposit/withdrawal history                             | N/A -- accounts are not transactions        |
 
 A SEP-6 extension
 ([stellar-protocol#1372](https://github.com/stellar/stellar-protocol/issues/1372))
@@ -107,29 +110,28 @@ correct receiving instructions, the provider should use [SEP-6](sep-0006.md) or
 Stellar supports three address types that may appear as authenticated subjects
 and as settlement destinations in this SEP:
 
-- **Classic accounts (G...)** are authenticated via [SEP-10](sep-0010.md).
-  A classic account may optionally include a memo to identify a sub-account
+- **Classic accounts (G...)** are authenticated via [SEP-10](sep-0010.md). A
+  classic account may optionally include a memo to identify a sub-account
   within a shared Stellar account.
 
-- **Muxed accounts (M...)** are authenticated via [SEP-10](sep-0010.md).
-  A muxed account (CAP-27) encodes a 64-bit sub-account ID directly in the
+- **Muxed accounts (M...)** are authenticated via [SEP-10](sep-0010.md). A
+  muxed account (CAP-27) encodes a 64-bit sub-account ID directly in the
   address, solving Stellar-to-Stellar routing without on-chain memo
-  coordination. A muxed account may appear directly as the `stellar_account`
-  in a SEP-58 account object. When `stellar_account` is a muxed account,
-  `memo` must be omitted.
+  coordination. A muxed account may appear directly as the `stellar_account` in
+  a SEP-58 account object. When `stellar_account` is a muxed account, `memo`
+  must be omitted.
 
-- **Contract accounts (C...)** are authenticated via [SEP-45](sep-0045.md).
-  A contract account is a Soroban smart contract that abstracts account
+- **Contract accounts (C...)** are authenticated via [SEP-45](sep-0045.md). A
+  contract account is a Soroban smart contract that abstracts account
   ownership. Contract accounts are the sole authenticated subject in a SEP-45
   session. `memo` must not be used to encode ownership or sub-identity for a
   contract account; the contract account itself is the subject.
 
-SEP-58 solves a different problem than any of these address types:
-provisioning *off-chain* or *external-network* receiving instruments (bank
-accounts, crypto addresses on other chains) that map to a Stellar destination.
-A muxed or contract account may appear as the `stellar_account`, but neither
-can provision an ACH virtual account number or an Ethereum deposit address on
-its own.
+SEP-58 solves a different problem than any of these address types: provisioning
+_off-chain_ or _external-network_ receiving instruments (bank accounts, crypto
+addresses on other chains) that map to a Stellar destination. A muxed or
+contract account may appear as the `stellar_account`, but neither can provision
+an ACH virtual account number or an Ethereum deposit address on its own.
 
 ## Abstract
 
@@ -140,9 +142,8 @@ a single resource (`account`) with a clean lifecycle (`pending` -> `active` ->
 offerings, `POST /accounts` for idempotent account creation, and
 `GET /accounts/:id` for polling status and retrieving credentials. It reuses
 existing Stellar infrastructure: discovery via SEP-1, authentication via SEP-10
-(G.../M...) and SEP-45 (C...), credential fields via SEP-9, and KYC
-remediation via SEP-12. The protocol is complementary to SEP-6, not a
-replacement.
+(G.../M...) and SEP-45 (C...), credential fields via SEP-9, and KYC remediation
+via SEP-12. The protocol is complementary to SEP-6, not a replacement.
 
 ## Out of Scope
 
@@ -155,7 +156,8 @@ This SEP does not define:
 - a global registry of payment rails
 - exchange rates or quotes (see [SEP-38](sep-0038.md))
 - client-triggered deactivation (may be added in a future version)
-- how providers validate bearer tokens internally (see [Token Validation](#token-validation))
+- how providers validate bearer tokens internally (see
+  [Token Validation](#token-validation))
 
 ## Definitions
 
@@ -163,16 +165,16 @@ This SEP does not define:
   necessarily limited to anchors)
 - **Account**: a provisioned inbound receiving instrument
 - **Offering**: a specific supported combination a client may request
-- **Authenticated subject**: the identity established by the bearer token.
-  For SEP-10, this is the classic account (G...) with optional memo semantics,
-  or the muxed account (M...). For SEP-45, this is the contract account (C...).
+- **Authenticated subject**: the identity established by the bearer token. For
+  SEP-10, this is the classic account (G...) with optional memo semantics, or
+  the muxed account (M...). For SEP-45, this is the contract account (C...).
 
 Account kinds:
 
 - `crypto_address`: a blockchain deposit address
 - `virtual_account`: a provider-provisioned inbound account mapped to the user
-- `bank_account`: bank account credentials the provider instructs the client
-  to use
+- `bank_account`: bank account credentials the provider instructs the client to
+  use
 
 ## Design Rationale
 
@@ -198,7 +200,8 @@ SEP keeps both models clean and composable.
 
 ### Alternative Designs Considered
 
-- **SEP-6 extension** ([stellar-protocol#1372](https://github.com/stellar/stellar-protocol/issues/1372)):
+- **SEP-6 extension**
+  ([stellar-protocol#1372](https://github.com/stellar/stellar-protocol/issues/1372)):
   Would add async deposit instructions to SEP-6, but conflates transaction and
   account lifecycles.
 - **Reusing the same SEP-6 address across transactions**
@@ -252,11 +255,11 @@ EXTERNAL_ACCOUNT_SERVER="https://api.example.com/sep58"
 ```
 
 The key follows the descriptive naming convention used by other SEPs
-(`TRANSFER_SERVER` for SEP-6, `ANCHOR_QUOTE_SERVER` for SEP-38). The
-endpoint represents the root of this SEP's API.
+(`TRANSFER_SERVER` for SEP-6, `ANCHOR_QUOTE_SERVER` for SEP-38). The endpoint
+represents the root of this SEP's API.
 
-`EXTERNAL_ACCOUNT_SERVER` discovers only the SEP-58 API root. Authentication
-is discovered separately through SEP-1:
+`EXTERNAL_ACCOUNT_SERVER` discovers only the SEP-58 API root. Authentication is
+discovered separately through SEP-1:
 
 - Clients authenticating classic or muxed accounts discover SEP-10 via
   `WEB_AUTH_ENDPOINT` and `SIGNING_KEY` in `stellar.toml`.
@@ -289,20 +292,20 @@ Authorization: Bearer <jwt>
 
 The bearer token may originate from either SEP-10 or SEP-45. SEP-58 does not
 distinguish between the two at the endpoint level; it consumes a valid JWT and
-relies on the issuing protocol to define how the token was minted and validated.
-SEP-58 standardizes only the identity and authorization consequences once a
-valid session exists.
+relies on the issuing protocol to define how the token was minted and
+validated. SEP-58 standardizes only the identity and authorization consequences
+once a valid session exists.
 
 #### Subject Binding Rules
 
-The provisioned account must be bound to the authenticated subject. The
-binding rules depend on the authentication protocol:
+The provisioned account must be bound to the authenticated subject. The binding
+rules depend on the authentication protocol:
 
-| Auth Protocol | JWT Subject | Binding Rule |
-|---------------|-------------|--------------|
-| SEP-10 (classic) | G... | Bind to the classic account. If the JWT includes memo semantics per SEP-10, scope to that sub-identity. |
-| SEP-10 (muxed) | M... | Bind to the muxed identity. `memo` must be omitted in the account object. |
-| SEP-45 (contract) | C... | Bind to the contract account. `memo` must not be used for sub-identity; the contract account is the sole subject. |
+| Auth Protocol     | JWT Subject | Binding Rule                                                                                                      |
+| ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| SEP-10 (classic)  | G...        | Bind to the classic account. If the JWT includes memo semantics per SEP-10, scope to that sub-identity.           |
+| SEP-10 (muxed)    | M...        | Bind to the muxed identity. `memo` must be omitted in the account object.                                         |
+| SEP-45 (contract) | C...        | Bind to the contract account. `memo` must not be used for sub-identity; the contract account is the sole subject. |
 
 **Invariant**: `stellar_account` in the returned account object must represent
 the same bound destination identity used for provisioning. A provider must not
@@ -342,8 +345,8 @@ browser-based wallets to access the API. At minimum:
 - `Access-Control-Allow-Origin: *` for `GET /info`
 - Appropriate `Access-Control-Allow-Origin` headers for authenticated endpoints
 
-This is consistent with the CORS expectations of
-[SEP-1](sep-0001.md) and [SEP-6](sep-0006.md).
+This is consistent with the CORS expectations of [SEP-1](sep-0001.md) and
+[SEP-6](sep-0006.md).
 
 ### Errors
 
@@ -351,10 +354,10 @@ Errors should return an appropriate HTTP status code and a JSON response body.
 
 Common status codes:
 
-| Status Code | Name              | Reason                                                       |
-| ----------- | ----------------- | ------------------------------------------------------------ |
-| `400`       | Bad Request       | The request is invalid or cannot be satisfied as requested.  |
-| `403`       | Permission Denied | Authentication is required or the token is not accepted.     |
+| Status Code | Name              | Reason                                                           |
+| ----------- | ----------------- | ---------------------------------------------------------------- |
+| `400`       | Bad Request       | The request is invalid or cannot be satisfied as requested.      |
+| `403`       | Permission Denied | Authentication is required or the token is not accepted.         |
 | `404`       | Not Found         | The requested account does not exist for the authenticated user. |
 
 `403` responses include but are not limited to:
@@ -374,8 +377,8 @@ Standard error body:
 ```
 
 If additional customer information is required, providers should respond with
-`403` and a body following the non-interactive customer information pattern used
-by [SEP-6](sep-0006.md) and [SEP-12](sep-0012.md):
+`403` and a body following the non-interactive customer information pattern
+used by [SEP-6](sep-0006.md) and [SEP-12](sep-0012.md):
 
 ```json
 {
@@ -401,17 +404,18 @@ KYC requirements in this SEP must be derived only from:
 - the requested offering
 
 If a provider needs transaction amount, quote context, or any other
-transaction-scoped input to determine KYC requirements, the provider should
-use [SEP-6](sep-0006.md) or [SEP-24](sep-0024.md) instead of SEP-58.
+transaction-scoped input to determine KYC requirements, the provider should use
+[SEP-6](sep-0006.md) or [SEP-24](sep-0024.md) instead of SEP-58.
 
 ### Data Formats
 
 #### Country Codes
 
-`country_code` uses [ISO 3166-1 alpha-2](https://www.iso.org/iso-3166-country-codes.html)
-codes such as `US`, `MX`, and `DE`. This is consistent with the country code
-format used by [SEP-6](sep-0006.md) and [SEP-38](sep-0038.md), and aligns with
-the format used by most financial APIs (ISO 20022, SWIFT, IBAN).
+`country_code` uses
+[ISO 3166-1 alpha-2](https://www.iso.org/iso-3166-country-codes.html) codes
+such as `US`, `MX`, and `DE`. This is consistent with the country code format
+used by [SEP-6](sep-0006.md) and [SEP-38](sep-0038.md), and aligns with the
+format used by most financial APIs (ISO 20022, SWIFT, IBAN).
 
 Note: [SEP-9](sep-0009.md) uses alpha-3 for some KYC fields. This SEP uses
 alpha-2 because it matches the convention already established by SEP-6 and
@@ -434,14 +438,14 @@ publish actual supported combinations in `GET /info`.
 
 Recommended values for common rails:
 
-| Rail       | Description                          |
-| ---------- | ------------------------------------ |
-| `ACH`      | US Automated Clearing House          |
-| `SEPA`     | Single Euro Payments Area            |
-| `SPEI`     | Mexico Sistema de Pagos Electronicos |
-| `SWIFT`    | SWIFT international wire             |
-| `PIX`      | Brazil instant payment system        |
-| `FEDWIRE`  | US Fedwire Funds Service             |
+| Rail      | Description                          |
+| --------- | ------------------------------------ |
+| `ACH`     | US Automated Clearing House          |
+| `SEPA`    | Single Euro Payments Area            |
+| `SPEI`    | Mexico Sistema de Pagos Electronicos |
+| `SWIFT`   | SWIFT international wire             |
+| `PIX`     | Brazil instant payment system        |
+| `FEDWIRE` | US Fedwire Funds Service             |
 
 This table is non-normative. Providers may use other values for rails not
 listed here.
@@ -457,14 +461,14 @@ own.
 
 Examples:
 
-| `chain_id`      | `network`             |
-| --------------- | --------------------- |
-| `eip155:1`      | Ethereum Mainnet      |
-| `eip155:10`     | Optimism              |
-| `eip155:8453`   | Base                  |
-| `eip155:56`     | BNB Smart Chain       |
-| `eip155:42161`  | Arbitrum One          |
-| `stellar:pubnet`| Stellar Mainnet       |
+| `chain_id`       | `network`        |
+| ---------------- | ---------------- |
+| `eip155:1`       | Ethereum Mainnet |
+| `eip155:10`      | Optimism         |
+| `eip155:8453`    | Base             |
+| `eip155:56`      | BNB Smart Chain  |
+| `eip155:42161`   | Arbitrum One     |
+| `stellar:pubnet` | Stellar Mainnet  |
 
 The Stellar namespace uses the identifiers defined in
 [CAIP-28](https://chainagnostic.org/CAIPs/caip-28).
@@ -476,7 +480,8 @@ through this account are settled on Stellar. The value uses the
 [SEP-11](sep-0011.md) format:
 
 - `native` for XLM
-- `Code:Issuer` for issued assets (e.g. `USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`)
+- `Code:Issuer` for issued assets (e.g.
+  `USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`)
 
 #### Instructions
 
@@ -573,22 +578,22 @@ No request arguments are required.
 
 A successful response returns `200 OK`.
 
-| Name        | Type  | Description |
-| ----------- | ----- | ----------- |
+| Name        | Type  | Description                             |
+| ----------- | ----- | --------------------------------------- |
 | `offerings` | array | A list of explicit supported offerings. |
 
 Offering fields vary by `kind`.
 
 Common offering fields:
 
-| Name           | Type   | Description |
-| -------------- | ------ | ----------- |
-| `kind`         | string | One of `crypto_address`, `virtual_account`, or `bank_account`. |
-| `country_code` | string | Required for `virtual_account` and `bank_account`. ISO 3166-1 alpha-2. |
+| Name           | Type   | Description                                                                                                                                                                                                                                                             |
+| -------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`         | string | One of `crypto_address`, `virtual_account`, or `bank_account`.                                                                                                                                                                                                          |
+| `country_code` | string | Required for `virtual_account` and `bank_account`. ISO 3166-1 alpha-2.                                                                                                                                                                                                  |
 | `currency`     | string | Required for `virtual_account` and `bank_account` (ISO 4217). Also required for `crypto_address` when the provider lists more than one currency on the same `chain_id`; otherwise optional. May be a token symbol such as `USDC` or `USDT`. Values SHOULD be uppercase. |
-| `rail`         | string | Required for `virtual_account` and `bank_account`. |
-| `chain_id`     | string | Required for `crypto_address`. CAIP-2 identifier. |
-| `network`      | string | Required for `crypto_address`. Human-readable network name. |
+| `rail`         | string | Required for `virtual_account` and `bank_account`.                                                                                                                                                                                                                      |
+| `chain_id`     | string | Required for `crypto_address`. CAIP-2 identifier.                                                                                                                                                                                                                       |
+| `network`      | string | Required for `crypto_address`. Human-readable network name.                                                                                                                                                                                                             |
 
 Providers may include additional provider-specific fields in each offering
 object (e.g. `description`, `min_deposit`, `max_deposit`). Clients should
@@ -650,9 +655,9 @@ instead of creating a new one. If a compatible account exists in `pending`
 status, the provider may return that pending account instead of creating a
 duplicate provisioning request.
 
-Accounts in `deactivated` or `error` status must not satisfy a new
-provisioning request. The provider must create a new account or return another
-compatible account in `active` or `pending` status.
+Accounts in `deactivated` or `error` status must not satisfy a new provisioning
+request. The provider must create a new account or return another compatible
+account in `active` or `pending` status.
 
 The client can detect whether a new account was created by inspecting the HTTP
 status code (`200` vs `201`).
@@ -684,8 +689,8 @@ For `crypto_address`, the request must include:
 
 Optional request fields:
 
-| Name                 | Type   | Description |
-| -------------------- | ------ | ----------- |
+| Name                 | Type   | Description                                                                  |
+| -------------------- | ------ | ---------------------------------------------------------------------------- |
 | `on_change_callback` | string | An HTTPS callback URL for account status changes. See [Webhooks](#webhooks). |
 
 `on_change_callback` must be an HTTPS URL. Providers should reject non-HTTPS
@@ -760,11 +765,11 @@ G.../M... accounts or [SEP-45](sep-0045.md) for C... accounts.
 
 Optional query parameter filters:
 
-| Name           | Type   | Description |
-| -------------- | ------ | ----------- |
+| Name           | Type   | Description             |
+| -------------- | ------ | ----------------------- |
 | `kind`         | string | Filter by account kind. |
 | `country_code` | string | Filter by country code. |
-| `status`       | string | Filter by status. |
+| `status`       | string | Filter by status.       |
 
 Example:
 
@@ -929,45 +934,45 @@ fields needed for the chosen kind plus the common lifecycle fields below.
 
 #### Common Fields
 
-| Name              | Type   | Required | Description |
-| ----------------- | ------ | -------- | ----------- |
-| `id`              | string | Yes      | Stable provider identifier for the account. |
-| `kind`            | string | Yes      | One of `crypto_address`, `virtual_account`, or `bank_account`. |
-| `status`          | string | Yes      | One of `pending`, `active`, `deactivated`, or `error`. |
-| `stellar_asset`   | string | Yes      | The Stellar asset credited when funds are settled. Uses [SEP-11](sep-0011.md) format: `native` for XLM, `Code:Issuer` for issued assets. |
-| `stellar_account` | string | Yes      | The Stellar destination identity bound to this external account. For SEP-10 sessions this is the authenticated classic (G...) or muxed (M...) destination per SEP-10 semantics. For SEP-45 sessions this is the authenticated contract account (C...). |
+| Name              | Type   | Required | Description                                                                                                                                                                                                                                                                 |
+| ----------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | string | Yes      | Stable provider identifier for the account.                                                                                                                                                                                                                                 |
+| `kind`            | string | Yes      | One of `crypto_address`, `virtual_account`, or `bank_account`.                                                                                                                                                                                                              |
+| `status`          | string | Yes      | One of `pending`, `active`, `deactivated`, or `error`.                                                                                                                                                                                                                      |
+| `stellar_asset`   | string | Yes      | The Stellar asset credited when funds are settled. Uses [SEP-11](sep-0011.md) format: `native` for XLM, `Code:Issuer` for issued assets.                                                                                                                                    |
+| `stellar_account` | string | Yes      | The Stellar destination identity bound to this external account. For SEP-10 sessions this is the authenticated classic (G...) or muxed (M...) destination per SEP-10 semantics. For SEP-45 sessions this is the authenticated contract account (C...).                      |
 | `memo`            | string | No       | Memo used with the bound Stellar destination. Omit when `stellar_account` is a muxed account (M...). Omit when `stellar_account` is a contract account (C...) authenticated via SEP-45. `memo` must not be used to encode ownership or sub-identity for a contract account. |
-| `memo_type`       | string | No       | One of `text`, `id`, or `hash`. Required when `memo` is present. |
-| `instructions`    | object | No       | Credential payload using [SEP-9](sep-0009.md) financial account fields. Present when `status` is `active`. |
-| `more_info_url`   | string | No       | URL for additional information or remediation. |
-| `created_at`      | string | Yes      | ISO 8601 timestamp. |
-| `updated_at`      | string | Yes      | ISO 8601 timestamp. |
-| `message`         | string | No       | Human-readable message, useful when `status` is `pending` or `error`. |
+| `memo_type`       | string | No       | One of `text`, `id`, or `hash`. Required when `memo` is present.                                                                                                                                                                                                            |
+| `instructions`    | object | No       | Credential payload using [SEP-9](sep-0009.md) financial account fields. Present when `status` is `active`.                                                                                                                                                                  |
+| `more_info_url`   | string | No       | URL for additional information or remediation.                                                                                                                                                                                                                              |
+| `created_at`      | string | Yes      | ISO 8601 timestamp.                                                                                                                                                                                                                                                         |
+| `updated_at`      | string | Yes      | ISO 8601 timestamp.                                                                                                                                                                                                                                                         |
+| `message`         | string | No       | Human-readable message, useful when `status` is `pending` or `error`.                                                                                                                                                                                                       |
 
 #### Additional Fields for `virtual_account` and `bank_account`
 
-| Name           | Type   | Required | Description |
-| -------------- | ------ | -------- | ----------- |
-| `country_code` | string | Yes      | ISO 3166-1 alpha-2 country code. |
-| `currency`     | string | Yes      | ISO 4217 currency code. |
+| Name           | Type   | Required | Description                         |
+| -------------- | ------ | -------- | ----------------------------------- |
+| `country_code` | string | Yes      | ISO 3166-1 alpha-2 country code.    |
+| `currency`     | string | Yes      | ISO 4217 currency code.             |
 | `rail`         | string | Yes      | Payment rail used for this account. |
 
 #### Additional Fields for `crypto_address`
 
-| Name       | Type   | Required | Description |
-| ---------- | ------ | -------- | ----------- |
-| `chain_id` | string | Yes      | CAIP-2 chain identifier. |
-| `network`  | string | Yes      | Human-readable network name. |
+| Name       | Type   | Required | Description                                                                                                                                                               |
+| ---------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chain_id` | string | Yes      | CAIP-2 chain identifier.                                                                                                                                                  |
+| `network`  | string | Yes      | Human-readable network name.                                                                                                                                              |
 | `currency` | string | Yes      | ISO 4217 code or token symbol identifying the asset received at this address (e.g. `USDC`, `USDT`). Disambiguates offerings that share a `chain_id`. SHOULD be uppercase. |
 
 #### Status Semantics
 
-| Status        | Meaning |
-| ------------- | ------- |
+| Status        | Meaning                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `pending`     | The provider has accepted the request but the account is not yet ready to receive funds. The client should poll `GET /accounts/:id`. |
-| `active`      | The account is provisioned and ready to receive funds. `instructions` must be present. |
-| `deactivated` | The account should no longer be used for new deposits. Previously received funds are not affected. |
-| `error`       | The provider could not provision or maintain the account. Check `message` for details. |
+| `active`      | The account is provisioned and ready to receive funds. `instructions` must be present.                                               |
+| `deactivated` | The account should no longer be used for new deposits. Previously received funds are not affected.                                   |
+| `error`       | The provider could not provision or maintain the account. Check `message` for details.                                               |
 
 Providers must not expose usable receiving credentials before the account is
 ready. `instructions` must be present only when `status` is `active`.
@@ -985,9 +990,9 @@ active -> error
 it must not transition back to `active` or `pending`. If the client needs a new
 account, it must create one via `POST /accounts`.
 
-This SEP does not define a client-triggered deactivation endpoint.
-Providers may transition an account to `deactivated` due to internal policy,
-compliance, or user action handled outside this SEP.
+This SEP does not define a client-triggered deactivation endpoint. Providers
+may transition an account to `deactivated` due to internal policy, compliance,
+or user action handled outside this SEP.
 
 ### Webhooks
 
@@ -1002,15 +1007,16 @@ do:
 3. The callback body should contain the same account object as returned by
    `GET /accounts/:id`.
 
-If a provider does not support webhooks, it should ignore
-`on_change_callback` rather than reject the request.
+If a provider does not support webhooks, it should ignore `on_change_callback`
+rather than reject the request.
 
 #### Callback Signatures
 
 Providers supporting webhooks must sign callback requests using the signature
 scheme defined by [SEP-6](sep-0006.md):
 
-- Include a `Signature` header with format: `t=<timestamp>, s=<base64 signature>`
+- Include a `Signature` header with format:
+  `t=<timestamp>, s=<base64 signature>`
 - Sign the payload `<timestamp>.<wallet_host>.<body>` using the provider's
   Stellar private key corresponding to the `SIGNING_KEY` in their
   [`stellar.toml`](sep-0001.md).
@@ -1023,10 +1029,10 @@ Wallets receiving callbacks must:
 
 ## Security Concerns
 
-- Providers must bind each account to the authenticated subject. When a
-  memo or muxed account is present in a SEP-10 JWT, the account must be scoped
-  to that specific sub-identity. When a contract account is present in a
-  SEP-45 JWT, the contract account is the sole subject.
+- Providers must bind each account to the authenticated subject. When a memo or
+  muxed account is present in a SEP-10 JWT, the account must be scoped to that
+  specific sub-identity. When a contract account is present in a SEP-45 JWT,
+  the contract account is the sole subject.
 - Providers must treat a SEP-45-authenticated contract account as the sole
   authenticated subject for ownership and idempotency purposes. Providers must
   not conflate a contract account with any backing classic account that may
@@ -1078,7 +1084,8 @@ a duplicate.
 The idempotency key is the combination of the authenticated subject and the
 fields that define the offering:
 
-- For `virtual_account` and `bank_account`: `(authenticated_subject, kind, country_code, currency, rail)`
+- For `virtual_account` and `bank_account`:
+  `(authenticated_subject, kind, country_code, currency, rail)`
 - For `crypto_address`: `(authenticated_subject, kind, chain_id, currency)`
 
 The authenticated subject is defined as:
@@ -1088,13 +1095,13 @@ The authenticated subject is defined as:
 - **SEP-10 muxed session**: the muxed identity (M...).
 - **SEP-45 session**: the contract account (C...).
 
-If `rail` is omitted, the provider should treat the resolved rail as part of the
-key — a request without `rail` that resolves to ACH should return the same
+If `rail` is omitted, the provider should treat the resolved rail as part of
+the key — a request without `rail` that resolves to ACH should return the same
 account as a subsequent request explicitly specifying `rail: "ACH"`.
 
 If `currency` is omitted on a `crypto_address` request and the provider offers
-exactly one currency for the requested `chain_id`, the provider should treat the
-resolved currency as part of the key — a request without `currency` that
+exactly one currency for the requested `chain_id`, the provider should treat
+the resolved currency as part of the key — a request without `currency` that
 resolves to `USDC` should return the same account as a subsequent request
 explicitly specifying `currency: "USDC"`.
 
@@ -1109,26 +1116,25 @@ flow is:
 3. Client submits KYC information via [SEP-12](sep-0012.md).
 4. Client retries `POST /accounts`.
 
-KYC requirements must be derivable from the authenticated subject (obtained
-via SEP-10 or SEP-45) and the requested offering alone. For
-SEP-45-authenticated sessions, the subject is the contract account identified
-by the JWT's `sub` claim. If the provider requires transaction-scoped context
-to determine KYC needs, it should use [SEP-6](sep-0006.md) or
-[SEP-24](sep-0024.md).
+KYC requirements must be derivable from the authenticated subject (obtained via
+SEP-10 or SEP-45) and the requested offering alone. For SEP-45-authenticated
+sessions, the subject is the contract account identified by the JWT's `sub`
+claim. If the provider requires transaction-scoped context to determine KYC
+needs, it should use [SEP-6](sep-0006.md) or [SEP-24](sep-0024.md).
 
 ### Token Validation
 
 SEP-58 consumes a bearer token and relies on [SEP-10](sep-0010.md) or
-[SEP-45](sep-0045.md) to define how that token was minted and validated.
-This SEP does not standardize how providers validate bearer tokens internally.
-It standardizes only the identity and authorization consequences once a valid
+[SEP-45](sep-0045.md) to define how that token was minted and validated. This
+SEP does not standardize how providers validate bearer tokens internally. It
+standardizes only the identity and authorization consequences once a valid
 session exists.
 
 ### Partial Auth Support
 
 A provider may implement only [SEP-10](sep-0010.md) or only
-[SEP-45](sep-0045.md). If so, the provider should make that limitation clear
-in its documentation and `stellar.toml` discovery metadata. Providers claiming
+[SEP-45](sep-0045.md). If so, the provider should make that limitation clear in
+its documentation and `stellar.toml` discovery metadata. Providers claiming
 full Stellar account-type support must implement both protocols.
 
 ### Adoption Context
@@ -1136,9 +1142,8 @@ full Stellar account-type support must implement both protocols.
 This SEP addresses a gap observed in production anchor deployments. Providers
 such as Bridge (liquidation addresses), MoneyGram Access (deposit account
 provisioning), and on-chain ramp providers already offer reusable receiving
-instruments but use proprietary APIs. SEP-58 standardizes the common pattern
-so that wallets can integrate with multiple providers through a single
-interface.
+instruments but use proprietary APIs. SEP-58 standardizes the common pattern so
+that wallets can integrate with multiple providers through a single interface.
 
 ### Future Work
 
@@ -1148,10 +1153,10 @@ will be revisited as implementations mature:
 - **SEP-45 contract-account refinements.** The contract-account paths in this
   SEP ([SEP-45](sep-0045.md) authentication, subject binding, idempotency,
   contract-account examples) are normative but have not yet been validated
-  against a running implementation. Wording, examples, and edge cases (e.g.
-  how `client_domain` interacts with contract-account ownership across
-  multiple wallets controlling the same C... account) may be refined in a
-  future version once contract-account anchors and wallets are in production.
+  against a running implementation. Wording, examples, and edge cases (e.g. how
+  `client_domain` interacts with contract-account ownership across multiple
+  wallets controlling the same C... account) may be refined in a future version
+  once contract-account anchors and wallets are in production.
 - **[CAP-67: Unified Asset Events](../core/cap-0067.md).** Once CAP-67 is
   broadly deployed, providers will be able to observe inbound settlements on
   the Stellar side via a unified event stream rather than per-asset polling.
@@ -1168,13 +1173,13 @@ will be revisited as implementations mature:
 ## Changelog
 
 - `v0.4.0`: Add `currency` to `crypto_address` offerings, `POST /accounts`
-  requests, and the account object. Update the `crypto_address` idempotency
-  key to `(authenticated_subject, kind, chain_id, currency)`. Motivation:
-  real provider implementations (e.g. Bridge) list multiple receivable
-  currencies on the same `chain_id` (USDC and USDT on `eip155:1`); without
-  `currency`, wallets cannot select between them and providers cannot
-  disambiguate idempotent requests. Add Future Work section noting deferred
-  SEP-45 / CAP-67 refinements and `message`-on-403 follow-up.
+  requests, and the account object. Update the `crypto_address` idempotency key
+  to `(authenticated_subject, kind, chain_id, currency)`. Motivation: real
+  provider implementations (e.g. Bridge) list multiple receivable currencies on
+  the same `chain_id` (USDC and USDT on `eip155:1`); without `currency`,
+  wallets cannot select between them and providers cannot disambiguate
+  idempotent requests. Add Future Work section noting deferred SEP-45 / CAP-67
+  refinements and `message`-on-403 follow-up.
 - `v0.3.0`: Add normative SEP-45 support throughout. Replace "Relationship to
   Muxed Accounts" with "Relationship to Stellar Account Types" covering G...,
   M..., and C... addresses. Add Subject Binding Rules table defining how each
@@ -1185,13 +1190,13 @@ will be revisited as implementations mature:
   Add auth-mismatch 403 cases to Errors section. Update `stellar_account` field
   definition with binding semantics per auth protocol. Tighten `memo` /
   `memo_type` rules: must omit for muxed and contract accounts. Add C...
-  contract-account example response. Replace `user` with `authenticated_subject`
-  in Idempotency section with per-protocol definitions. Expand Security
-  Considerations with contract-account-specific rules. Add Token Validation and
-  Partial Auth Support implementation notes. Expand KYC Integration to reference
-  both auth protocols. Define `authenticated_subject` term in Definitions. Add
-  explicit auth-protocol description to each endpoint's Authentication
-  subsection.
+  contract-account example response. Replace `user` with
+  `authenticated_subject` in Idempotency section with per-protocol definitions.
+  Expand Security Considerations with contract-account-specific rules. Add
+  Token Validation and Partial Auth Support implementation notes. Expand KYC
+  Integration to reference both auth protocols. Define `authenticated_subject`
+  term in Definitions. Add explicit auth-protocol description to each
+  endpoint's Authentication subsection.
 - `v0.2.2`: Define explicit idempotency key per kind. Require HTTPS for
   `on_change_callback` URLs, consistent with SEP-6 callback conventions.
 - `v0.2.1`: Tighten reuse semantics -- only `active`/`pending` accounts are
