@@ -101,6 +101,8 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                               | Draft                        |
 | [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Draft                        |
 | [SEP-0057](sep-0057.md) | T-REX (Token for Regulated EXchanges)                          | OpenZeppelin, Boyan Barakov, Özgün Özerk, Dennis O'Connell | Draft                        |
+| [SEP-0058](sep-0058.md) | Contract Build Reproducibility for Verification                | Leigh McCulloch                                            | Draft                        |
+| [SEP-0059](sep-0059.md) | External Account API                                           | Anthony Barker                                             | Draft                        |
 
 ### Abandoned Proposals
 
@@ -161,6 +163,12 @@ following:
 - Use the following format for the filename of your draft:
   `sep_{shorttitle}.md`, for example `sep_newaccountdeposit.md`
 - Make sure to place your SEP in the `ecosystem/` folder.
+- Do not self-assign, reference, or request a SEP number. Leave the SEP number
+  in the preamble as "To Be Assigned". A SEP number will be assigned by a
+  maintainer.
+- Do not add the proposal to the `ecosystem/README.md` as it increases the
+  chance of conflicts at merge time. The proposal will be added to the readme
+  by a maintainer.
 - Include GitHub handles or emails for all authors listed. GitHub handles are
   preferred.
 - Set the version to `v0.0.1`.
@@ -172,7 +180,9 @@ following:
     any abuse to the repository.
   - If the template is followed and the change does not introduce any abuse to
     the repository:
+    - Format the file.
     - Assign a SEP number.
+    - Add the SEP to the `ecosystem/README.md` list.
     - Merge the PR.
 
 #### Additional Tips
