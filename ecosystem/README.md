@@ -163,6 +163,12 @@ following:
 - Use the following format for the filename of your draft:
   `sep_{shorttitle}.md`, for example `sep_newaccountdeposit.md`
 - Make sure to place your SEP in the `ecosystem/` folder.
+- Do not self-assign, reference, or request a SEP number. Leave the SEP number
+  in the preamble as "To Be Assigned". A SEP number will be assigned by a
+  maintainer.
+- Do not add the proposal to the `ecosystem/README.md` as it increases the
+  chance of conflicts at merge time. The proposal will be added to the readme
+  by a maintainer.
 - Include GitHub handles or emails for all authors listed. GitHub handles are
   preferred.
 - Set the version to `v0.0.1`.
@@ -174,7 +180,9 @@ following:
     any abuse to the repository.
   - If the template is followed and the change does not introduce any abuse to
     the repository:
+    - Format the file.
     - Assign a SEP number.
+    - Add the SEP to the `ecosystem/README.md` list.
     - Merge the PR.
 
 #### Additional Tips
