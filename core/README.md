@@ -95,7 +95,7 @@
 | [CAP-0080](cap-0080.md) | 26 | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Implemented |
 | [CAP-0081](cap-0081.md) | TBD | TTL-Ordered Eviction | Garand Tyson | Accepted |
 | [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Implemented |
-| [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to skip the current ledger | Brett Boston | Awaiting Decision |
+| [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to drop the transaction set from the current ledger | Brett Boston | Awaiting Decision |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
