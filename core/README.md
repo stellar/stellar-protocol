@@ -82,9 +82,9 @@
 | [CAP-0068](cap-0068.md) | 23 | Host function for getting executable for `Address` | Dmytro Kozhevin | Final |
 | [CAP-0069](cap-0069.md) | 23 | String/Bytes conversion host functions | Dmytro Kozhevin | Final |
 | [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Final |
-| [CAP-0071](cap-0071.md) | TBD | Authentication delegation and address-bound Soroban credentials | Dmytro Kozhevin | Accepted |
-| [CAP-0071-01](cap-0071-01.md) | TBD | Authentication delegation for custom accounts | Dmytro Kozhevin | Accepted |
-| [CAP-0071-02](cap-0071-02.md) | TBD | Address-bound Soroban address credentials | Dmytro Kozhevin | Accepted |
+| [CAP-0071](cap-0071.md) | 27 | Authentication delegation and address-bound Soroban credentials | Dmytro Kozhevin | Accepted |
+| [CAP-0071-01](cap-0071-01.md) | 27 | Authentication delegation for custom accounts | Dmytro Kozhevin | Accepted |
+| [CAP-0071-02](cap-0071-02.md) | 27 | Address-bound Soroban address credentials | Dmytro Kozhevin | Accepted |
 | [CAP-0073](cap-0073.md) | 26 | Allow SAC to create G-account balances | Dmytro Kozhevin | Implemented |
 | [CAP-0074](cap-0074.md) | 25 | Host functions for BN254 | Siddharth Suresh | Final |
 | [CAP-0075](cap-0075.md) | 25 | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Final |
