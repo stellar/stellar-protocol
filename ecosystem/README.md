@@ -74,33 +74,35 @@ All SEPs have individuals fulfilling the following roles:
 
 ### Draft Proposals
 
-| Number                  | Title                                                          | Author                                                     | Status               |
-| ----------------------- | -------------------------------------------------------------- | ---------------------------------------------------------- | -------------------- |
-| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                               | Draft                |
-| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                               | Draft                |
-| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                                 | Draft                |
-| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                                  | Draft                |
-| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                               | Draft                |
-| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                                       | Draft                |
-| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                               | Draft                |
-| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                                            | Draft                |
-| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                             | Final Comment Period |
-| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein              | Draft                |
-| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                                  | Draft                |
-| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                             | Draft                |
-| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                                           | Active               |
-| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna                 | Draft                |
-| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh                            | Draft                |
-| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch               | Draft                |
-| [SEP-0047](sep-0047.md) | Contract Interface Discovery                                   | Leigh McCulloch                                            | Draft                |
-| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk                   | Draft                |
-| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk                   | Draft                |
-| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                            | Draft                |
-| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                      | Draft                |
-| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu               | Draft                |
-| [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                               | Draft                |
-| [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Draft                |
-| [SEP-0057](sep-0057.md) | T-REX (Token for Regulated EXchanges)                          | OpenZeppelin, Boyan Barakov, Özgün Özerk, Dennis O'Connell | Draft                |
+| Number                  | Title                                                          | Author                                                     | Status                       |
+| ----------------------- | -------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------- |
+| [SEP-0015](sep-0015.md) | Attachment Convention                                          | Interstellar                                               | Draft                        |
+| [SEP-0016](sep-0016.md) | Account Transfer Permissionless Payment Protocol (@p2p)        | Jeremy Rubin                                               | Draft                        |
+| [SEP-0017](sep-0017.md) | Issuer account funding protocol (CAP-13 Based)                 | Tom Quisel                                                 | Draft                        |
+| [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                                  | Draft                        |
+| [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                               | Draft                        |
+| [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                                       | Draft                        |
+| [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                               | Draft                        |
+| [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                                            | Draft                        |
+| [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                             | Final Comment Period         |
+| [SEP-0035](sep-0035.md) | Operation IDs                                                  | Isaiah Turner, Debnil Sur, Scott Fleckenstein              | Draft                        |
+| [SEP-0037](sep-0037.md) | Address Directory API                                          | OrbitLens                                                  | Draft                        |
+| [SEP-0038](sep-0038.md) | Anchor RFQ API                                                 | Jake Urban and Leigh McCulloch                             | Draft                        |
+| [SEP-0039](sep-0039.md) | Interoperability Recommendations for NFTs                      | SDF, Litemint.io                                           | Active                       |
+| [SEP-0040](sep-0040.md) | Oracle Consumer Interface                                      | Alex Mootz, OrbitLens, Markus Paulson-Luna                 | Draft                        |
+| [SEP-0041](sep-0041.md) | Soroban Token Interface                                        | Jonathan Jove, Siddharth Suresh                            | Draft                        |
+| [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch               | Draft                        |
+| [SEP-0047](sep-0047.md) | Contract Interface Discovery                                   | Leigh McCulloch                                            | Draft                        |
+| [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk                   | Draft                        |
+| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk                   | Draft                        |
+| [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                            | Draft                        |
+| [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                      | Draft                        |
+| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu               | Final Comment Period (Final) |
+| [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                               | Draft                        |
+| [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Draft                        |
+| [SEP-0057](sep-0057.md) | T-REX (Token for Regulated EXchanges)                          | OpenZeppelin, Boyan Barakov, Özgün Özerk, Dennis O'Connell | Draft                        |
+| [SEP-0058](sep-0058.md) | Contract Build Reproducibility for Verification                | Leigh McCulloch                                            | Draft                        |
+| [SEP-0059](sep-0059.md) | External Account API                                           | Anthony Barker                                             | Draft                        |
 
 ### Abandoned Proposals
 
@@ -118,7 +120,7 @@ technology forward into new territory.
 
 Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are
 intended to be a more dynamic way of introducing standards and protocols
-utilized in the ecosystem that are built on top of the Stellar Network. It uses
+utilized in the ecosystem that are built on top of the Stellar network. It uses
 a lightweight process.
 
 A SEP's author is responsible for a proposal's adoption. Other ecosystem
@@ -135,7 +137,7 @@ Before contributing, consider the following:
   the proposal forward, talk to folks in the ecosystem, or folks at SDF;
   they'll often have guidance on how to move things forward, as well as
   feedback regarding feasibility and how the proposal does or does not align
-  with the Stellar Network's goals.
+  with the Stellar network's goals.
 
 ## SEP Process
 
@@ -161,6 +163,12 @@ following:
 - Use the following format for the filename of your draft:
   `sep_{shorttitle}.md`, for example `sep_newaccountdeposit.md`
 - Make sure to place your SEP in the `ecosystem/` folder.
+- Do not self-assign, reference, or request a SEP number. Leave the SEP number
+  in the preamble as "To Be Assigned". A SEP number will be assigned by a
+  maintainer.
+- Do not add the proposal to the `ecosystem/README.md` as it increases the
+  chance of conflicts at merge time. The proposal will be added to the readme
+  by a maintainer.
 - Include GitHub handles or emails for all authors listed. GitHub handles are
   preferred.
 - Set the version to `v0.0.1`.
@@ -172,7 +180,9 @@ following:
     any abuse to the repository.
   - If the template is followed and the change does not introduce any abuse to
     the repository:
+    - Format the file.
     - Assign a SEP number.
+    - Add the SEP to the `ecosystem/README.md` list.
     - Merge the PR.
 
 #### Additional Tips

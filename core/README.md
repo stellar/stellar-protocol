@@ -82,16 +82,20 @@
 | [CAP-0068](cap-0068.md) | 23 | Host function for getting executable for `Address` | Dmytro Kozhevin | Final |
 | [CAP-0069](cap-0069.md) | 23 | String/Bytes conversion host functions | Dmytro Kozhevin | Final |
 | [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Final |
-| [CAP-0073](cap-0073.md) | TBD | Allow SAC to create G-account balances | Dmytro Kozhevin | Accepted |
+| [CAP-0071](cap-0071.md) | 27 | Authentication delegation and address-bound Soroban credentials | Dmytro Kozhevin | Accepted |
+| [CAP-0071-01](cap-0071-01.md) | 27 | Authentication delegation for custom accounts | Dmytro Kozhevin | Accepted |
+| [CAP-0071-02](cap-0071-02.md) | 27 | Address-bound Soroban address credentials | Dmytro Kozhevin | Accepted |
+| [CAP-0073](cap-0073.md) | 26 | Allow SAC to create G-account balances | Dmytro Kozhevin | Implemented |
 | [CAP-0074](cap-0074.md) | 25 | Host functions for BN254 | Siddharth Suresh | Final |
 | [CAP-0075](cap-0075.md) | 25 | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Final |
 | [CAP-0076](cap-0076.md) | 24 | P23 State Archival bug remediation | Dmytro Kozhevin | Final |
-| [CAP-0077](cap-0077.md) | TBD | Ability to freeze ledger keys via network configuration | Dmytro Kozhevin | Accepted |
-| [CAP-0078](cap-0078.md) | TBD | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Accepted |
-| [CAP-0079](cap-0079.md) | TBD | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Accepted |
-| [CAP-0080](cap-0080.md) | TBD | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Accepted |
+| [CAP-0077](cap-0077.md) | 26 | Freeze Ledger Entries via Network Configuration | Dmytro Kozhevin | Implemented |
+| [CAP-0078](cap-0078.md) | 26 | Host functions for performing limited TTL extensions | Dmytro Kozhevin | Implemented |
+| [CAP-0079](cap-0079.md) | 26 | Host functions for muxed address strkey conversions | Dmytro Kozhevin | Implemented |
+| [CAP-0080](cap-0080.md) | 26 | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Implemented |
 | [CAP-0081](cap-0081.md) | TBD | TTL-Ordered Eviction | Garand Tyson | Accepted |
-| [CAP-0082](cap-0082.md) | TBD | Checked 256-bit integer arithmetic host functions | Jay Geng | Accepted |
+| [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Implemented |
+| [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to drop the transaction set from the current ledger | Brett Boston | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -112,9 +116,7 @@
 | [CAP-0045](cap-0045.md) | SPEEDEX - Pricing | Jonathan Jove | Draft |
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
-| [CAP-0071](cap-0071.md) | Authentication delegation for custom accounts | Dmytro Kozhevin | Draft |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
-| [CAP-0083](cap-0083.md) | Add `StellarValue` type representing a skipped ledger | Brett Boston | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -133,50 +135,50 @@
 
 # Contribution Process
 
-The Stellar Protocol, like most software in the world, continues to evolve over time to meet the
+The Stellar protocol, like most software in the world, continues to evolve over time to meet the
 needs of our network's participants and to drive technology forward into new territory. Given the
 importance of the reliability and safety of the network, we ask that all of those who have ideas
 towards pushing Stellar's protocol development forward adhere to the following:
 
-- Consider your idea and how it serves the fundamental goals of the Stellar Network and aligns with
-  values of the Stellar Protocol (which are listed below). If you cannot show how your proposal
+- Consider your idea and how it serves the fundamental goals of the Stellar network and aligns with
+  values of the Stellar protocol (which are listed below). If you cannot show how your proposal
   aligns with those goals and values, it's unlikely to ever be implemented.
 - Gather feedback from discussion on the dev mailing list and other forums, and utilize it to begin
   a draft proposal, otherwise known as a CAP (Core Advancement Proposal).
 - Follow the proposal process listed below.
 
 ## Stellar Network Goals
-- **The Stellar Network should be secure and reliable, and should bias towards safety, simplicity,
+- **The Stellar network should be secure and reliable, and should bias towards safety, simplicity,
   reliability, and performance over new functionality.**
-- **The Stellar Network should run at scale and at low cost to all participants of the network.**
-  * In support of this, the Stellar Network should support off-chain transactions, e.g. Starlight.
+- **The Stellar network should run at scale and at low cost to all participants of the network.**
+  * In support of this, the Stellar network should support off-chain transactions, e.g. Starlight.
   * An explicit non-goal is limiting the hardware requirements of stellar-core to a personal
     computer.
-- **The Stellar Network should facilitate simplicity and interoperability with other protocols and
+- **The Stellar network should facilitate simplicity and interoperability with other protocols and
   networks.**
-  * In support of this, the Stellar Network should facilitate side-chain transactions to enable
+  * In support of this, the Stellar network should facilitate side-chain transactions to enable
     sub-networks.
-- **The Stellar Network should enable cross-border payments, i.e. payments via exchange of assets,
+- **The Stellar network should enable cross-border payments, i.e. payments via exchange of assets,
   throughout the globe, enabling users to make payments between assets in a manner that is fast,
   cheap, and highly usable.**
-    - In support of this, the Stellar Network should support an orderbook that values simplicity
+    - In support of this, the Stellar network should support an orderbook that values simplicity
       over functionality, and one that primarily serves to enable cross-border payments.
-    - In support of this, the Stellar Network should facilitate liquidity as a means to enabling
+    - In support of this, the Stellar network should facilitate liquidity as a means to enabling
     - cross-border payments.
-    - In support of this, the Stellar Network should enable asset issuance, but as a means of
+    - In support of this, the Stellar network should enable asset issuance, but as a means of
     - enabling cross-border payments.
-- **The Stellar Network should support decentralization wherever possible, but not at the expense
+- **The Stellar network should support decentralization wherever possible, but not at the expense
   of the majority of its values.**
   - There should be no privileged actors — we should support egalitarianism and everyone
     participating on the same playing field.
-- **The Stellar Network should enable users to easily exchange their non-Stellar based assets to
+- **The Stellar network should enable users to easily exchange their non-Stellar based assets to
   Stellar-based assets, and vice versa.**
-- **The Stellar Network should make it easy for developers of Stellar projects to create highly
+- **The Stellar network should make it easy for developers of Stellar projects to create highly
   usable products.**
 
 ## Stellar Protocol Development Values
-- **The Stellar Protocol should serve the goals of the Stellar Network.**
-- **The Stellar Protocol should bias towards simplicity.**
+- **The Stellar protocol should serve the goals of the Stellar network.**
+- **The Stellar protocol should bias towards simplicity.**
   - When possible, solutions should be considered outside of core protocol changes such as via
     [SEPs (Stellar Ecosystem Proposals)](../ecosystem/README.md) to minimize complexity in the
     Stellar protocol.
@@ -194,12 +196,12 @@ towards pushing Stellar's protocol development forward adhere to the following:
     - Unobservable tx semantics (eg. performance or bug fixes)
     - Horizon semantics
     - Public APIs, Client Libraries/SDKs.
-- **The Stellar Protocol should be clear, concise, and opinionated.**
+- **The Stellar protocol should be clear, concise, and opinionated.**
   - New operations and functionality should be opinionated, and straightforward to use.
   - There should ideally be only one obvious way to accomplish a given task.
-- **The Stellar Protocol should bias towards broad use cases, and bias against niche
+- **The Stellar protocol should bias towards broad use cases, and bias against niche
     functionality.**
-- **The Stellar Protocol should bias towards user safety.**
+- **The Stellar protocol should bias towards user safety.**
 
 ## CAP Process
 These are the steps from [idea to deployment](https://www.youtube.com/watch?v=Otbml6WIQPo) on how
