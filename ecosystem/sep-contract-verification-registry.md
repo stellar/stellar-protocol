@@ -17,30 +17,25 @@ A read-only HTTP API for asking a verification service whether a smart
 contract's wasm has been reproduced from its source, and for reading the build
 and source metadata behind each result. A client looks a wasm up by its wasm
 hash and receives the verifications one or more verifiers have recorded for it,
-each described with the
-[SEP-58](sep-0058.md)
-vocabulary verbatim.
+each described with the [SEP-58](sep-0058.md) vocabulary verbatim.
 
 ## Dependencies
 
-- [SEP-58](sep-0058.md):
-  Contract Build Reproducibility for Verification. Defines the build
-  environment and source identification vocabulary (`bldimg`, `bldopt`,
-  `source_repo`, `source_rev`, `tarball_url`, `tarball_sha256`) that this API
-  reports. This SEP is a transport for SEP-58 results; it adds no vocabulary of
-  its own.
-- [SEP-46](sep-0046.md):
-  Contract Meta (informative). One of the venues a service may read SEP-58
-  fields from.
+- [SEP-58](sep-0058.md): Contract Build Reproducibility for Verification.
+  Defines the build environment and source identification vocabulary (`bldimg`,
+  `bldopt`, `source_repo`, `source_rev`, `tarball_url`, `tarball_sha256`) that
+  this API reports. This SEP is a transport for SEP-58 results; it adds no
+  vocabulary of its own.
+- [SEP-46](sep-0046.md): Contract Meta (informative). One of the venues a
+  service may read SEP-58 fields from.
 
 ## Motivation
 
 When a wasm is uploaded to a network, the on-chain artifact is opaque bytes.
-[SEP-58](sep-0058.md)
-defines the vocabulary needed to reproduce those bytes from source, and
-anticipates "the creation of verification registries" and off-chain
-"verification services" that hold this metadata, but it deliberately does not
-say how a client talks to such a service.
+[SEP-58](sep-0058.md) defines the vocabulary needed to reproduce those bytes
+from source, and anticipates "the creation of verification registries" and
+off-chain "verification services" that hold this metadata, but it deliberately
+does not say how a client talks to such a service.
 
 Without a shared contract, every block explorer, wallet, and tool that wants to
 display "verified" invents its own request and response shape, and a result
@@ -94,10 +89,11 @@ The base path at which a service exposes these endpoints is configurable and is
 deployment-specific. It MAY be a bare origin (e.g.
 `https://verify.example.com`) or include a path prefix (e.g.
 `https://example.com/stellar`). All paths in this document are written absolute
-relative to that configured base — e.g. `/wasms/:wasm_hash.json` — and are appended
-to it. For a base of `https://example.com/stellar`, the endpoint resolves to
-`https://example.com/stellar/wasms/:wasm_hash.json`. A service publishes its base
-path out of band; this SEP does not define a discovery mechanism for it.
+relative to that configured base — e.g. `/wasms/:wasm_hash.json` — and are
+appended to it. For a base of `https://example.com/stellar`, the endpoint
+resolves to `https://example.com/stellar/wasms/:wasm_hash.json`. A service
+publishes its base path out of band; this SEP does not define a discovery
+mechanism for it.
 
 ### HTTPS Only
 
@@ -174,8 +170,8 @@ GET /wasms/:wasm_hash.json
 
 Path parameters:
 
-| Name   | Type   | Description                                                                                          |
-| ------ | ------ | ---------------------------------------------------------------------------------------------------- |
+| Name        | Type   | Description                                                                                          |
+| ----------- | ------ | ---------------------------------------------------------------------------------------------------- |
 | `wasm_hash` | string | Lowercase hex SHA-256 of the wasm to look up (64 hex characters). The path appends a `.json` suffix. |
 
 Query parameters:
@@ -198,7 +194,7 @@ The status code communicates whether a result is available:
 
 | Status Code       | Name        | Reason                                                                                                                                                                                                                                                                                             |
 | ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `200 OK`          | OK          | The service holds a settled result for this wasm (each verification is a final `verified`, `mismatched`, or settled `unverified`). The body is the status object.                                                                                                                                                                                                |
+| `200 OK`          | OK          | The service holds a settled result for this wasm (each verification is a final `verified`, `mismatched`, or settled `unverified`). The body is the status object.                                                                                                                                  |
 | `202 Accepted`    | Accepted    | The service has no completed verification yet but has accepted the wasm and enqueued one (or one is in progress). The body is the status object whose `source_code_verifications` entries are `unverified` and omit `processed_at`. The client should retry after a sensible interval (see below). |
 | `400 Bad Request` | Bad Request | `wasm_hash` is not a valid lowercase hex SHA-256.                                                                                                                                                                                                                                                  |
 | `404 Not Found`   | Not Found   | The service has no verification for this wasm and will not produce one (it does not perform on-demand verification, or declines this wasm).                                                                                                                                                        |
@@ -209,9 +205,10 @@ is the service's responsibility (see
 [Authentication and Rate Limiting](#authentication-and-rate-limiting)).
 
 Note: a settled `unverified` (`200`) and an enqueued `unverified` (`202`) carry
-identical bodies; the distinction is conveyed only by the HTTP status and is not
-preserved if the body is stored or forwarded apart from its response. A consumer
-that needs to distinguish them MUST do so from the live response status.
+identical bodies; the distinction is conveyed only by the HTTP status and is
+not preserved if the body is stored or forwarded apart from its response. A
+consumer that needs to distinguish them MUST do so from the live response
+status.
 
 A `400 Bad Request` MAY carry content type `application/json` with a coded
 error body, as described in [Errors](#errors), to say why the request was
@@ -225,12 +222,12 @@ that a service can report one or several independent verifiers and so that
 other verification methods can be added later as sibling arrays without
 disturbing the existing shape:
 
-| Name                        | Type            | Description                                                                                                                                                                                                                                                                                                                                            |
-| --------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name                        | Type            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `schema_version`            | string          | The version of the response schema this body conforms to, as `MAJOR.MINOR`, versioned independently of this SEP's `Version`. `MAJOR` increments on a breaking change (a field removed or renamed); `MINOR` increments on an additive change (a new field, or a new value added to an open enumeration). Clients SHOULD branch on `MAJOR` and tolerate a higher `MINOR`, including unrecognized fields and unrecognized enumeration values; for an unrecognized value, a client follows that field's documented fallback recommendation. |
-| `wasm_hash`                 | string          | The queried wasm hash, echoed back. Lowercase hex SHA-256.                                                                                                                                                                                                                                                                                             |
-| `updated_at`                | string          | RFC 3339 UTC timestamp of when this record was last updated, across all of its verifications (status transitions, re-checks, newly added verifiers). Always present.                                                                                                                                                                                   |
-| `source_code_verifications` | array of object | One or more rebuild-from-source verification results, each from one verifier. MUST contain at least one entry. See below.                                                                                                                                                                                                                              |
+| `wasm_hash`                 | string          | The queried wasm hash, echoed back. Lowercase hex SHA-256.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `updated_at`                | string          | RFC 3339 UTC timestamp of when this record was last updated, across all of its verifications (status transitions, re-checks, newly added verifiers). Always present.                                                                                                                                                                                                                                                                                                                                                                    |
+| `source_code_verifications` | array of object | One or more rebuild-from-source verification results, each from one verifier. MUST contain at least one entry. See below.                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Each entry of `source_code_verifications` describes one verifier's attempt to
 rebuild the wasm from source. Fields sourced from SEP-58 carry the same names
@@ -248,7 +245,7 @@ knows them:
 | `source_rev`     | string          | SEP-58 `source_rev`. (optional) Full 40-char SHA-1 of the source commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `tarball_url`    | string          | SEP-58 `tarball_url`. (optional)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `tarball_sha256` | string          | SEP-58 `tarball_sha256`. (optional) Lowercase hex SHA-256 of the source tarball.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `rebuilt_hash`   | string          | The conflicting lowercase hex SHA-256 the verifier produced by rebuilding from source. REQUIRED when `status` is `mismatched` and MUST be omitted otherwise: for `verified` it would simply repeat the top-level `wasm_hash`, and `unverified` has no rebuild result.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `rebuilt_hash`   | string          | The conflicting lowercase hex SHA-256 the verifier produced by rebuilding from source. REQUIRED when `status` is `mismatched` and MUST be omitted otherwise: for `verified` it would simply repeat the top-level `wasm_hash`, and `unverified` has no rebuild result.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `processed_at`   | string          | RFC 3339 UTC timestamp of when this verification was processed. REQUIRED for `verified` and `mismatched`; MUST be omitted for `unverified` (which is not a processed result).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `results_urls`   | array of string | (optional) Zero or more URIs where a fuller, externally-published record of this verification can be retrieved (e.g. build logs, the rebuilt artifact, or a signed report). The same record MAY be listed at several locations (e.g. both an IPFS and an Arweave copy). Each entry's scheme is open — `https`, `ipfs`, `ar`, and others are all valid — letting a verifier publish to a content-addressed or permanent store. The SEP does not constrain the format of what is served there. Entries are opaque pointers, not necessarily directly fetchable by a browser; a client resolves each according to its scheme (e.g. an `ipfs` or `ar` URI may require a gateway or a protocol client) and SHOULD treat content-addressed URIs as integrity-checkable references. |
 
@@ -271,8 +268,8 @@ These are the values of each verification's `status`:
 | `unverified` | The wasm is not verified. This covers everything that is not a definitive `verified` or `mismatched` result — verification is enqueued or in progress, the wasm lacks the metadata to rebuild, the build environment is unsupported, the source could not be retrieved, or the verifier hit an error, among others. |
 
 Because `mismatched` reports a concrete conflicting `rebuilt_hash`, a verifier
-that concludes a wasm does not correspond to its source without producing such a
-hash — for example an out-of-band check that compares against an audited copy
+that concludes a wasm does not correspond to its source without producing such
+a hash — for example an out-of-band check that compares against an audited copy
 rather than rebuilding — reports `unverified`, not `mismatched`.
 
 The HTTP status separates an enqueued or in-progress `unverified` (`202`) from
@@ -318,9 +315,9 @@ means outside SEP-58's reproducible-build path — for example building with a
 custom or non-allowlisted image, working from private or unpublished source
 code, comparing against an internal/audited copy of the source, or relying on a
 trusted attestation rather than rebuilding. In these cases the
-reproducible-build fields (`bldimg`, `source_repo`, …) may be
-absent because the result cannot be independently reproduced from them;
-`out_of_band` flags this so a consumer can weigh it accordingly:
+reproducible-build fields (`bldimg`, `source_repo`, …) may be absent because
+the result cannot be independently reproduced from them; `out_of_band` flags
+this so a consumer can weigh it accordingly:
 
 ```json
 {
@@ -456,9 +453,9 @@ alongside this SEP:
 - [`examples/`](../contents/sep-contract-verification-registry/examples) — each
   snippet in this document as a file that validates against the schema above.
 
-Each schema's filename carries the `MAJOR.MINOR` it describes and validates that
-shape exactly; a future schema version is published as a new file rather than by
-editing these in place.
+Each schema's filename carries the `MAJOR.MINOR` it describes and validates
+that shape exactly; a future schema version is published as a new file rather
+than by editing these in place.
 
 See the
 [directory README](../contents/sep-contract-verification-registry/README.md)
