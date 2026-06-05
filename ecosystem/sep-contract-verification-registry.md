@@ -8,7 +8,7 @@ Status: Draft
 Created: 2026-06-04
 Updated: 2026-06-04
 Version: 0.1.0
-Discussion: TODO
+Discussion: https://github.com/orgs/stellar/discussions/1945
 ```
 
 ## Simple Summary
