@@ -18,25 +18,25 @@ contract's wasm has been reproduced from its source, and for reading the build
 and source metadata behind each result. A client looks a wasm up by its wasm
 hash and receives the verifications one or more verifiers have recorded for it,
 each described with the
-[SEP-58](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0058.md)
+[SEP-58](sep-0058.md)
 vocabulary verbatim.
 
 ## Dependencies
 
-- [SEP-58](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0058.md):
+- [SEP-58](sep-0058.md):
   Contract Build Reproducibility for Verification. Defines the build
   environment and source identification vocabulary (`bldimg`, `bldopt`,
   `source_repo`, `source_rev`, `tarball_url`, `tarball_sha256`) that this API
   reports. This SEP is a transport for SEP-58 results; it adds no vocabulary of
   its own.
-- [SEP-46](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0046.md):
+- [SEP-46](sep-0046.md):
   Contract Meta (informative). One of the venues a service may read SEP-58
   fields from.
 
 ## Motivation
 
 When a wasm is uploaded to a network, the on-chain artifact is opaque bytes.
-[SEP-58](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0058.md)
+[SEP-58](sep-0058.md)
 defines the vocabulary needed to reproduce those bytes from source, and
 anticipates "the creation of verification registries" and off-chain
 "verification services" that hold this metadata, but it deliberately does not
