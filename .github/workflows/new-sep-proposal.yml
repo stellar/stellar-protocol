@@ -50,7 +50,12 @@ jobs:
               return;
             }
 
-            const discussionsUrl = `https://github.com/${owner}/${repo}/discussions`;
+            // Link to the SEP process docs in ecosystem/README.md, anchored to
+            // the specific sections that explain the flow and statuses.
+            const defaultBranch = context.payload.repository.default_branch;
+            const readmeUrl = `https://github.com/${owner}/${repo}/blob/${defaultBranch}/ecosystem/README.md`;
+            const discussionsUrl =
+              'https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals';
 
             const body = [
               '👋 Thanks for your contribution!',
@@ -59,15 +64,17 @@ jobs:
               '',
               ...newSepFiles.map((f) => `- \`${f.filename}\``),
               '',
-              'New SEP ideas start as a **discussion**, not a pull request, so I have **locked this PR** for now.',
+              `New SEP ideas start as a **discussion**, not a pull request, so I have **locked this PR** for now. The full process, including how SEP statuses work, is documented in the [SEP Contribution Process](${readmeUrl}#contribution-process).`,
               '',
               '### How the SEP process works',
               '',
-              `1. 💬 **Start a discussion.** Discussion for new ideas happens on [GitHub Discussions](${discussionsUrl}). Please start a discussion there about your idea and proposal so people in the Stellar ecosystem can collaborate on it.`,
-              '2. 🤝 **Collaborate.** Iterate on the proposal with the community in that discussion.',
+              `1. 💬 **Start a discussion.** Per [Pre-SEP (Initial Discussion)](${readmeUrl}#pre-sep-initial-discussion), discussion for new ideas happens on [GitHub Discussions](${discussionsUrl}). Please start a discussion there about your idea and proposal so people in the Stellar ecosystem can collaborate on it.`,
+              '2. 🤝 **Collaborate.** Iterate on the proposal with the community in that discussion until it is ready to become a draft. See [Creating a SEP Draft](' + readmeUrl + '#creating-a-sep-draft).',
               '3. ✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, post in your GitHub Discussion asking for this PR to be merged. A maintainer will then unlock this PR, review it for formatting, **assign a SEP number**, and merge it.',
               '',
-              '> ⚠️ **Never pre-allocate a SEP number in your PR.** A maintainer will assign the SEP number — please do not pick one yourself.',
+              `> ⚠️ **Never pre-allocate a SEP number in your PR.** Leave the SEP number as "To Be Assigned" — a maintainer will assign it on merge, as described in [Creating a SEP Draft](${readmeUrl}#creating-a-sep-draft).`,
+              '',
+              `For details on what each SEP status (Draft, FCP, Active, Final, …) means, see [SEP Status Terms](${readmeUrl}#sep-status-terms).`,
               '',
               'Thanks for helping improve the Stellar ecosystem! 🚀',
             ].join('\n');
