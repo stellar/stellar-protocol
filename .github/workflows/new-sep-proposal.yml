@@ -1,0 +1,111 @@
+name: 'New SEP Proposal'
+
+# When a PR adds a new file to the ecosystem/ directory it is likely proposing a
+# new SEP. New ideas are meant to start as a GitHub Discussion rather than a PR,
+# so this workflow locks the PR and explains the process to the author.
+#
+# Uses pull_request_target so the GITHUB_TOKEN has write access even for PRs
+# opened from forks. No untrusted PR code is checked out or executed; the job
+# only inspects the list of changed files via the API.
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+    paths:
+      - 'ecosystem/**'
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  new-sep-proposal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lock PR and explain SEP proposal process
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            // Find files added (not just modified) under ecosystem/.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const newSepFiles = files.filter(
+              (f) =>
+                f.status === 'added' &&
+                f.filename.startsWith('ecosystem/') &&
+                f.filename.endsWith('.md') &&
+                f.filename !== 'ecosystem/README.md'
+            );
+
+            if (newSepFiles.length === 0) {
+              core.info('No new files added under ecosystem/; nothing to do.');
+              return;
+            }
+
+            // Idempotency guard: if guidance has already been posted on this PR,
+            // do nothing. This avoids duplicate comments and re-lock errors when
+            // the workflow fires again (e.g. on reopened), and avoids re-locking
+            // a PR that a maintainer has deliberately unlocked.
+            const marker = '<!-- new-sep-proposal-guidance -->';
+            const existingComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: pull_number, per_page: 100 }
+            );
+            if (existingComments.some((c) => c.body && c.body.includes(marker))) {
+              core.info('SEP proposal guidance already posted; nothing to do.');
+              return;
+            }
+
+            // Link to the SEP process docs in ecosystem/README.md, anchored to
+            // the specific sections that explain the flow and statuses.
+            const defaultBranch = context.payload.repository.default_branch;
+            const readmeUrl = `https://github.com/${owner}/${repo}/blob/${defaultBranch}/ecosystem/README.md`;
+            const discussionsUrl =
+              'https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals';
+
+            const body = [
+              marker,
+              '👋 Thanks for your contribution!',
+              '',
+              'It looks like this PR is proposing a **new SEP** — it adds the following new file(s) to the `ecosystem/` directory:',
+              '',
+              ...newSepFiles.map((f) => `- \`${f.filename}\``),
+              '',
+              `New SEP ideas start as a **discussion**, not a pull request, so I have **locked this PR** for now. The full process, including how SEP statuses work, is documented in the [SEP Contribution Process](${readmeUrl}#contribution-process).`,
+              '',
+              '### How the SEP process works',
+              '',
+              `1. 💬 **Start a discussion.** Per [Pre-SEP (Initial Discussion)](${readmeUrl}#pre-sep-initial-discussion), discussion for new ideas happens on [GitHub Discussions](${discussionsUrl}). Please start a discussion there about your idea and proposal so people in the Stellar ecosystem can collaborate on it.`,
+              '2. 🤝 **Collaborate.** Iterate on the proposal with the community in that discussion until it is ready to become a draft. See [Creating a SEP Draft](' + readmeUrl + '#creating-a-sep-draft).',
+              '3. ✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, post in your GitHub Discussion asking for this PR to be merged. A maintainer will then unlock this PR, review it for formatting, **assign a SEP number**, and merge it.',
+              '',
+              `> ⚠️ **Never pre-allocate a SEP number in your PR.** Leave the SEP number as "To Be Assigned" — a maintainer will assign it on merge, as described in [Creating a SEP Draft](${readmeUrl}#creating-a-sep-draft).`,
+              '',
+              `For details on what each SEP status (Draft, FCP, Active, Final, …) means, see [SEP Status Terms](${readmeUrl}#sep-status-terms).`,
+              '',
+              'Thanks for helping improve the Stellar ecosystem! 🚀',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body,
+            });
+
+            await github.rest.issues.lock({
+              owner,
+              repo,
+              issue_number: pull_number,
+              lock_reason: 'resolved',
+            });
+
+            core.info(`Locked PR #${pull_number} and posted the SEP proposal guidance.`);
