@@ -82,7 +82,7 @@ jobs:
               '',
               ...newSepFiles.map((f) => `- \`${f.filename}\``),
               '',
-              `New SEP ideas start as a **discussion**, not a pull request, so I have **locked this PR and converted it to a draft** for now. The full process, including how SEP statuses work, is documented in the [SEP Contribution Process](${readmeUrl}#contribution-process).`,
+              `New SEP ideas start as a **discussion**, not a pull request, so I have **locked this PR and marked it as a draft** for now. The full process, including how SEP statuses work, is documented in the [SEP Contribution Process](${readmeUrl}#contribution-process).`,
               '',
               '### How the SEP process works',
               '',
@@ -97,13 +97,12 @@ jobs:
               'Thanks for helping improve the Stellar ecosystem! 🚀',
             ].join('\n');
 
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number: pull_number,
-              body,
-            });
-
+            // Perform the side effects (lock, convert to draft) BEFORE posting the
+            // guidance comment. The comment carries the idempotency marker that the
+            // guard above checks, so it must be the last step: if locking or the
+            // draft conversion fails, no marker is left behind and a rerun or
+            // reopened event will retry the whole sequence instead of short-circuiting
+            // on the marker with the PR left unlocked or not a draft.
             await github.rest.issues.lock({
               owner,
               repo,
@@ -128,5 +127,14 @@ jobs:
               );
               core.info(`Converted PR #${pull_number} to a draft.`);
             }
+
+            // Post the guidance comment last; its marker records that the sequence
+            // completed so the guard above can skip subsequent runs.
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body,
+            });
 
             core.info(`Locked PR #${pull_number} and posted the SEP proposal guidance.`);
