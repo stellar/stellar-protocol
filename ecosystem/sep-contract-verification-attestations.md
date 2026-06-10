@@ -8,7 +8,7 @@ Status: Draft
 Created: 2026-06-10
 Updated: 2026-06-10
 Version: 0.1.0
-Discussion: TBD
+Discussion: https://github.com/orgs/stellar/discussions/1952
 ```
 
 ## Simple Summary
@@ -108,7 +108,7 @@ Given a fixed commit, `git archive` is a reasonable starting point because file 
 
 For a non-git source, `sourceHash` is simply the SHA-256 of the agreed archive bytes; the same determinism requirements apply. Either way the archive is content-addressed by `sourceHash` per section 2, so a verifier obtains exactly the bytes that were hashed and is never exposed to URL drift.
 
-There is a relevant discussion here (TODO).
+There is a [relevant discussion of reproducibility as part of SEP-58 here](https://github.com/orgs/stellar/discussions/1923#discussioncomment-17225937)
 
 As an alternate proposal for this section: if a canonical, reproducible git archive tools is deemed too complex, the original builder can run this archive tool and push the resulting file to IPFS and later reference that file by sha256 hash. This only requires a robust archiving tool that works, not that it must produce byte-identical output on multiple runs on different machines and versions.
 
