@@ -59,7 +59,7 @@
 | [CAP-0046](cap-0046.md) | 20 |Soroban smart contract system overview | Graydon Hoare | Final |
 | [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | 20 | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Final |
 | [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | 20 | Smart Contract Lifecycle | Siddharth Suresh | Final |
-| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20 | Smart Contract Host Functons | Jay Geng | Final |
+| [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20 | Smart Contract Host Functions | Jay Geng | Final |
 | [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | 20 | Smart Contract Data | Graydon Hoare | Final |
 | [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | 20 | Smart Contract Standardized Asset | Jonathan Jove | Final |
 | [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | 20 | Fee model in smart contracts | Nicolas Barry | Final |
@@ -83,9 +83,9 @@
 | [CAP-0068](cap-0068.md) | 23 | Host function for getting executable for `Address` | Dmytro Kozhevin | Final |
 | [CAP-0069](cap-0069.md) | 23 | String/Bytes conversion host functions | Dmytro Kozhevin | Final |
 | [CAP-0070](cap-0070.md) | 23 | Configurable SCP Timing Parameters | Garand Tyson | Final |
-| [CAP-0071](cap-0071.md) | TBD | Authentication delegation and address-bound Soroban credentials | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0071-01](cap-0071-01.md) | TBD | Authentication delegation for custom accounts | Dmytro Kozhevin | Awaiting Decision |
-| [CAP-0071-02](cap-0071-02.md) | TBD | Address-bound Soroban address credentials | Dmytro Kozhevin | Awaiting Decision |
+| [CAP-0071](cap-0071.md) | 27 | Authentication delegation and address-bound Soroban credentials | Dmytro Kozhevin | Accepted |
+| [CAP-0071-01](cap-0071-01.md) | 27 | Authentication delegation for custom accounts | Dmytro Kozhevin | Accepted |
+| [CAP-0071-02](cap-0071-02.md) | 27 | Address-bound Soroban address credentials | Dmytro Kozhevin | Accepted |
 | [CAP-0073](cap-0073.md) | 26 | Allow SAC to create G-account balances | Dmytro Kozhevin | Implemented |
 | [CAP-0074](cap-0074.md) | 25 | Host functions for BN254 | Siddharth Suresh | Final |
 | [CAP-0075](cap-0075.md) | 25 | Cryptographic Primitives for Poseidon/Poseidon2 Hash Functions | Jay Geng | Final |
@@ -96,7 +96,7 @@
 | [CAP-0080](cap-0080.md) | 26 | Host functions for efficient ZK BN254 use cases | Siddharth Suresh | Implemented |
 | [CAP-0081](cap-0081.md) | TBD | TTL-Ordered Eviction | Garand Tyson | Accepted |
 | [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Implemented |
-| [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to skip the current ledger | Brett Boston | Awaiting Decision |
+| [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to drop the transaction set from the current ledger | Brett Boston | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
