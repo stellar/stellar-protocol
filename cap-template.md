@@ -151,7 +151,7 @@ unit tests. Here are some examples:
 - For Soroban CAPs, a contract using the new functionality has been executed on Futurenet or
   Quickstart.
 - Stellar Core `LedgerCloseMeta`s (captured via `--capture-lcm` from new tests relevant to this CAP)
-  pass through the Horizon ingestion test case.
+  pass Horizon ingestion test cases.
 - The [Test Cases](#test-cases) are passing.
 
 Add any feature-specific criteria below.
