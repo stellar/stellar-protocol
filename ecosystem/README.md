@@ -170,7 +170,11 @@ following:
   chance of conflicts at merge time. The proposal will be added to the readme
   by a maintainer.
 - Include GitHub handles or emails for all authors listed. GitHub handles are
-  preferred.
+  strongly preferred. Including a GitHub handle for each author is important
+  because it allows authors to be mentioned for review on follow-up PRs that
+  propose changes to the SEP. If no GitHub handle is provided for an author,
+  follow-up PRs that propose changes to the SEP will not be able to mention
+  that author for their review.
 - Set the version to `v0.0.1`.
 - Submit a PR of your draft via your fork of this repository.
 - Enable the GitHub feature `Maintainers are allowed to edit this pull request`
