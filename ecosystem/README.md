@@ -169,11 +169,9 @@ following:
 - Do not add the proposal to the `ecosystem/README.md` as it increases the
   chance of conflicts at merge time. The proposal will be added to the readme
   by a maintainer.
-- Include a GitHub handle for each author so they can be mentioned for review
-  on follow-up PRs that propose changes to the SEP; without a handle an author
-  cannot be mentioned. An author with no GitHub handle may provide an email
-  instead, but maintainers will not use it to reach out the way they would a
-  handle.
+- Include GitHub handles or emails for all authors listed. GitHub handles are
+  preferred, because GitHub handles for authors will get mentioned on PRs
+  opened against existing proposals.
 - Set the version to `v0.0.1`.
 - Submit a PR of your draft via your fork of this repository.
 - Enable the GitHub feature `Maintainers are allowed to edit this pull request`
