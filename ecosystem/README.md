@@ -128,11 +128,10 @@ participants, including SDF, may encourage adoption of a proposal, but authors
 should expect each proposal to stand on its own merits and authors and
 maintainers should plan to drive adoption themselves.
 
-If you propose changes to an existing SEP, start a new discussion thread at the
-`Discussion` link in the SEP's preamble, or on the [GitHub discussion forum] if
-the SEP has no such link, and advocate for your change with the SEP's
-author(s). The author maintains the proposal, so engaging them is an important
-part of getting a change adopted.
+If you propose changes to an existing SEP, start a discussion, either at the
+SEP's `Discussion` link or on the [GitHub discussion forum], and advocate for
+your change with the SEP's author(s). The author maintains the proposal, so
+engaging them is an important part of getting a change adopted.
 
 Before contributing, consider the following:
 
