@@ -130,7 +130,7 @@ maintainers should plan to drive adoption themselves.
 
 If you open a PR proposing changes to an existing SEP, be prepared to advocate
 for your change with the SEP's author(s). Mention them on the PR using their
-GitHub handle, and where only an email address is listed you may reach out to
+GitHub handle, and where an email address is listed you may reach out to
 them respectfully by email. The author is responsible for the proposal, so
 engaging them and earning their support is an important part of getting a
 change adopted.
