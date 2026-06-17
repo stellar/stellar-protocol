@@ -170,7 +170,8 @@ following:
   chance of conflicts at merge time. The proposal will be added to the readme
   by a maintainer.
 - Include GitHub handles or emails for all authors listed. GitHub handles are
-  preferred.
+  preferred, because GitHub handles for authors will get mentioned on PRs
+  opened against existing proposals.
 - Set the version to `v0.0.1`.
 - Submit a PR of your draft via your fork of this repository.
 - Enable the GitHub feature `Maintainers are allowed to edit this pull request`
