@@ -130,10 +130,8 @@ maintainers should plan to drive adoption themselves.
 
 If you propose changes to an existing SEP, start a new discussion thread at the
 `Discussion` link in the SEP's preamble, and advocate for your change with the
-SEP's author(s). Mention them on the PR using their GitHub handle, and where an
-email address is listed you may reach out to them respectfully by email. The
-author maintains the proposal, so engaging them and earning their support is an
-important part of getting a change adopted.
+SEP's author(s). The author maintains the proposal, so engaging them and
+earning their support is an important part of getting a change adopted.
 
 Before contributing, consider the following:
 
