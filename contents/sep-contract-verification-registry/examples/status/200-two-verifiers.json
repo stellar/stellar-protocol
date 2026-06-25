@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "wasm_hash": "cb2fc3a1b4d5e6f7081928374655647382910abcdef0123456789abcdef01234",
+  "updated_at": "2026-06-04T13:00:00Z",
+  "source_code_verifications": [
+    {
+      "verifier": { "name": "Verifier A", "url": "https://a.example.com" },
+      "status": "verified",
+      "source_repo": "https://github.com/user/my-contract",
+      "source_rev": "abc1234567890abcdef1234567890abcdef12345",
+      "processed_at": "2026-06-04T12:00:00Z"
+    },
+    {
+      "verifier": { "name": "Verifier B", "url": "https://b.example.com" },
+      "status": "mismatched",
+      "source_repo": "https://github.com/user/my-contract",
+      "source_rev": "abc1234567890abcdef1234567890abcdef12345",
+      "rebuilt_hash": "999888777666555444333222111000fedcba9876543210fedcba9876543210fe",
+      "processed_at": "2026-06-04T13:00:00Z"
+    }
+  ]
+}

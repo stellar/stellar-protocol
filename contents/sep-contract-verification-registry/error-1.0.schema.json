@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stellar/stellar-protocol/blob/master/contents/sep-contract-verification-registry/error-1.0.schema.json",
+  "title": "Contract Verification Error",
+  "description": "The body a 400 Bad Request MAY carry to disambiguate why the request was rejected. Other non-2xx statuses are signaled by status code and define no body.",
+  "type": "object",
+  "required": ["schema_version", "error", "message"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "The version of the response schema, as MAJOR.MINOR, versioned independently of the SEP. MAJOR increments on a breaking change; MINOR on an additive change. This schema describes version 1.0.",
+      "const": "1.0"
+    },
+    "error": {
+      "type": "string",
+      "description": "A stable, machine-readable error code. Clients SHOULD branch on this rather than message, and MUST tolerate codes they do not recognize.",
+      "enum": ["400_invalid_wasm_hash", "400_other"]
+    },
+    "message": {
+      "type": "string",
+      "description": "A human-readable description of the error. Wording is not stable and is intended for display and debugging.",
+      "minLength": 1
+    }
+  }
+}
