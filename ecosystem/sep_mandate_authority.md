@@ -14,15 +14,16 @@ Discussion: https://github.com/orgs/stellar/discussions/1925
 
 A standardized Soroban contract interface for issuing non-transferable, revocable
 **Mandate tokens** that allow a sovereign identity (**Root Anchor**) to delegate
-programmable, scoped, and auditable authority to AI agents or automated systems —
-without sharing private keys. Now including support for **Autonomous Subscriptions** 
-via recurring periodic budgets.
+programmable, scoped, and auditable authority to autonomous systems (such as AI agents,
+smart wallets, IoT devices, or cross-chain relayers) — without sharing private keys.
+Now including support for **Autonomous Subscriptions** via recurring periodic budgets.
 
 ## Motivation
 
-The emergence of agentic AI systems on Stellar creates a fundamental trust problem:
-how can a human grant an autonomous agent the ability to act on their behalf without
-handing over their private key?
+The emergence of autonomous systems on Stellar — ranging from agentic AI and 
+programmable smart wallets to IoT devices and automated DeFi relayers — creates a 
+fundamental trust problem: how can a sovereign entity grant a secondary system the 
+ability to act on their behalf without handing over their private key?
 
 Current approaches are inadequate:
 
@@ -68,6 +69,8 @@ The standard introduces four interlocking mechanisms:
 - **[SEP-45](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0045.md)**
   (Stellar Remote Authentication): Foundation for the `MandateRequest` remote
   issuance flow defined in Section VI of this SEP.
+- **[SEP-50](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0050.md)**
+  (Stellar Asset & NFT Standards): Foundation for the non-transferable (Soulbound) nature of Mandate tokens.
 
 ## Terminology
 
@@ -599,6 +602,14 @@ impl LendingProtocol {
 
 ## Design Rationale
 
+### Identity Resolution vs. Operational Authority
+
+A core design philosophy of this standard is the strict separation between **who** the actor is (Identity) and **what** the actor is allowed to do (Authority).
+
+The Mandate token remains strictly stateless regarding reputation, KYC status, or identity history. It acts solely as a cryptographic enforcement layer answering: *"What is this specific address authorized to execute?"*
+
+External profile layers (such as DIDs, or Verifiable Credentials) MUST be used alongside the Nexus if a dApp needs to answer: *"Who is this actor, and what is their provenance?"* This modularity prevents the Mandate from bloating into a universal trust score, avoids excessive state reads during verification, and allows third-party dApps to plug in their own preferred risk policies.
+
 ### Immutable Scope, Mutable State
 
 Separating `Scope` (immutable) from `MandateState` (mutable) is a deliberate
@@ -647,11 +658,10 @@ a request across epochs.
 | Standard | Relationship |
 |---|---|
 | **SEP-41** | Mandates follow the token interface for discoverability, but are non-transferable (no `transfer` function). |
+| **SEP-50** | Mandates technically represent a specialized, hierarchical implementation of Soulbound Tokens on Stellar. |
 | **SEP-10** | Used for Root Anchor authentication in web-client issuance flows. |
 | **SEP-45** | Used for off-chain issuance via `MandateRequest`. |
-| **EIP-4973 (Ethereum)** | Conceptual ancestor (Account-Bound Tokens / SBTs). This SEP extends the concept with hierarchical delegation and financial limits for the agentic economy. |
-
----
+| **EIP-4973 / ERC-8004 (Ethereum)** | Conceptual ancestors for Account-Bound Tokens and agent delegation. This SEP adapts and extends those delegation boundaries for the Soroban smart contract environment. |
 
 ## Security Concerns
 
@@ -720,6 +730,7 @@ verification key management, and on-chain verifier contract interface.
 | `0.3.0` | 2026-05-05 | Extracted `spent_budget` into `MandateState`, added `MandateError`. |
 | `0.4.0` | 2026-05-06 | Added `renewal_period` for Autonomous Subscriptions. |
 | `0.4.1` | 2026-05-13 | Added `token` and `metadata_uri` to `Scope`. Aligned types to `u32`. |
+| `0.4.2` | 2026-06-30 | Expanded scope beyond AI agents (Smart Wallets, IoT). Added Identity vs Authority boundary rationale. Integrated SEP-50 and ERC-8004 references. |
 
 ---
 
