@@ -118,6 +118,7 @@
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0084](cap-0084.md) | Muxed Contract Addresses | Jake Urban | Draft |
+| [CAP-0085](cap-0085.md) | Externally managed contract executables | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
