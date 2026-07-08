@@ -28,11 +28,11 @@ All SEPs have individuals fulfilling the following roles:
 - **Active** - A SEP ready to be adopted, and the proposal is a living document
   and may still receive changes. The author intends the SEP in its current form
   to be actively adopted. Changes can be made without changing the SEP number,
-  although in the interest of growing an ecosystem of interopable participants
-  the author should endeavor to make changes backwards compatible so that
-  participants who have already adopted the SEP can continue to participate.
-  Where changes cannot be backwards compatible, the major version should be
-  updated to clearly distinguish new incompatible versions.
+  although in the interest of growing an ecosystem of interoperable
+  participants the author should endeavor to make changes backwards compatible
+  so that participants who have already adopted the SEP can continue to
+  participate. Where changes cannot be backwards compatible, the major version
+  should be updated to clearly distinguish new incompatible versions.
 - **Final** - A SEP ready to be adopted, and the proposal is an immutable
   document and will no longer receive changes, other than minor errata. The
   author intends to make no further changes. Adopters can expect significant
@@ -70,6 +70,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0033](sep-0033.md) | Identicons for Stellar Accounts                                        | Lobstr.co, Gleb Pitsevich                                     | Active |
 | [SEP-0046](sep-0046.md) | Contract Meta                                                          | Leigh McCulloch                                               | Active |
 | [SEP-0048](sep-0048.md) | Contract Interface Specification                                       | Leigh McCulloch                                               | Active |
+| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                               | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu                  | Final  |
 | [SEP-0054](sep-0054.md) | Ledger Metadata Storage                                                | Tamir Sen                                                     | Active |
 
 ### Draft Proposals
@@ -97,10 +98,11 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk                   | Draft                |
 | [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                            | Draft                |
 | [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                      | Draft                |
-| [SEP-0053](sep-0053.md) | Sign and Verify Messages                                       | Jun Luo, Pamphile Roy, OrbitLens, Piyal Basu               | Draft                |
 | [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                               | Draft                |
 | [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Draft                |
 | [SEP-0057](sep-0057.md) | T-REX (Token for Regulated EXchanges)                          | OpenZeppelin, Boyan Barakov, Özgün Özerk, Dennis O'Connell | Draft                |
+| [SEP-0058](sep-0058.md) | Contract Build Reproducibility for Verification                | Leigh McCulloch                                            | Draft                |
+| [SEP-0059](sep-0059.md) | External Account API                                           | Anthony Barker                                             | Draft                |
 
 ### Abandoned Proposals
 
@@ -118,13 +120,18 @@ technology forward into new territory.
 
 Unlike Stellar's Core development (CAPs), Stellar's Ecosystem Proposals are
 intended to be a more dynamic way of introducing standards and protocols
-utilized in the ecosystem that are built on top of the Stellar Network. It uses
+utilized in the ecosystem that are built on top of the Stellar network. It uses
 a lightweight process.
 
-A SEPs author is responsible for a proposals adoption. Other ecosystem
+A SEP's author is responsible for a proposal's adoption. Other ecosystem
 participants, including SDF, may encourage adoption of a proposal, but authors
 should expect each proposal to stand on its own merits and authors and
 maintainers should plan to drive adoption themselves.
+
+If you propose changes to an existing SEP, start a discussion, either at the
+SEP's `Discussion` link or on the [GitHub discussion forum], and advocate for
+your change with the SEP's author(s). The author maintains the proposal, so
+engaging them is an important part of getting a change adopted.
 
 Before contributing, consider the following:
 
@@ -135,7 +142,7 @@ Before contributing, consider the following:
   the proposal forward, talk to folks in the ecosystem, or folks at SDF;
   they'll often have guidance on how to move things forward, as well as
   feedback regarding feasibility and how the proposal does or does not align
-  with the Stellar Network's goals.
+  with the Stellar network's goals.
 
 ## SEP Process
 
@@ -161,8 +168,15 @@ following:
 - Use the following format for the filename of your draft:
   `sep_{shorttitle}.md`, for example `sep_newaccountdeposit.md`
 - Make sure to place your SEP in the `ecosystem/` folder.
+- Do not self-assign, reference, or request a SEP number. Leave the SEP number
+  in the preamble as "To Be Assigned". A SEP number will be assigned by a
+  maintainer.
+- Do not add the proposal to the `ecosystem/README.md` as it increases the
+  chance of conflicts at merge time. The proposal will be added to the readme
+  by a maintainer.
 - Include GitHub handles or emails for all authors listed. GitHub handles are
-  preferred.
+  preferred, because GitHub handles for authors will get mentioned on PRs
+  opened against existing proposals.
 - Set the version to `v0.0.1`.
 - Submit a PR of your draft via your fork of this repository.
 - Enable the GitHub feature `Maintainers are allowed to edit this pull request`
@@ -172,7 +186,9 @@ following:
     any abuse to the repository.
   - If the template is followed and the change does not introduce any abuse to
     the repository:
+    - Format the file.
     - Assign a SEP number.
+    - Add the SEP to the `ecosystem/README.md` list.
     - Merge the PR.
 
 #### Additional Tips
@@ -251,13 +267,13 @@ After at least one week in FCP:
 
 ## SEP Versioning
 
-SEPs may stay in `Draft` status for an extended period of time. They are are
+SEPs may stay in `Draft` status for an extended period of time. They are
 assigned versions so that the ecosystem can communicate about which version
 they are implementing or discussing. SEPs use [semantic versioning] in the form
 `vMAJOR.MINOR.PATCH` to determine an appropriate version for each change.
 
 During draft a SEP should have a major version of `0` to indicate that anything
-in the SEP may change at anytime. Once a SEP moves to Active it should be
+in the SEP may change at any time. Once a SEP moves to Active it should be
 changed to `v1.0.0` and the rules of semantic versioning apply.
 
 All changes to a SEP should be accompanied by an update to its version, no
