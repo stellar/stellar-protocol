@@ -119,6 +119,7 @@
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0084](cap-0084.md) | Muxed Contract Addresses | Jake Urban | Draft |
 | [CAP-0085](cap-0085.md) | Externally managed contract executables | Dmytro Kozhevin | Draft |
+| [CAP-0086](cap-0086.md) | Host functions for sparse Symbol-keyed map creation and unpacking | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
