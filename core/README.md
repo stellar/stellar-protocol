@@ -118,6 +118,7 @@
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
+| [CAP-0084](cap-0084.md) | Muxed Contract Addresses | Jake Urban | Draft |
 | [CAP-0086](cap-0086.md) | Host functions for sparse Symbol-keyed map creation and unpacking | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
