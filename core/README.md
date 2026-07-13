@@ -315,10 +315,10 @@ it is possible that the proposal is rejected based on the issues that arise from
 implementation.
 
 Before the CAP can move to **Implemented**, its [exit criteria](../cap-template.md#exit-criteria)
-must be met and the evidence shared with the protocol group — for example, exercising the feature on
-Futurenet or via Quickstart (with Horizon and RPC up), and, for Soroban CAPs, executing a contract
-that uses it. Once the criteria are met and no issues arise, a CAP team member moves it to
-**Implemented**.
+must be met and the evidence shared in the Slack channel for the protocol release you're targeting
+— for example, exercising the feature on Futurenet or via Quickstart (with Horizon and RPC up), and,
+for Soroban CAPs, executing a contract that uses it. Once the criteria are met and no issues arise,
+a CAP team member moves it to **Implemented**.
 
 ### CAP Finalization
 
