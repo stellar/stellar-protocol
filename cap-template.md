@@ -140,4 +140,22 @@ completed before the CAP is accepted. While there is merit to the approach of re
 the specification and rationale before writing code, the principle of "rough consensus and running
 code" is still useful when it comes to resolving many discussions of API details.
 
+## Exit Criteria
+The verifiable conditions that must be met before this CAP moves to `Implemented` and can be
+included in a protocol release. Each item should be objectively verifiable (e.g. a test run,
+transaction hash, or contract execution) and demonstrate the feature working end-to-end, not only in
+unit tests. Here are some examples:
+
+- The feature has been exercised on [Futurenet] or via [Quickstart], with Horizon and RPC up and
+  reflecting the change.
+- For Soroban CAPs, a contract using the new functionality has been executed on Futurenet or
+  Quickstart.
+- Stellar Core `LedgerCloseMeta`s (captured via `--capture-lcm` from new tests relevant to this CAP)
+  pass Horizon ingestion test cases.
+- The [Test Cases](#test-cases) are passing.
+
+Add any feature-specific criteria below.
+
 [stellar-core repository]: https://github.com/stellar/stellar-core
+[Futurenet]: https://developers.stellar.org/docs/networks
+[Quickstart]: https://github.com/stellar/quickstart

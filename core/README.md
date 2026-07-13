@@ -14,7 +14,8 @@
 - **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
   ready for implementation. It is still possible that the CAP may be rejected post-implementation
   due to the issues that may arise during an initial implementation.
-- **Implemented** - A CAP that has been implemented with the protocol version specified in the CAP. It will graduate to
+- **Implemented** - A CAP that has been implemented with the protocol version specified in the CAP,
+  and whose [exit criteria](../cap-template.md#exit-criteria) have been met. It will graduate to
   **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
 - **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
   final CAP should only be updated to correct errata.
@@ -236,6 +237,8 @@ Finally, submit a PR of your draft via your fork of this repository.
 #### Additional Tips
 - Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
   established once the CAP has reached the state of *Final* and has been formally implemented.
+- Define the CAP's [exit criteria](../cap-template.md#exit-criteria) up front — the verifiable
+  conditions, agreed with the working group, for when the feature is ready to be released.
 
 ### Draft: Merging & Further Iteration
 From there, the following process will happen.
@@ -309,7 +312,12 @@ Review**, along with the protocol version it was released in if applicable.
 
 From here the proposal is brought up again before the protocol group for additional comment, where
 it is possible that the proposal is rejected based on the issues that arise from its
-implementation. If no issues arise, it will move to **Implemented** by a CAP team member.
+implementation.
+
+Before the CAP can move to **Implemented**, its [exit criteria](../cap-template.md#exit-criteria)
+must be met — for example, exercising the feature on Futurenet or via Quickstart (with Horizon and
+RPC up), and, for Soroban CAPs, executing a contract that uses it. Once the criteria are met and no
+issues arise, a CAP team member moves it to **Implemented**.
 
 ### CAP Finalization
 
