@@ -6,11 +6,12 @@
 - **Draft** — A CAP that is currently open for consideration and actively being discussed.
 - **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
   Core Team. After a maximum of three meetings, a vote will take place that will set the CAP's
-  intended FCP disposition (**FCP: Acceptance/Rejection**) or go back into a **Draft** state.
-- **FCP: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period (FCP) with an
-  intended disposition. After one week has passed, during which any new concerns should be
-  addressed, the CAP will head towards its intended disposition [**Acceptance/Rejection**] or go
-  back into a Draft state.
+  intended disposition of Acceptance or Rejection for the Final Comment Period, or go back into a
+  **Draft** state.
+- **Final Comment Period: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period with an
+  intended disposition of Acceptance or Rejection. After one week has passed, during which any new concerns should be
+  addressed, the CAP will move to **Accepted** or **Rejected** according to its intended
+  disposition, or go back into a Draft state.
 - **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
   ready for implementation. It is still possible that the CAP may be rejected post-implementation
   due to the issues that may arise during an initial implementation.
@@ -97,7 +98,7 @@
 | [CAP-0081](cap-0081.md) | TBD | TTL-Ordered Eviction | Garand Tyson | Accepted |
 | [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Implemented |
 | [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to drop the transaction set from the current ledger | Brett Boston | Accepted |
-| [CAP-0085](cap-0085.md) | TBD | Externally managed contract executables | Dmytro Kozhevin | Final Comment Period |
+| [CAP-0085](cap-0085.md) | TBD | Externally managed contract executables | Dmytro Kozhevin | Final Comment Period: Acceptance |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -287,17 +288,19 @@ The protocol meetings will be used to decide on next step:
   - If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned ; 
   - If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
 
-### Awaiting Decision -> Final Comment Period (FCP)
+### Awaiting Decision -> Final Comment Period: [Acceptance/Rejection]
 - A vote will take place among the CAP Core Team.
-  - A unanimous approval from the CAP Core Team will put the CAP in a `Accepted` status.
-  - Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
-    majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
-    raises concerns).
+  - A unanimous approval from the CAP Core Team will move the CAP to `Final Comment Period: Acceptance` with
+    an intended disposition of Acceptance.
+  - Otherwise, the CAP will be given feedback and either move to `Final Comment Period: Rejection` with an
+    intended disposition of Rejection (if the majority of the CAP Core Team raises concerns) or
+    return to `Draft` (if only a minority of the CAP Core Team raises concerns).
   - It can take upwards of 3 meetings before a disposition is reached.
 
-### FCP -> Accepted/Rejected
-- After a week of an Final Comment Period (FCP) where any major concerns that have not been
-  previously addressed can be brought up, the CAP will head to its final disposition.
+### Final Comment Period: [Acceptance/Rejection] -> Accepted or Rejected
+- After a week in Final Comment Period, any major concerns that have not been previously
+  addressed can be brought up. If no such concerns remain, the CAP will move to `Accepted` or
+  `Rejected` according to its intended disposition.
   - Concerns will be addressed on a case by case basis, and only major concerns that were not
     addressed earlier will move the CAP back to a `Draft` state.
 
