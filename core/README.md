@@ -11,7 +11,7 @@
 - **Final Comment Period** — A CAP that has entered a Final Comment Period with an
   intended disposition of Acceptance or Rejection. After one week has passed, during which any new concerns should be
   addressed, the CAP will move to **Accepted** or **Rejected** according to its intended
-  disposition, or go back into a Draft state.
+  disposition, or go back into a **Draft** state.
 - **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
   ready for implementation. It is still possible that the CAP may be rejected post-implementation
   due to the issues that may arise during an initial implementation.
