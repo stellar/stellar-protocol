@@ -8,7 +8,7 @@
   Core Team. After a maximum of three meetings, a vote will take place that will set the CAP's
   intended disposition of Acceptance or Rejection for the Final Comment Period, or go back into a
   **Draft** state.
-- **Final Comment Period: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period with an
+- **Final Comment Period** — A CAP that has entered a Final Comment Period with an
   intended disposition of Acceptance or Rejection. After one week has passed, during which any new concerns should be
   addressed, the CAP will move to **Accepted** or **Rejected** according to its intended
   disposition, or go back into a Draft state.
@@ -98,7 +98,7 @@
 | [CAP-0081](cap-0081.md) | TBD | TTL-Ordered Eviction | Garand Tyson | Accepted |
 | [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Implemented |
 | [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to drop the transaction set from the current ledger | Brett Boston | Accepted |
-| [CAP-0085](cap-0085.md) | TBD | Externally managed contract executables | Dmytro Kozhevin | Final Comment Period: Acceptance |
+| [CAP-0085](cap-0085.md) | TBD | Externally managed contract executables | Dmytro Kozhevin | Final Comment Period |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -288,16 +288,16 @@ The protocol meetings will be used to decide on next step:
   - If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned ; 
   - If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
 
-### Awaiting Decision -> Final Comment Period: [Acceptance/Rejection]
+### Awaiting Decision -> Final Comment Period
 - A vote will take place among the CAP Core Team.
-  - A unanimous approval from the CAP Core Team will move the CAP to `Final Comment Period: Acceptance` with
+  - A unanimous approval from the CAP Core Team will move the CAP to `Final Comment Period` with
     an intended disposition of Acceptance.
-  - Otherwise, the CAP will be given feedback and either move to `Final Comment Period: Rejection` with an
+  - Otherwise, the CAP will be given feedback and either move to `Final Comment Period` with an
     intended disposition of Rejection (if the majority of the CAP Core Team raises concerns) or
     return to `Draft` (if only a minority of the CAP Core Team raises concerns).
   - It can take upwards of 3 meetings before a disposition is reached.
 
-### Final Comment Period: [Acceptance/Rejection] -> Accepted or Rejected
+### Final Comment Period -> Accepted or Rejected
 - After a week in Final Comment Period, any major concerns that have not been previously
   addressed can be brought up. If no such concerns remain, the CAP will move to `Accepted` or
   `Rejected` according to its intended disposition.
