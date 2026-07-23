@@ -346,7 +346,7 @@ bytes yields the common default behavior.
 These functions take the full message, whereas
 `verify_sig_ecdsa_secp256r1` takes a 32-byte digest. This reflects a
 difference in the schemes' external interfaces, not in key binding. ECDSA
-verification operates on `H(M)` directly — the hash is external to the
+verification operates on message hash `H(M)` directly — the hash is external to the
 algorithm and the digest fully determines the verified value — so a digest
 interface is faithful. The *pure* ML-DSA external interface implemented here
 (FIPS 204 Algorithm 3) formats `M' = 0x00 || len(ctx) || ctx || M`,
