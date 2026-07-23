@@ -298,9 +298,10 @@ The protocol meetings will be used to decide on next step:
   - It can take upwards of 3 meetings before a disposition is reached.
 
 ### Final Comment Period -> Accepted or Rejected
-- After a week in Final Comment Period, any major concerns that have not been previously
-  addressed can be brought up. If no such concerns remain, the CAP will move to `Accepted` or
-  `Rejected` according to its intended disposition.
+- During the week-long Final Comment Period, anyone can bring up major concerns
+  that have not been previously addressed. If no such concerns remain at the
+  end of the period, the CAP will move to `Accepted` or `Rejected` according to
+  its intended disposition.
   - Concerns will be addressed on a case by case basis, and only major concerns that were not
     addressed earlier will move the CAP back to a `Draft` state.
 
