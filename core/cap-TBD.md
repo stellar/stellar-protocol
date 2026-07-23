@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-CAP: 0087
+CAP: TBD
 Title: Host functions for ML-DSA signature verification
 Working Group:
     Owner: Jay Geng <@jayz22>
