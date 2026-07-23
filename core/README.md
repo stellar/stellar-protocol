@@ -121,6 +121,7 @@
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
+| [CAP-TBD](cap-TBD.md) | Host functions for ML-DSA signature verification | Jay Geng | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
