@@ -20,6 +20,9 @@ on:
       - 'ecosystem/**'
 
 permissions:
+  # read is required to fetch SEP contents at the PR's base commit; declaring
+  # permissions sets every omitted scope to none.
+  contents: read
   issues: write
   # write is required to convert the PR to a draft (the GraphQL
   # convertPullRequestToDraft mutation); listing changed files only needs read.
@@ -68,12 +71,21 @@ jobs:
             // do nothing. This avoids duplicate comments when the workflow fires
             // again (e.g. on reopened), and avoids re-drafting a PR that a
             // maintainer or the author has deliberately marked ready for review.
+            // Only markers authored by the workflow itself count, so a PR
+            // participant cannot suppress the guidance by posting the marker.
             const marker = '<!-- sep-modification-guidance -->';
             const existingComments = await github.paginate(
               github.rest.issues.listComments,
               { owner, repo, issue_number: pull_number, per_page: 100 }
             );
-            if (existingComments.some((c) => c.body && c.body.includes(marker))) {
+            if (
+              existingComments.some(
+                (c) =>
+                  c.user?.login === 'github-actions[bot]' &&
+                  c.body &&
+                  c.body.includes(marker)
+              )
+            ) {
               core.info('SEP modification guidance already posted; nothing to do.');
               return;
             }
