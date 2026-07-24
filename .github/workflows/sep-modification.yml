@@ -1,0 +1,185 @@
+name: 'SEP Modification'
+
+# When a PR modifies existing files in the ecosystem/ directory it is proposing
+# a change to an existing SEP. Changes to an existing SEP should start as a
+# discussion and be reviewed by the SEP's original authors, so this workflow
+# converts the PR to a draft and posts a comment that explains the process and
+# mentions the authors listed in each modified SEP. Unlike the New SEP Proposal
+# workflow, the PR is not locked, since collaboration on the change itself is
+# welcome on the PR.
+#
+# Uses pull_request_target so the GITHUB_TOKEN has write access even for PRs
+# opened from forks. No untrusted PR code is checked out or executed; the job
+# only inspects the list of changed files via the API and reads SEP contents at
+# the PR's base commit, which is trusted content from this repository.
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+    paths:
+      - 'ecosystem/**'
+
+permissions:
+  issues: write
+  # write is required to convert the PR to a draft (the GraphQL
+  # convertPullRequestToDraft mutation); listing changed files only needs read.
+  pull-requests: write
+
+jobs:
+  sep-modification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Convert PR to draft and mention SEP authors
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const isSepFile = (f) =>
+              f.filename.startsWith('ecosystem/') &&
+              f.filename.endsWith('.md') &&
+              f.filename !== 'ecosystem/README.md';
+
+            // PRs that add a new SEP are handled by the New SEP Proposal
+            // workflow; defer to it even if the PR also modifies existing SEPs.
+            if (files.some((f) => f.status === 'added' && isSepFile(f))) {
+              core.info('PR adds a new SEP; deferring to the New SEP Proposal workflow.');
+              return;
+            }
+
+            const modifiedSepFiles = files.filter(
+              (f) => f.status === 'modified' && isSepFile(f)
+            );
+
+            if (modifiedSepFiles.length === 0) {
+              core.info('No existing SEP files modified; nothing to do.');
+              return;
+            }
+
+            // Idempotency guard: if guidance has already been posted on this PR,
+            // do nothing. This avoids duplicate comments when the workflow fires
+            // again (e.g. on reopened), and avoids re-drafting a PR that a
+            // maintainer or the author has deliberately marked ready for review.
+            const marker = '<!-- sep-modification-guidance -->';
+            const existingComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: pull_number, per_page: 100 }
+            );
+            if (existingComments.some((c) => c.body && c.body.includes(marker))) {
+              core.info('SEP modification guidance already posted; nothing to do.');
+              return;
+            }
+
+            // Read each modified SEP at the PR's base commit (trusted content
+            // from this repository, not the PR head) and pull the author GitHub
+            // handles and the discussion link out of its preamble.
+            const prAuthor = context.payload.pull_request.user.login.toLowerCase();
+            const baseSha = context.payload.pull_request.base.sha;
+            const sepInfos = [];
+            for (const f of modifiedSepFiles) {
+              const res = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: f.filename,
+                ref: baseSha,
+              });
+              const content = Buffer.from(res.data.content, 'base64').toString('utf8');
+
+              // Handles appear in the preamble's Author(s) line as <@handle>,
+              // (@handle), or bare @handle. Require the @ to follow the line
+              // start, whitespace, or an opening bracket so the domain part of
+              // author emails is never picked up as a handle, and validate the
+              // whole token as a legal GitHub username so tokens that only
+              // resemble one (e.g. non-GitHub handles with underscores) are not
+              // partially matched and misattributed to an unrelated user.
+              // Authors listed without a handle (plain names, emails,
+              // companies) are skipped.
+              const authorLine =
+                content.match(/^Authors?:(.*)$/m)?.[1] ?? '';
+              const handles = [
+                ...authorLine.matchAll(/(?:^|[\s<(,])@([^\s<>(),]+)/g),
+              ]
+                .map((m) => m[1])
+                .filter((h) => /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(h))
+                .filter((h) => h.toLowerCase() !== prAuthor);
+              const uniqueHandles = [...new Set(handles)];
+
+              const discussion =
+                content.match(/^Discussion:\s*(https?:\S+)\s*$/m)?.[1] ?? null;
+
+              sepInfos.push({ filename: f.filename, handles: uniqueHandles, discussion });
+            }
+
+            const defaultBranch = context.payload.repository.default_branch;
+            const readmeUrl = `https://github.com/${owner}/${repo}/blob/${defaultBranch}/ecosystem/README.md`;
+            const discussionsUrl =
+              'https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals';
+
+            const sepLines = sepInfos.map((s) => {
+              const parts = [`- \`${s.filename}\``];
+              if (s.handles.length > 0) {
+                parts.push(`— author(s): ${s.handles.map((h) => `@${h}`).join(', ')}`);
+              }
+              if (s.discussion) {
+                parts.push(`— [existing discussion](${s.discussion})`);
+              }
+              return parts.join(' ');
+            });
+
+            const body = [
+              marker,
+              '👋 Thanks for your contribution!',
+              '',
+              'This PR proposes changes to the following existing SEP(s):',
+              '',
+              ...sepLines,
+              '',
+              `Per the [SEP Contribution Process](${readmeUrl}#contribution-process), changes to an existing SEP should start as a **discussion**, and should be advocated with the SEP's author(s) — the author maintains the proposal, so engaging them is an important part of getting a change adopted. If you haven't already, please raise your proposed change on the SEP's existing discussion linked above, or start one on the [GitHub discussion forum](${discussionsUrl}).`,
+              '',
+              'I have **marked this PR as a draft** for now. Once the change has been discussed and is ready for a maintainer to review and merge, mark it as ready for review.',
+              '',
+              'Thanks for helping improve the Stellar ecosystem! 🚀',
+            ].join('\n');
+
+            // Convert the PR to a draft BEFORE posting the guidance comment. The
+            // comment carries the idempotency marker that the guard above checks,
+            // so it must be the last step: if the draft conversion fails, no
+            // marker is left behind and a rerun or reopened event will retry the
+            // whole sequence instead of short-circuiting on the marker with the
+            // PR left ready for review.
+            //
+            // There is no REST endpoint for this, so use the GraphQL
+            // convertPullRequestToDraft mutation. Already-draft PRs are left
+            // as-is. node_id is the PR's GraphQL global ID from the event payload.
+            if (context.payload.pull_request.draft) {
+              core.info('PR is already a draft; skipping draft conversion.');
+            } else {
+              await github.graphql(
+                `mutation($pullRequestId: ID!) {
+                  convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+                    pullRequest { isDraft }
+                  }
+                }`,
+                { pullRequestId: context.payload.pull_request.node_id }
+              );
+              core.info(`Converted PR #${pull_number} to a draft.`);
+            }
+
+            // Post the guidance comment last; its marker records that the
+            // sequence completed so the guard above can skip subsequent runs.
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body,
+            });
+
+            core.info(`Posted SEP modification guidance on PR #${pull_number}.`);
