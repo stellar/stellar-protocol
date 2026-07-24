@@ -46,20 +46,27 @@ jobs:
               per_page: 100,
             });
 
-            const isSepFile = (f) =>
+            // New SEPs aren't numbered yet, so the defer check below uses the
+            // same broad predicate as the New SEP Proposal workflow; existing
+            // SEPs always have numbered filenames, so the modified check is
+            // strict and won't treat future support docs under ecosystem/ as
+            // SEPs.
+            const isNewSepFile = (f) =>
               f.filename.startsWith('ecosystem/') &&
               f.filename.endsWith('.md') &&
               f.filename !== 'ecosystem/README.md';
+            const isExistingSepFile = (f) =>
+              /^ecosystem\/sep-\d{4}\.md$/.test(f.filename);
 
             // PRs that add a new SEP are handled by the New SEP Proposal
             // workflow; defer to it even if the PR also modifies existing SEPs.
-            if (files.some((f) => f.status === 'added' && isSepFile(f))) {
+            if (files.some((f) => f.status === 'added' && isNewSepFile(f))) {
               core.info('PR adds a new SEP; deferring to the New SEP Proposal workflow.');
               return;
             }
 
             const modifiedSepFiles = files.filter(
-              (f) => f.status === 'modified' && isSepFile(f)
+              (f) => f.status === 'modified' && isExistingSepFile(f)
             );
 
             if (modifiedSepFiles.length === 0) {
@@ -124,8 +131,13 @@ jobs:
                 .filter((h) => h.toLowerCase() !== prAuthor);
               const uniqueHandles = [...new Set(handles)];
 
+              // Discussion lines aren't always a single bare URL: some SEPs
+              // list multiple comma-separated URLs, others wrap the URL in
+              // Markdown brackets. Extract the first URL on the line.
+              const discussionLine =
+                content.match(/^Discussion:(.*)$/m)?.[1] ?? '';
               const discussion =
-                content.match(/^Discussion:\s*(https?:\S+)\s*$/m)?.[1] ?? null;
+                discussionLine.match(/https?:\/\/[^\s,\])]+/)?.[0] ?? null;
 
               sepInfos.push({ filename: f.filename, handles: uniqueHandles, discussion });
             }
