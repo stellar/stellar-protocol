@@ -1,7 +1,7 @@
 ## Preamble
 
 ```
-CAP: TBD
+CAP: 0087
 Title: Host functions for ML-DSA signature verification
 Working Group:
     Owner: Jay Geng <@jayz22>
@@ -10,7 +10,7 @@ Working Group:
 Status: Draft
 Created: 2026-06-05
 Discussion: https://github.com/orgs/stellar/discussions/1915
-Protocol version: 29
+Protocol version: TBD
 ```
 
 ## Simple Summary
