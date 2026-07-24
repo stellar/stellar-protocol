@@ -124,7 +124,8 @@ jobs:
               'https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals';
 
             const sepLines = sepInfos.map((s) => {
-              const parts = [`- \`${s.filename}\``];
+              const fileUrl = `https://github.com/${owner}/${repo}/blob/${defaultBranch}/${s.filename}`;
+              const parts = [`- [\`${s.filename}\`](${fileUrl})`];
               if (s.handles.length > 0) {
                 parts.push(`— author(s): ${s.handles.map((h) => `@${h}`).join(', ')}`);
               }
