@@ -98,8 +98,8 @@
 | [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Implemented |
 | [CAP-0083](cap-0083.md) | TBD | Allow validators to vote to drop the transaction set from the current ledger | Brett Boston | Accepted |
 | [CAP-0085](cap-0085.md) | TBD | Externally managed contract executables | Dmytro Kozhevin | Accepted |
-| [CAP-0084](cap-0084.md) | TBD | Muxed Contract Addresses | Jake Urban | Final Comment Period |
-| [CAP-0086](cap-0086.md) | TBD | Host functions for sparse Symbol-keyed map creation and unpacking | Dmytro Kozhevin | Final Comment Period |
+| [CAP-0084](cap-0084.md) | TBD | Muxed Contract Addresses | Jake Urban | Accepted |
+| [CAP-0086](cap-0086.md) | TBD | Host functions for sparse Symbol-keyed map creation and unpacking | Dmytro Kozhevin | Accepted |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
