@@ -9,9 +9,10 @@ name: 'SEP Modification'
 # welcome on the PR.
 #
 # Uses pull_request_target so the GITHUB_TOKEN has write access even for PRs
-# opened from forks. No untrusted PR code is checked out or executed; the job
-# only inspects the list of changed files via the API and reads SEP contents at
-# the PR's base commit, which is trusted content from this repository.
+# opened from forks. It is critical that this job never checks out or executes
+# untrusted PR data: it ONLY inspects the list of changed files via the API and
+# reads SEP contents at the PR's base commit, which is trusted content from
+# this repository.
 
 on:
   pull_request_target:
