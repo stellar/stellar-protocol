@@ -284,8 +284,8 @@ and participate in discussion during the meeting.
 You may invite any other members of your working group.
 
 The protocol meetings will be used to decide on next step:
-  - If the CAP has received support and general consensus, it is moved to `Awaiting Decision` ;
-  - If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned ; 
+  - If the CAP has received support and general consensus, it is moved to `Awaiting Decision`;
+  - If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned;
   - If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
 
 ### Awaiting Decision -> Final Comment Period (FCP)
