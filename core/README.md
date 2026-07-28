@@ -293,7 +293,7 @@ The protocol meetings will be used to decide on next step:
   - Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
     majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
     raises concerns).
-  - It can take upwards of 3 meetings before a disposition is reached.
+  - It can take up to 3 meetings before a disposition is reached.
 
 ### FCP -> Accepted/Rejected
 - After a week of an Final Comment Period (FCP) where any major concerns that have not been
