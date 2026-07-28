@@ -135,11 +135,17 @@ jobs:
 
               // Discussion lines aren't always a single bare URL: some SEPs
               // list multiple comma-separated URLs, others wrap the URL in
-              // Markdown brackets. Extract the first URL on the line.
+              // Markdown brackets. Extract the URLs on the line, preferring
+              // the GitHub link when one is present.
               const discussionLine =
                 content.match(/^Discussion:(.*)$/m)?.[1] ?? '';
+              const urls = [
+                ...discussionLine.matchAll(/https?:\/\/[^\s,\])]+/g),
+              ].map((m) => m[0]);
               const discussion =
-                discussionLine.match(/https?:\/\/[^\s,\])]+/)?.[0] ?? null;
+                urls.find((u) => u.startsWith('https://github.com/')) ??
+                urls[0] ??
+                null;
 
               sepInfos.push({ filename: f.filename, handles: uniqueHandles, discussion });
             }
