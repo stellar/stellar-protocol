@@ -8,6 +8,7 @@ name: 'SEP Modification'
 # workflow, the PR is not locked, since collaboration on the change itself is
 # welcome on the PR.
 #
+# CRITICAL:
 # Uses pull_request_target so the GITHUB_TOKEN has write access even for PRs
 # opened from forks. It is critical that this job never checks out or executes
 # untrusted PR data: it ONLY inspects the list of changed files via the API and
@@ -31,7 +32,7 @@ permissions:
 
 jobs:
   sep-modification:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Convert PR to draft and mention SEP authors
         uses: actions/github-script@v7
