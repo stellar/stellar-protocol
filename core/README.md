@@ -18,7 +18,7 @@
   and whose [exit criteria](../cap-template.md#exit-criteria) have been met. It will graduate to
   **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
 - **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
-  final CAP should only be updated to correct errata.
+  final CAP should only be updated to correct errata or for procedural updates.
 
 ### Additional Statuses
 - **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
