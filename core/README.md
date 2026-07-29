@@ -5,9 +5,8 @@
 ### Primary Workflow
 - **Draft** — A CAP that is currently open for consideration and actively being discussed.
 - **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
-  Core Team. After a maximum of three meetings, a vote will take place that will set the CAP's
-  intended disposition of Acceptance or Rejection for the Final Comment Period, or go back into a
-  **Draft** state.
+  Core Team. After a maximum of three meetings, a vote will take place that will move the CAP
+  to **Final Comment Period** state, or back into a **Draft** state.
 - **Final Comment Period** — A CAP that has entered a Final Comment Period with an
   intended disposition of Acceptance or Rejection. After one week has passed, during which any new concerns should be
   addressed, the CAP will move to **Accepted** or **Rejected** according to its intended
@@ -293,9 +292,9 @@ The protocol meetings will be used to decide on next step:
 - A vote will take place among the CAP Core Team.
   - A unanimous approval from the CAP Core Team will move the CAP to `Final Comment Period` with
     an intended disposition of Acceptance.
-  - Otherwise, the CAP will be given feedback and either move to `Final Comment Period` with an
-    intended disposition of Rejection (if the majority of the CAP Core Team raises concerns) or
-    return to `Draft` (if only a minority of the CAP Core Team raises concerns).
+  - Otherwise, the CAP will be given feedback and either,
+    - move to `Final Comment Period` with an intended disposition of Rejection documenting the reason (if the majority of the CAP Core Team raises concerns), or
+    - return to `Draft` (if only a minority of the CAP Core Team raises concerns).
   - It can take upwards of 3 meetings before a disposition is reached.
 
 ### Final Comment Period -> Accepted or Rejected
