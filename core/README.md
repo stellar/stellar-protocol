@@ -16,8 +16,9 @@
   due to the issues that may arise during an initial implementation.
 - **Implemented** - A CAP that has been implemented with the protocol version specified in the CAP,
   and whose [exit criteria](../cap-template.md#exit-criteria) have been met. It will graduate to
-  **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
-- **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network.
+  **Final** when it has been formally accepted by a Stellar Consensus Protocol (SCP) quorum of
+  validators (nodes) on the network.
+- **Final** — A CAP that has been accepted by an SCP quorum of validators (nodes) on the network.
   Final CAPs can be updated only to follow procedure, add implementation considerations, or correct
   errata (such as typos).
 
@@ -324,8 +325,8 @@ issues arise, a CAP team member moves it to **Implemented**.
 ### CAP Finalization
 
 Once an implemented CAP has been released in a specified version, the CAP should be updated with
-the protocol version that the implementation targets. From there, once a majority of validators on
-the network have accepted the implementation, it will move to **Final**.
+the protocol version that the implementation targets. From there, once an SCP quorum of validators
+on the network has accepted the implementation, it will move to **Final**.
 
 ## CAP Team Members
 
