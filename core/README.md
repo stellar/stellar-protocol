@@ -17,8 +17,9 @@
 - **Implemented** - A CAP that has been implemented with the protocol version specified in the CAP,
   and whose [exit criteria](../cap-template.md#exit-criteria) have been met. It will graduate to
   **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
-- **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
-  final CAP should only be updated to correct errata or for procedural updates.
+- **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network.
+  Final CAPs can be updated only to follow procedure, add implementation considerations, or correct
+  errata (such as typos).
 
 ### Additional Statuses
 - **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
