@@ -3,15 +3,16 @@
   "title": "VRF-Based Protocol Randomness and Fair Leader Selection",
   "cryptographic_building_block": "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381)",
   "building_block_pr": "https://github.com/stellar/stellar-core/pull/5409",
-  "note": "Protocol-level conformance fixture. `network_id` is the real 32-byte Application::getNetworkID() = SHA-256(network passphrase), with no prefix. Public `contributions` are deterministic placeholders whose RFC 9381 proofs are exercised by the PR #5409 harness; the beacon and sub-seeds below are the protocol-level derivations pinned by this CAP.",
+  "note": "Protocol-level conformance fixture. `network_id` is the real 32-byte Application::getNetworkID() = SHA-256(network passphrase), no prefix. `anchor_ledger_header_hash` is the canonical LedgerHeader hash of ledger (s-3) and is used directly (not re-hashed) as prior_context(s). Contributions are ordered by NodeID ascending per the CAP. The beta placeholders model VRF determinism-in-transcript; real RFC 9381 proofs are exercised by the PR #5409 harness.",
   "constants": {
     "domain": "stellar-vrf",
     "transcript_version": 1,
     "sub_domain": "stellar-vrf/sub",
     "network_id_hash": "SHA-256",
-    "anchor_hash": "SHA-256",
+    "anchor_hash": "LedgerHeaderHash (32 bytes, not re-hashed)",
     "beacon_hash": "SHA-256",
     "subseed_hash": "SHA-512[0:32]",
+    "beta_label_hash": "SHA-512[0:64] (protocol placeholder)",
     "purpose_leader": 1,
     "purpose_prng": 2,
     "purpose_order": 3,
@@ -22,17 +23,26 @@
     "network_id": "cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
     "slot": 123456789,
     "anchor_ledger_header_hash": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-    "contributions": [
-      "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
-      "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80",
-      "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0"
+    "contributors": [
+      {
+        "node_id": "2532702abdee30d797b4d1aebe99f3a55dfb90334713f2d943f2829c7245fe42",
+        "beta": "116c3b9129cc398e56b5d240c02b967e92fdd3eada32db967de3f705c01c6e9cdcc8046d6f4240c132eacc2d175ae2ef7e07a63a5feec6b71b16d8ad909b81d1"
+      },
+      {
+        "node_id": "ce4f749c91b2a17bafa4d80d3896eacb6fdc0ee06d9ac3f72fb684fee740755d",
+        "beta": "203ea8091d191f37ba6de0caae7fe94056f1db3f6ee01660bc0b88dff00fb7c92f786ea77dfd4df0bd9c15fc51782c49a91854749f276be431848e8660fb835f"
+      },
+      {
+        "node_id": "d7e1f2a81b93d6562fade12feeba445afd85725029f323bbe0bbb6c04ae16310",
+        "beta": "494d0693e654ece28ffec24effc71ec0ebd94e1eaf40faf2f0749019f907fb7926d0ea981fa425247cce5338cd18d565060c6de07243f52b8f62b59dfa675d48"
+      }
     ],
-    "beacon": "0fc971a9e0e642d09da32dc57c3ad1a975fe4a3cdb2740a9cbc43fc58f60663e",
-    "V1_transcript_hash_leader": "84a4c177de82370a4a9d05eea20b251dea7814d2811aaceac7ab59e750ce91d1",
-    "V4_transcript_hash_cross_network": "82a0370ee56b21c1fd77a689dcfa318516243ea5a0576e1d55589c844f1363bc",
-    "V5_transcript_hash_cross_slot": "527c6ce0bc496f5002d613bad42fdaba754ff1e57ad5bfa74b16bddbffc930d2",
-    "V6_subseed_prng": "27caf3cbd56321fde02f769856eb24cdf428c37c5b53e8cef36ad900e162774d",
-    "V6_subseed_order": "2ceab89fecb2ded113e8325ed0fcf92ba85d8384324574ea68ba50ae1937f6d1",
-    "V8_transcript_hash_mutated": "782c7677ed2fcabfc090ba6a9715114aa28757556ee64cf4d72cc06bd0659032"
+    "beacon": "9437773a7e82b3d42ddeb4d112ffedfd67b84fe43aeed9129fc6b272b8accbe6",
+    "V1_transcript_hash_leader": "bb42ea934c875235ea10687556278e2094b65afe13ae851071569c50cdc3b4e0",
+    "V4_beta_under_mainnet": "65e46dc63d908e8e8e87c6579b3cb8319d591c43df135e382929dd4a18d95a89b05be2e2307091e133de96b84ca642656a2b765d19edccb417a5f15aec36aff1",
+    "V5_transcript_hash_cross_slot": "f53dc7e3c41a5b4942721d27beb0908fb185100f08a236a2660e46eb946ec73b",
+    "V6_subseed_prng": "aa3f8ff8124cddbef9994a0709542bc96d27300936d807789e7a96c932122397",
+    "V6_subseed_order": "928145fafd63feab05b4505266d88a2faa2c31214fe97c2acc68e6996481164e",
+    "V8_transcript_hash_mutated": "0807f95322d6e81997bf7fdff0fbaf78c5690dcb13bc17cb05f4e2de3186847b"
   }
 }
