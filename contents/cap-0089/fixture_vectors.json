@@ -1,30 +1,38 @@
 {
   "cap": "CAP-0089",
-  "title": "VRF-Driven Protocol Randomness and Leader Election",
+  "title": "VRF-Based Protocol Randomness and Fair Leader Selection",
   "cryptographic_building_block": "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381)",
   "building_block_pr": "https://github.com/stellar/stellar-core/pull/5409",
-  "note": "Fixture inputs marked 'fixture_sk' are deterministic placeholders; the authoritative VRF beta/proof values are the RFC 9381 vectors and the PR #5409 harness. This file pins the protocol-level derivations (transcript, network/slot binding, sub-seeds) with real digests so vectors V4/V5/V6/V8 are executable.",
+  "note": "Protocol-level conformance fixture. `network_id` is the real 32-byte Application::getNetworkID() = SHA-256(network passphrase), with no prefix. Public `contributions` are deterministic placeholders whose RFC 9381 proofs are exercised by the PR #5409 harness; the beacon and sub-seeds below are the protocol-level derivations pinned by this CAP.",
   "constants": {
     "domain": "stellar-vrf",
     "transcript_version": 1,
     "sub_domain": "stellar-vrf/sub",
-    "sub_version": 1,
+    "network_id_hash": "SHA-256",
+    "anchor_hash": "SHA-256",
+    "beacon_hash": "SHA-256",
+    "subseed_hash": "SHA-512[0:32]",
     "purpose_leader": 1,
     "purpose_prng": 2,
     "purpose_order": 3,
-    "network_id_testnet": "000000TBD"
+    "network_id_testnet": "cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
+    "network_id_mainnet": "7ac33997544e3175d266bd022439b22cdb16508c01163f26e5cb2a3e1045a979"
   },
   "testnet": {
-    "network_id": "00cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
+    "network_id": "cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
     "slot": 123456789,
-    "fixture_ledger_header_hash": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-    "fixture_txset_contents_hash": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
-    "fixture_beta": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
-    "V1_transcript_hash_leader": "67cce29e3eda32ee8fe7ded0db16ede0482bef5e7696ecf212ab6ca25e354dceefb5341ba8e7c32b92e2becfe978ed07ea076f46dfdadcc5d5f650d6b9317100",
-    "V4_transcript_hash_same_net_same_slot": "67cce29e3eda32ee8fe7ded0db16ede0482bef5e7696ecf212ab6ca25e354dceefb5341ba8e7c32b92e2becfe978ed07ea076f46dfdadcc5d5f650d6b9317100",
-    "V4_transcript_hash_cross_network_mainnet": "de6d8c85751c37085c822561e37bc566741808c5380c8539c1775e28ef7a9c5e472888c15033eb381f34d17ea2198a9a7f0b16d32f826d556152aa1131bb1282",
-    "V5_transcript_hash_cross_slot": "29a2d4d5390c470c7307f798d48c898ca27671ac8d1d3f8fab14de100e731456e2528a62c38653fd7d63cfe2918c97ad612ec0ab3f9e5fe99d333bd713060701",
-    "V6_subseed_prng": "fdc20a241f9fc74291b2abba4a894bfa316de000a65e5d2f792ad834de5e74a9",
-    "V6_subseed_order": "94f23ed53ab721653ccbc97de82ace52d011a7c173ef24f73d4401606d902454"
+    "anchor_ledger_header_hash": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "contributions": [
+      "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+      "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80",
+      "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0"
+    ],
+    "beacon": "0fc971a9e0e642d09da32dc57c3ad1a975fe4a3cdb2740a9cbc43fc58f60663e",
+    "V1_transcript_hash_leader": "84a4c177de82370a4a9d05eea20b251dea7814d2811aaceac7ab59e750ce91d1",
+    "V4_transcript_hash_cross_network": "82a0370ee56b21c1fd77a689dcfa318516243ea5a0576e1d55589c844f1363bc",
+    "V5_transcript_hash_cross_slot": "527c6ce0bc496f5002d613bad42fdaba754ff1e57ad5bfa74b16bddbffc930d2",
+    "V6_subseed_prng": "27caf3cbd56321fde02f769856eb24cdf428c37c5b53e8cef36ad900e162774d",
+    "V6_subseed_order": "2ceab89fecb2ded113e8325ed0fcf92ba85d8384324574ea68ba50ae1937f6d1",
+    "V8_transcript_hash_mutated": "782c7677ed2fcabfc090ba6a9715114aa28757556ee64cf4d72cc06bd0659032"
   }
 }

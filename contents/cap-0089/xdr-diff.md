@@ -5,62 +5,46 @@ This file records, as a canonical unified diff, the changes to the XDR in the
 CAP-0089. The authoritative copy of this diff — which is machine-checked by the
 `mddiffcheck` CI gate against commit
 `03cbf40cec4d89f82171bf895ef7598458d83e1b` of `stellar-xdr` — is embedded in
-[`core/cap-0089.md`](../core/cap-0089.md) under the caption
+[`core/cap-0089.md`](../../core/cap-0089.md) under the caption
 `diff mddiffcheck.base=03cbf40cec4d89f82171bf895ef7598458d83e1b`.
 
-The changes are additive and versioned behind the `VRF_RANDOMNESS` guard,
-following the precedent set by CAP-0088's `MS_CLOSE_TIME` arms of the same
-union.
+The change is additive and versioned behind the `VRF_RANDOMNESS` guard. It
+adds a **new orthogonal top-level field** to `struct StellarValue` rather than a
+new arm of the `ext` union, so it coexists with CAP-0088's `MS_CLOSE_TIME` arms
+(and the empty-tx-set arms) of that union. The field is a 32-byte `Hash`
+(`opaque Hash[32]`), matching the `SHA-256` width used throughout CAP-0089.
 
-## `Stellar-ledger.x`
-
-### `StellarValueType` — add `STELLAR_VALUE_VRF`
-
-Note that numeric values `3` and `4` are already taken by the CAP-0088
-`MS_CLOSE_TIME` arms, so the new arm is `STELLAR_VALUE_VRF = 5`.
+## `Stellar-ledger.x` — add `vrfBeaconNext` to `struct StellarValue`
 
 ```diff
-@@ -20,6 +20,10 @@ enum StellarValueType
-     STELLAR_VALUE_SIGNED_MS = 3,
-     STELLAR_VALUE_EMPTY_TX_SET_MS = 4
+@@ -76,6 +76,15 @@ struct StellarValue
  #endif // MS_CLOSE_TIME
-+#ifdef VRF_RANDOMNESS
-+    ,
-+    STELLAR_VALUE_VRF = 5
-+#endif // VRF_RANDOMNESS
- };
-```
-
-### `StellarValue.ext` — add `vrfValue` arm
-
-```diff
-@@ -74,6 +78,19 @@ struct StellarValue
-             LedgerCloseValueSignature lcValueSignature;
-         } proposedMsValue;
- #endif // MS_CLOSE_TIME
-+#ifdef VRF_RANDOMNESS
-+    case STELLAR_VALUE_VRF:
-+        struct
-+        {
-+            // the leader-elected beacon for this slot, verifiable by every node
-+            opaque<64> vrfBeta;               // ECVRF output (beta), RFC 9381
-+            opaque<80> vrfProof;              // pi = Gamma || c || s
-+            NodeID vrfNodeID;                 // validating node that self-selected
-+            uint32 vrfSlot;                   // ledger sequence the value applies to
-+            Hash vrfTranscriptHash;           // H(T(N)) -- fixed prior-context transcript
-+            LedgerCloseValueSignature lcValueSignature;
-+        } vrfValue;
-+#endif // VRF_RANDOMNESS
      }
      ext;
++
++#ifdef VRF_RANDOMNESS
++    // CAP-0089: randomness beacon for the next slot. Aggregated from verified,
++    // delayed-reveal VRF contributions finalized at close of THIS ledger, so
++    // beacon(L) is public and immutable before slot L begins. Carried as an
++    // orthogonal top-level field (not an `ext` arm) so it can coexist with any
++    // MS_CLOSE_TIME / empty-tx-set arm of `ext` above.
++    Hash vrfBeaconNext; // 32-byte SHA-256 (see "Hash" in Stellar-types.x)
++#endif // VRF_RANDOMNESS
  };
 ```
 
-### Unchanged
+`vrfBeaconNext` is the aggregate randomness beacon `B(s)` for the slot `s`
+produced immediately after the ledger carrying it closes, computed from the
+verified, delayed-reveal VRF contributions accepted during that ledger. Because
+it is a plain 32-byte `Hash`, it serializes compactly and needs no variable
+length.
+
+## Unchanged
 
 The `GeneralizedTransactionSet`, `TransactionSetV1`, and
-`TransactionSetV1.phases` are **not** modified by this CAP. The beacon is
-carried in `StellarValue.ext.vrfValue` (the consensus-critical value), and the
-per-purpose sub-seeds are derived deterministically by every node from the
-winner's committed `beta` and the fixed prior-context transcript, so no
-per-transaction or per-set inflation is introduced.
+`TransactionSetV1.phases` are **not** modified by this CAP. The existing `ext`
+union and all of its `StellarValueType` arms (including the CAP-0088
+`MS_CLOSE_TIME` arms and the empty-tx-set arms) are **not** modified and remain
+fully selectable. The per-purpose sub-seeds are derived deterministically by
+every node from the shared beacon, so no per-transaction or per-set inflation
+is introduced.
