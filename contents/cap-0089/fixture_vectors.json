@@ -1,0 +1,30 @@
+{
+  "cap": "CAP-0089",
+  "title": "VRF-Driven Protocol Randomness and Leader Election",
+  "cryptographic_building_block": "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381)",
+  "building_block_pr": "https://github.com/stellar/stellar-core/pull/5409",
+  "note": "Fixture inputs marked 'fixture_sk' are deterministic placeholders; the authoritative VRF beta/proof values are the RFC 9381 vectors and the PR #5409 harness. This file pins the protocol-level derivations (transcript, network/slot binding, sub-seeds) with real digests so vectors V4/V5/V6/V8 are executable.",
+  "constants": {
+    "domain": "stellar-vrf",
+    "transcript_version": 1,
+    "sub_domain": "stellar-vrf/sub",
+    "sub_version": 1,
+    "purpose_leader": 1,
+    "purpose_prng": 2,
+    "purpose_order": 3,
+    "network_id_testnet": "000000TBD"
+  },
+  "testnet": {
+    "network_id": "00cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
+    "slot": 123456789,
+    "fixture_ledger_header_hash": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "fixture_txset_contents_hash": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+    "fixture_beta": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+    "V1_transcript_hash_leader": "67cce29e3eda32ee8fe7ded0db16ede0482bef5e7696ecf212ab6ca25e354dceefb5341ba8e7c32b92e2becfe978ed07ea076f46dfdadcc5d5f650d6b9317100",
+    "V4_transcript_hash_same_net_same_slot": "67cce29e3eda32ee8fe7ded0db16ede0482bef5e7696ecf212ab6ca25e354dceefb5341ba8e7c32b92e2becfe978ed07ea076f46dfdadcc5d5f650d6b9317100",
+    "V4_transcript_hash_cross_network_mainnet": "de6d8c85751c37085c822561e37bc566741808c5380c8539c1775e28ef7a9c5e472888c15033eb381f34d17ea2198a9a7f0b16d32f826d556152aa1131bb1282",
+    "V5_transcript_hash_cross_slot": "29a2d4d5390c470c7307f798d48c898ca27671ac8d1d3f8fab14de100e731456e2528a62c38653fd7d63cfe2918c97ad612ec0ab3f9e5fe99d333bd713060701",
+    "V6_subseed_prng": "fdc20a241f9fc74291b2abba4a894bfa316de000a65e5d2f792ad834de5e74a9",
+    "V6_subseed_order": "94f23ed53ab721653ccbc97de82ace52d011a7c173ef24f73d4401606d902454"
+  }
+}

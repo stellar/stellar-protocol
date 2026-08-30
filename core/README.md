@@ -123,6 +123,7 @@
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0087](cap-0087.md) | Host functions for ML-DSA signature verification | Jay Geng | Draft |
 | [CAP-0088](cap-0088.md) | Millisecond-Resolution Close Times | Garand Tyson | Draft |
+| [CAP-0089](cap-0089.md) | VRF-Driven Protocol Randomness and Leader Election | EslaM-X | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
