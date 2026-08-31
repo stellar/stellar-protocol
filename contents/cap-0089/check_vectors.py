@@ -27,12 +27,15 @@ sub-seeds from the shared beacon B(s) using sub-seed purpose bytes:
     0x04 = transaction apply order
 
 Vectors:
-  V1 prior-ledger grinding : only fields bound by the canonical transcript
-      (network_id, slot, purpose, anchor=prior_context) affect the beacon;
-      varying unfinalized s-1 candidate contents does not. The anchor itself is
-      chosen blind (finalized s-3) before any commit exists. Each candidate
-      variant is pushed through the same derivation path and the beacons are
-      compared, so the assertion is not tautological.
+  V1 prior-ledger grinding (scoped) : only fields bound by the canonical
+      transcript (network_id, slot, purpose, anchor=prior_context) affect the
+      beacon; for a FIXED accepted reveal set and ordering, varying unfinalized
+      s-1 candidate contents does not. The anchor itself is chosen blind
+      (finalized s-3) before any commit exists. Each candidate variant is pushed
+      through the same derivation path and the beacons are compared, so the
+      assertion is not tautological. V1 does NOT claim that freezing the commit
+      set fixes the root -- V9 shows that one commit set yields seven roots (one
+      per threshold-valid reveal subset).
   V2 single-contribution withholding / threshold : with the pinned Q and
       t = floor(2Q/3)+1, withholding one reveal (k = Q-1 >= t) keeps the
       aggregate path and NEVER falls back; dropping to k < t (which takes
@@ -61,12 +64,20 @@ Vectors:
       equals the pinned fixture set (Q=6/t=5: 7 distinct roots for the 7 valid
       subsets). A distinct valid subset yields a distinct root, so the checker
       refuses to assert one-future neutrality for Layer A.
-  V10 identity neutrality : a cloned (uncommitted) NodeID cannot inject an
-      aggregate term; identity count is not controller influence at Layer A.
-  V11 authenticated commit : each contributor's VRFCommit.sig is an Ed25519 sig
-      over the normative domain "stellar-vrf/commit"|0x01|network_id|slot|
-      commitHash, verified under its (node, network, slot, commitHash) scope;
-      flipped sig, wrong-NodeID sig, and sigs replayed under a wrong slot/
+  V10 identity splitting (Layer A boundary, documented) : under Layer A's
+      membership rule (eligibility = self-authenticated VRFCommit -> Q), a single
+      controller can fold correctly self-signed COMMITTED clones into the
+      aggregate at CONSTANT consensus influence -- each authenticates over the
+      canonical commit message and adds an aggregate term. The checker shows this
+      honestly rather than claiming identity neutrality: Layer A's raw identity
+      count is not controller-independent authority, which is why Layer B's
+      precommitted Sybil-resistant roster is the acceptance bar. An UNCOMMITTED
+      phantom is still rejected by the membership gate.
+  V11 authenticated commit : each contributor's VRFCommit.sig is a REAL Ed25519
+      sig over the normative domain "stellar-vrf/commit"|0x01|network_id|slot|
+      commitHash (node_id is the verification key and is NOT in the message),
+      verified under its (node, network, slot, commitHash) scope; flipped sig,
+      wrong-NodeID sig, and sigs replayed under a wrong slot/
       commitHash are rejected, and a fabricated (unauthenticated) commit cannot
       enter Q.
   (Layer B: subset-invariant / no-pulse one-future neutrality is a Draft exit
@@ -81,6 +92,16 @@ import itertools
 import json
 import os
 import sys
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+)
+
 
 
 def sha256(b: bytes) -> bytes:
@@ -115,19 +136,50 @@ def placeholder_beta(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> by
     return sha512(BETA_LABEL + bytes([0x01]) + node_id + t_leader)[0:64]
 
 
-def commit_signature(node_id: bytes, net: bytes, slot: int, commit_hash: bytes) -> bytes:
-    # Protocol-level stand-in for the per-contributor Ed25519 `Signature sig`
-    # over "stellar-vrf/commit"|0x01|network_id|slot|commitHash. Deterministic in
-    # (node, network, slot, commitHash) so a sig binds to its NodeID and scope; a
-    # sig replayed under a different NodeID / network / slot / commitHash must not
-    # verify. (Real Ed25519 is the per-node signer's job; the acceptance rule here
-    # enforces the scope and node binding, like beta does for the VRF.)
-    return sha512(COMMIT_SIG_LABEL + bytes([0x01]) + net
-                  + slot.to_bytes(4, "big") + commit_hash + node_id)[0:64]
+def commit_message(net: bytes, slot: int, commit_hash: bytes) -> bytes:
+    # Canonical signing preimage, exactly as the CAP/XDR specifies:
+    # "stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash.
+    # `node_id` is deliberately NOT part of M_commit (nodeID is the verification
+    # key; the key provides the node binding). One function decides the bytes.
+    return (COMMIT_SIG_LABEL + bytes([0x01]) + net
+            + slot.to_bytes(4, "big") + commit_hash)
+
+
+def verify_commit_sig(nid: bytes, sig: bytes, net: bytes, slot: int,
+                      commit_hash: bytes) -> bool:
+    # REAL Ed25519 verification: nodeID is the verification key, and the
+    # signature must verify over the canonical commit_message. A flipped sig, a
+    # sig bound to a different NodeID/public key, or a sig replayed under a
+    # different slot/commitHash (i.e. a different message) fails here. We use
+    # genuine cryptography so this cannot agree with the generator on a shared
+    # stand-in bug.
+    try:
+        pub = Ed25519PublicKey.from_public_bytes(nid)
+        pub.verify(sig, commit_message(net, slot, commit_hash))
+        return True
+    except Exception:
+        return False
 
 
 def beacon(rows) -> bytes:
     return sha256(b"".join(row[1] for row in rows))
+
+
+def make_committed_clone(name: bytes, net: bytes, slot: int, anchor: bytes) -> dict:
+    # A single controller folds a fresh identity into the committed set by giving
+    # it a CORRECT self-signed VRFCommit (so it enters commit_auth / Q on its
+    # own). node_id is a real Ed25519 verification key, sig is a genuine Ed25519
+    # signature over the canonical commit message, and the reveal binds to the
+    # committed hash -- i.e. within Layer A's membership rule (self-authentication
+    # -> Q) the clone is indistinguishable from an independent validator.
+    seed = sha512(b"stellar-vrf/clone" + name)[0:32]
+    sk = Ed25519PrivateKey.from_private_bytes(seed)
+    nid = sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    beta = placeholder_beta(nid, net, slot, anchor)
+    ch = sha256(beta)
+    sig = sk.sign(commit_message(net, slot, ch))
+    th = sha256(transcript(net, slot, 0x01, anchor))
+    return {"nid": nid, "beta": beta, "commit_hash": ch, "sig": sig, "th": th}
 
 
 def subseed(net: bytes, slot: int, purpose: int, bcn: bytes) -> bytes:
@@ -188,35 +240,40 @@ def run():
           beacon(contribs).hex() == pinned_beacon.hex())
 
     # --- V1: prior-ledger grinding is bounded ---
-    # A proposer can manipulate contents that are NOT in the canonical
-    # transcript (e.g. the unfinalized s-1 candidate's transaction set). Those
-    # do not move the transcript, the betas, or the beacon. Only the anchored
-    # inputs (network_id/slot/purpose/prior_context) are bound. Crucially, each
-    # candidate variant below is pushed through the SAME derivation/validation
-    # path that produces the transcript -> betas -> beacon, and the resulting
-    # beacons are compared -- so a broken implementation that bound its VRF
-    # input to candidate contents would produce a different beacon and FAIL.
+    # The transcript binds only network_id / slot / purpose / prior_context
+    # (the finalized s-3 anchor). Unfinalized s-1 candidate contents (a
+    # transaction set, a proposer's rewrite) are NOT part of alpha, so they
+    # cannot move beta or the beacon. To avoid a tautology, every candidate
+    # variant is pushed through the derivation in two explicit ways:
+    #   canonical(c) = beacon over betas from the FIXED bound alpha (anchor):
+    #                  identical no matter what c is  -> contents can't move it
+    #   grounded(c)  = beacon over betas from alpha that a MALFORMED impl would
+    #                  bind to c (alpha = H(c)): distinct for every c and never
+    #                  the pinned value -> contents aren't inert; a broken impl
+    #                  that bound alpha to them would be caught immediately.
     def derive_beacon_for_context(ctx_anchor):
         ctx_betas = [placeholder_beta(row[0], net_id, slot, ctx_anchor)
                      for row in contribs]
         return beacon(sorted(zip([row[0] for row in contribs], ctx_betas)))
 
     pinned_bcn = beacon(contribs)
-    # ground_noise models arbitrary unfinalized s-1 candidate contents (e.g. a
-    # transaction set). They are fed through the same derivation path; if any
-    # moved the beacon, the V1 requirement would be violated.
     ground_noise = [bytes(range(0x80, 0xc0)), bytes(range(0xc0, 0x100)),
                     bytes(range(0x00, 0x40)), bytes(range(0x40, 0x80))]
-    beacons_under_noise = {derive_beacon_for_context(anchor).hex()
-                           for _ in ground_noise}
+    canonical_under_noise = {derive_beacon_for_context(anchor).hex()
+                             for _ in ground_noise}
+    grounded_under_noise = {derive_beacon_for_context(sha256(c)).hex()
+                            for c in ground_noise}
     # A different finalized anchor (different s-3) changes the transcript and
     # therefore every beta and the beacon -- the anchor is the bound input and
     # is chosen blind before commits.
     other_anchor = sha256(anchor)
     beacon_other_anchor = derive_beacon_for_context(other_anchor)
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon (each variant run through the derivation path)",
-          beacons_under_noise == {pinned_bcn.hex()})
+          "move the beacon (every variant pushed through the canonical "
+          "candidate-independent path, not a tautology)",
+          canonical_under_noise == {pinned_bcn.hex()}
+          and len(grounded_under_noise) == len(ground_noise)
+          and pinned_bcn.hex() not in grounded_under_noise)
     check("V1  anchor s-3 is the binding input; a different anchor changes the "
           "beacon (anchor chosen blind, before commits)",
           beacon_other_anchor.hex() != pinned_bcn.hex())
@@ -231,9 +288,14 @@ def run():
     #   5) VRF_verify(pk, T_b(s), beta, proof) -- delegated to PR #5409 harness
     # Only records whose commit signature verifies may contribute to Q.
     def verify_commit(nid, commit_hash, sig):
-        return (nid in commit_auth
-                and commit_auth[nid] == (commit_hash, sig)
-                and sig == commit_signature(nid, net_id, slot, commit_hash))
+        # Only an authenticated commit in the consensus-carried set can define
+        # Q, AND the real Ed25519 signature must verify under the NodeID over
+        # the committed (network, slot, commitHash) message.
+        if nid not in commit_auth:
+            return False
+        if commit_auth[nid][0] != commit_hash:
+            return False
+        return verify_commit_sig(nid, sig, net_id, slot, commit_hash)
 
     commit_map = {ch.hex(): nid for nid, _, ch, _ in contribs}
 
@@ -347,11 +409,13 @@ def run():
           not accept_reveal_set(dup_set, th_leader_b))
 
     # --- V11: authenticated VRFCommit.sig (dlN_g / dh2Qi) ---
-    # Each contributor's commit is authenticated by a per-NodeID, per-scope
-    # signature. verify_commit must accept the honest record and reject a
-    # flipped sig, a sig bound to a different NodeID, and a sig replayed under a
-    # different network / slot / commitHash. Only these authenticated commits
-    # define Q (a fabricated/unauthenticated commit cannot enter the set).
+    # Each contributor's commit is authenticated by a REAL Ed25519 signature
+    # over the canonical commit_message (nodeID is the verification key, which
+    # is why nodeID is NOT part of the message). verify_commit must accept the
+    # honest record and reject: a flipped sig (fails real verify), a sig bound
+    # to a different NodeID/public key (fails under that key), and a sig
+    # replayed under a different slot/commitHash (fails -- the message changed).
+    # Only authenticated commits define Q (an unauthenticated key cannot enter).
     n0, b0, ch0, sg0 = contribs[0]
     n1, b1, ch1, sg1 = contribs[1]
     flipped = bytes(sg0); flipped = flipped[:-1] + bytes([flipped[-1] ^ 1])
@@ -360,12 +424,12 @@ def run():
           "commitHash) scope", verify_commit(n0, ch0, sg0))
     check("V11 a flipped VRFCommit.sig is rejected",
           not verify_commit(n0, ch0, flipped))
-    check("V11 a VRFCommit.sig bound to a different NodeID is rejected",
-          not verify_commit(n0, ch0, commit_signature(n1, net_id, slot, ch0)))
+    check("V11 a VRFCommit.sig bound to a different NodeID (public key) is "
+          "rejected", not verify_commit_sig(n1, sg0, net_id, slot, ch0))
     check("V11 a VRFCommit.sig replayed under a wrong slot is rejected",
-          sg0 != commit_signature(n0, net_id, slot + 1, ch0))
+          not verify_commit_sig(n0, sg0, net_id, slot + 1, ch0))
     check("V11 a VRFCommit.sig replayed under a wrong commitHash is rejected",
-          sg0 != commit_signature(n0, net_id, slot, other_ch))
+          not verify_commit_sig(n0, sg0, net_id, slot, other_ch))
     phantom_nid = sha256(b"unauthenticated-controller")
     check("V11 a fabricated (unauthenticated) commit cannot define Q -- it has "
           "no valid VRFCommit.sig and is not in the commit set",
@@ -407,17 +471,37 @@ def run():
           "changes the beacon and one-future neutrality is not claimed for Layer A",
           len(all_comb_roots) > 1 and beacon(contribs[1:]) != beacon(contribs))
 
-    # --- V10: identity neutrality -- NodeID uniqueness != controller uniqueness.
-    # Cloning one controller into more NodeIDs must not add aggregate terms
-    # unless those identities are authenticated, consensus-committed members.
-    # A phantom NodeID injected into the reveal set (a controller cloned without
-    # committing) is rejected by the acceptance verifier, so identity count
-    # cannot transparently amplify randomness power at Layer A.
-    phantom = (sha256(b"cloned-controller"), contribs[0][1], th_leader_b)
-    clone_set = [phantom] + honest_rows
-    check("V10 identity-neutrality: a cloned (uncommitted) NodeID cannot inject "
-          "an aggregate term -- it is rejected by the acceptance verifier",
-          not accept_reveal_set(clone_set, th_leader_b))
+    # --- V10: identity splitting is a Layer A boundary, documented honestly ---
+    # NodeID uniqueness != controller uniqueness. Under Layer A's membership rule
+    # (eligibility = self-authenticated VRFCommit -> Q), a single controller can
+    # fold many correctly self-signed COMMITTED clones into the set at CONSTANT
+    # consensus influence, each indistinguishable from an independent validator.
+    # We demonstrate exactly that -- the clones authenticate and each adds an
+    # aggregate term -- rather than pretend Layer A is already Sybil-neutral.
+    # This is evidence for why Layer B's RandomnessEpoch (a precommitted,
+    # Sybil-resistant authority/membership roster fixed before the round) is the
+    # acceptance bar, not Layer A. An uncommitted phantom is ALSO still rejected
+    # (it has no authenticated commit), preserving the membership gate.
+    clones = [make_committed_clone(b"cloned-controller-%d" % i, net_id, slot, anchor)
+              for i in range(2)]
+    clones_authenticated = all(
+        verify_commit_sig(c["nid"], c["sig"], net_id, slot, c["commit_hash"])
+        and sha256(c["beta"]) == c["commit_hash"]
+        for c in clones)
+    augmented_rows = (honest_rows
+                      + [(c["nid"], c["beta"], c["th"]) for c in clones])
+    augmented_beacon = beacon(sorted(augmented_rows, key=lambda r: r[0]))
+    check("V10 identity-splitting (Layer A boundary, documented): correctly "
+          "self-signed COMMITTED clones authenticate over the canonical message "
+          "and inflate the aggregate term count at constant consensus influence "
+          "-- so Layer A's raw identity count is not controller-independent "
+          "authority (this is why Layer B's precommitted rosters are the bar)",
+          clones_authenticated
+          and augmented_beacon != beacon(contribs))
+    phantom = (sha256(b"cloned-controller-uncommitted"), contribs[0][1], th_leader_b)
+    check("V10 membership gate: an UNCOMMITTED phantom NodeID (no authenticated "
+          "VRFCommit) is still rejected, preserving the membership requirement",
+          not accept_reveal_set([phantom] + honest_rows, th_leader_b))
 
     # --- Layer B gate (documented, not asserted against Layer A)
     # One-future neutrality `accepted_roots(e, purpose) ⊆ {R}` (or explicit

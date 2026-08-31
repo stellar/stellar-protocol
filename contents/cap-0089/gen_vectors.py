@@ -17,11 +17,27 @@ transcript `alpha`, and pseudorandomness/dependence on the transcript. The
 real ECVRF outputs and proofs are exercised by the PR #5409 harness; this
 fixture pins the protocol-level derivations (transcript, aggregation order,
 beacon, sub-seeds) so V1/V2/V4/V5/V6/V8 are executable without the crypto.
+
+`VRFCommit.sig` is a REAL Ed25519 signature (not a stand-in): each node's
+`node_id` IS its Ed25519 verification key, and the signature is computed with
+`cryptography` over the canonical, spec-defined message
+`"stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash`
+(no `node_id` in the message; the key provides the binding). A real fixture
+means the generator cannot silently share a stand-in bug with the checker.
 """
 import hashlib
 import itertools
 import json
 import sys
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+)
 
 
 def sha256(b: bytes) -> bytes:
@@ -60,14 +76,28 @@ FALLBACK_ANCHOR = sha256(ANCHOR)
 # which is the honest resilience property V2 must demonstrate. Only when a
 # one-third coalition (Q - t + 1 = 2 nodes here) withholds do we reach k < t and
 # re-enter the fallback.
-NODES = [
-    (sha256(b"validator:alpha"), b"validator:alpha"),
-    (sha256(b"validator:beta"), b"validator:beta"),
-    (sha256(b"validator:gamma"), b"validator:gamma"),
-    (sha256(b"validator:delta"), b"validator:delta"),
-    (sha256(b"validator:epsilon"), b"validator:epsilon"),
-    (sha256(b"validator:zeta"), b"validator:zeta"),
-]
+#
+# Each node_id IS a real Ed25519 verification key, deterministically derived so
+# the fixture is reproducible. `node_keypair(name)` returns (private, public);
+# the public key is the node's NodeID, and only that private key can produce a
+# `VRFCommit.sig` that verifies under the NodeID (real cryptography, so the
+# generator and checker cannot silently agree on the same stand-in bug).
+NODE_KEY_LABEL = b"stellar-vrf/node-key"
+
+
+def node_key(name: bytes) -> "tuple[Ed25519PrivateKey, bytes]":
+    seed = sha512(NODE_KEY_LABEL + name)[0:32]
+    sk = Ed25519PrivateKey.from_private_bytes(seed)
+    pub = sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    return sk, pub
+
+
+# NODES: (private_key, node_id=public_key, name) — 6 deterministic validators.
+_keypairs = [(node_key(b"validator:%s" % b))
+             for b in (b"alpha", b"beta", b"gamma", b"delta", b"epsilon", b"zeta")]
+NODES = [(sk, pub, name) for (sk, pub), name in zip(_keypairs, (
+    b"validator:alpha", b"validator:beta", b"validator:gamma",
+    b"validator:delta", b"validator:epsilon", b"validator:zeta"))]
 
 
 def transcript(net: bytes, slot: int, purpose: int, anchor: bytes) -> bytes:
@@ -93,25 +123,36 @@ def commit_hash_of(beta: bytes) -> bytes:
     return sha256(beta)
 
 
-def commit_signature(node_id: bytes, net: bytes, slot: int, commit_hash: bytes) -> bytes:
-    """Protocol-level stand-in for the per-contributor Ed25519 `Signature sig`
-    over `"stellar-vrf/commit"|0x01|network_id|slot|commitHash`. Deterministic
-    in (node, network, slot, commitHash) so a sig binds to its NodeID and its
-    scope; a sig replayed under a different NodeID / network / slot / commitHash
-    must not verify. (Real Ed25519 is the signer's job; here we model the scope
-    and node binding the acceptance rule enforces.)"""
-    return sha512(COMMIT_SIG_LABEL + bytes([VER]) + net
-                  + slot.to_bytes(4, "big") + commit_hash + node_id)[0:64]
+def commit_message(net: bytes, slot: int, commit_hash: bytes) -> bytes:
+    """Canonical signing preimage, exactly as the CAP/XDR specifies:
+    `"stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash`.
+    NOTE: `node_id` is deliberately NOT part of M_commit — the key provides the
+    node binding (nodeID is the Ed25519 verification key). One function decides
+    the bytes everywhere (V11 spec parity)."""
+    return (COMMIT_SIG_LABEL + bytes([VER]) + net
+            + slot.to_bytes(4, "big") + commit_hash)
+
+
+def commit_signature(sk: Ed25519PrivateKey, net: bytes, slot: int, commit_hash: bytes) -> bytes:
+    """Real Ed25519 signature over `commit_message(net, slot, commitHash)` using
+    the node's secret key (whose public key is its NodeID). Genuine
+    cryptography, so the fixture cannot share a stand-in bug with the checker:
+    the signature verifies under the NodeID's public key exactly as the CAP
+    requires (`VRFCommit.sig` is an Ed25519 signature by `nodeID`'s key)."""
+    return sk.sign(commit_message(net, slot, commit_hash))
 
 
 def contributors(net, slot, anchor):
     # Sorted by NodeID ascending; each entry is (node_id, beta, commit_hash, sig).
-    rows = sorted((nid for nid, _ in NODES))
+    # node_id IS the Ed25519 public key; sig is the REAL Ed25519 signature over
+    # the canonical commit message, made by that node's secret key.
+    rows = sorted((pub for _, pub, _ in NODES))
+    key_of = {pub: sk for sk, pub, _ in NODES}
     out = []
     for nid in rows:
         beta = placeholder_beta(nid, net, slot, anchor)
         ch = commit_hash_of(beta)
-        sg = commit_signature(nid, net, slot, ch)
+        sg = commit_signature(key_of[nid], net, slot, ch)
         out.append((nid, beta, ch, sg))
     return out
 
