@@ -19,6 +19,7 @@ fixture pins the protocol-level derivations (transcript, aggregation order,
 beacon, sub-seeds) so V1/V2/V4/V5/V6/V8 are executable without the crypto.
 """
 import hashlib
+import itertools
 import json
 import sys
 
@@ -39,7 +40,9 @@ NETWORK_ID_MAINNET = sha256(b"Public Global Stellar Network ; September 2015")
 DOMAIN = b"stellar-vrf"
 SUB_DOMAIN = b"stellar-vrf/sub"
 BETA_LABEL = b"stellar-vrf/beta"
-COMMIT_SIG_LABEL = b"stellar-vrf/commit-sig"
+# Normative signature domain per the CAP/XDR: the Ed25519 signature is over
+# "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash (spec parity).
+COMMIT_SIG_LABEL = b"stellar-vrf/commit"
 VER = 0x01
 SLOT = 123456789
 # Canonical anchor: the existing 32-byte LedgerHeader hash of ledger (s-3).
@@ -155,6 +158,18 @@ partial_beacon = beacon(partial_withhold)
 # Layer A LCL fallback uses the DISTINCT s-2 header hash, not the s-3 anchor.
 bfbk = fallback_beacon(FALLBACK_ANCHOR)
 
+# V9: every threshold-valid reveal subset (each combination of size in [T..Q]
+# over the authenticated, NodeID-ordered committed set) -> a root. Pinned so the
+# checker asserts the full bounded root set, not a suffix-only containment. The
+# roots differ per subset, honestly documenting that Layer A is NOT
+# subset-invariant (one-future neutrality is a Layer B / epoch property).
+v9_roots = sorted({
+    beacon(list(combo)).hex()
+    for k in range(T, Q + 1)
+    for combo in itertools.combinations(contribs, k)
+})
+
+
 fixture = {
     "cap": "CAP-0089",
     "title": "VRF-Based Protocol Randomness and Fair Leader Selection",
@@ -213,6 +228,7 @@ fixture = {
         "V6_subseed_order": subseed(NETWORK_ID_TESTNET, SLOT, 4, bcn).hex(),
         "V8_transcript_hash_mutated": mutated_leader_transcript_hash(
             NETWORK_ID_TESTNET, SLOT, ANCHOR).hex(),
+        "V9_threshold_roots": v9_roots,
     },
 }
 

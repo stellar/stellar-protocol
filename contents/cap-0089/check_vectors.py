@@ -55,15 +55,20 @@ Vectors:
       job.)
   V8 transcript mutation : flipping a byte of T_b(s) changes the transcript
       hash; it no longer matches the pinned value.
-  V9 layer-A honesty : the per-reveal aggregate is NOT subset-invariant; reveal
-      subsets of the authenticated committed set give a bounded, pinned root set
-      and the checker refuses to assert one-future neutrality for Layer A.
+  V9 layer-A honesty : the per-reveal aggregate is NOT subset-invariant; V9
+      enumerates EVERY threshold-valid reveal subset (all combinations of size
+      in [T..Q], not just suffix slices) and asserts the resulting root set
+      equals the pinned fixture set (Q=6/t=5: 7 distinct roots for the 7 valid
+      subsets). A distinct valid subset yields a distinct root, so the checker
+      refuses to assert one-future neutrality for Layer A.
   V10 identity neutrality : a cloned (uncommitted) NodeID cannot inject an
       aggregate term; identity count is not controller influence at Layer A.
-  V11 authenticated commit : each contributor's VRFCommit.sig is verified under
-      its (node, network, slot, commitHash) scope; flipped sig, wrong-NodeID
-      sig, and sigs replayed under a wrong slot/commitHash are rejected, and a
-      fabricated (unauthenticated) commit cannot enter Q.
+  V11 authenticated commit : each contributor's VRFCommit.sig is an Ed25519 sig
+      over the normative domain "stellar-vrf/commit"|0x01|network_id|slot|
+      commitHash, verified under its (node, network, slot, commitHash) scope;
+      flipped sig, wrong-NodeID sig, and sigs replayed under a wrong slot/
+      commitHash are rejected, and a fabricated (unauthenticated) commit cannot
+      enter Q.
   (Layer B: subset-invariant / no-pulse one-future neutrality is a Draft exit
       criterion gated on a randomness-epoch/reconstruction primitive -- not
       asserted for, or faked by, the Layer A aggregate.)
@@ -72,6 +77,7 @@ Run:  python3 check_vectors.py
 Exit code 0 on pass, 1 on any failure.
 """
 import hashlib
+import itertools
 import json
 import os
 import sys
@@ -88,7 +94,9 @@ def sha512(b: bytes) -> bytes:
 DOMAIN = b"stellar-vrf"
 SUB_DOMAIN = b"stellar-vrf/sub"
 BETA_LABEL = b"stellar-vrf/beta"
-COMMIT_SIG_LABEL = b"stellar-vrf/commit-sig"
+# Normative signature domain per the CAP/XDR: the Ed25519 signature is over
+# "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash (spec parity).
+COMMIT_SIG_LABEL = b"stellar-vrf/commit"
 
 
 def transcript(net: bytes, slot: int, purpose: int, anchor: bytes) -> bytes:
@@ -378,24 +386,26 @@ def run():
     # A changed valid reveal subset changes the hash, so Layer A cannot satisfy
     # one-future neutrality. This checker refuses to assert `accepted_roots(e) ⊆
     # {R}` for the per-reveal aggregate: that would be a false claim. Instead we
-    # pin the honest, bounded statement -- any reveal subset of the *authenticated*
-    # committed set produces one of a few deterministic values (full, drop-1, ...,
-    # drop-k), never an unbounded set, and below threshold is exactly the one
-    # documented LCL fallback (a liveness tool, not a reselectable root).
-    full_b = pinned_bcn
-    drop1_b = beacon(contribs[1:])
-    all_subsets = {beacon(contribs[i:]).hex() for i in range(1, len(contribs))}
-    check("V9  Layer A is honestly bounded: reveal subsets of the authenticated "
-          "committed set yield only the pinned full/drop-prefix values (no "
-          "unbounded root set)",
-          drop1_b != full_b
-          and all_subsets <= {b.hex() for b in
-                              [full_b] + [beacon(contribs[i:])
-                                          for i in range(1, len(contribs))]})
-    check("V9  Layer A makes NO subset-invariance claim: a dropped reveal "
-          "changes the beacon (asserted honestly, so the CAP cannot pretend "
-          "one-future neutrality is already met)",
-          drop1_b != full_b)
+    # pin the honest, bounded statement. V9 now enumerates EVERY threshold-valid
+    # subset -- every combination of size in [T..Q] over the authenticated
+    # committed set (not just suffix slices) -- and asserts the resulting root
+    # set is exactly the independently pinned fixture set; because a single
+    # dropped reveal changes the root, the set has > 1 element and subset-
+    # invariance is honestly NOT claimed for Layer A.
+    all_comb_roots = set()
+    for k in range(T, Q + 1):
+        for combo in itertools.combinations(contribs, k):
+            all_comb_roots.add(beacon(list(combo)).hex())
+    pinned_v9 = sorted(t["V9_threshold_roots"])
+    check("V9  Layer A is honestly bounded: enumerating EVERY threshold-valid "
+          "subset (all combinations of size in [T..Q]) yields exactly the pinned "
+          "root set -- no unbounded root set, and not a suffix-only "
+          "true-by-construction containment",
+          sorted(all_comb_roots) == pinned_v9)
+    check("V9  Layer A is NOT subset-invariant (asserted honestly): distinct "
+          "threshold-valid subsets yield distinct roots, so dropping a reveal "
+          "changes the beacon and one-future neutrality is not claimed for Layer A",
+          len(all_comb_roots) > 1 and beacon(contribs[1:]) != beacon(contribs))
 
     # --- V10: identity neutrality -- NodeID uniqueness != controller uniqueness.
     # Cloning one controller into more NodeIDs must not add aggregate terms
