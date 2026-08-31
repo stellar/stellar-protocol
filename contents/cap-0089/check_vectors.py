@@ -60,6 +60,10 @@ Vectors:
       and the checker refuses to assert one-future neutrality for Layer A.
   V10 identity neutrality : a cloned (uncommitted) NodeID cannot inject an
       aggregate term; identity count is not controller influence at Layer A.
+  V11 authenticated commit : each contributor's VRFCommit.sig is verified under
+      its (node, network, slot, commitHash) scope; flipped sig, wrong-NodeID
+      sig, and sigs replayed under a wrong slot/commitHash are rejected, and a
+      fabricated (unauthenticated) commit cannot enter Q.
   (Layer B: subset-invariant / no-pulse one-future neutrality is a Draft exit
       criterion gated on a randomness-epoch/reconstruction primitive -- not
       asserted for, or faked by, the Layer A aggregate.)
@@ -84,6 +88,7 @@ def sha512(b: bytes) -> bytes:
 DOMAIN = b"stellar-vrf"
 SUB_DOMAIN = b"stellar-vrf/sub"
 BETA_LABEL = b"stellar-vrf/beta"
+COMMIT_SIG_LABEL = b"stellar-vrf/commit-sig"
 
 
 def transcript(net: bytes, slot: int, purpose: int, anchor: bytes) -> bytes:
@@ -102,8 +107,19 @@ def placeholder_beta(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> by
     return sha512(BETA_LABEL + bytes([0x01]) + node_id + t_leader)[0:64]
 
 
+def commit_signature(node_id: bytes, net: bytes, slot: int, commit_hash: bytes) -> bytes:
+    # Protocol-level stand-in for the per-contributor Ed25519 `Signature sig`
+    # over "stellar-vrf/commit"|0x01|network_id|slot|commitHash. Deterministic in
+    # (node, network, slot, commitHash) so a sig binds to its NodeID and scope; a
+    # sig replayed under a different NodeID / network / slot / commitHash must not
+    # verify. (Real Ed25519 is the per-node signer's job; the acceptance rule here
+    # enforces the scope and node binding, like beta does for the VRF.)
+    return sha512(COMMIT_SIG_LABEL + bytes([0x01]) + net
+                  + slot.to_bytes(4, "big") + commit_hash + node_id)[0:64]
+
+
 def beacon(rows) -> bytes:
-    return sha256(b"".join(beta for _, beta in rows))
+    return sha256(b"".join(row[1] for row in rows))
 
 
 def subseed(net: bytes, slot: int, purpose: int, bcn: bytes) -> bytes:
@@ -122,8 +138,12 @@ def run():
     net_main = bytes.fromhex(con["network_id_mainnet"])
     slot = t["slot"]  # the ledger being generated (s); DO NOT increment
     anchor = bytes.fromhex(t["anchor_ledger_header_hash"])  # prior_context as-is
-    contribs = [(bytes.fromhex(c["node_id"]), bytes.fromhex(c["beta"]))
+    contribs = [(bytes.fromhex(c["node_id"]), bytes.fromhex(c["beta"]),
+                 bytes.fromhex(c["commit_hash"]), bytes.fromhex(c["sig"]))
                 for c in t["contributors"]]
+    # commit_auth[node_id] = (commit_hash, sig) from the consensus-carried,
+    # self-authenticating VRFCommit set. Only these authenticated commits define Q.
+    commit_auth = {nid: (ch, sg) for nid, _, ch, sg in contribs}
     pinned_beacon = bytes.fromhex(t["beacon"])
 
     failed = 0
@@ -155,7 +175,7 @@ def run():
 
     # --- Aggregation orders by NodeID and matches the pinned beacon ---
     check("contributors are aggregated ordered by NodeID ascending",
-          [nid for nid, _ in contribs] == sorted(nid for nid, _ in contribs))
+          [row[0] for row in contribs] == sorted(row[0] for row in contribs))
     check("beacon B(s) equals pinned beacon (SHA-256 over NodeID-ordered betas)",
           beacon(contribs).hex() == pinned_beacon.hex())
 
@@ -169,9 +189,9 @@ def run():
     # beacons are compared -- so a broken implementation that bound its VRF
     # input to candidate contents would produce a different beacon and FAIL.
     def derive_beacon_for_context(ctx_anchor):
-        ctx_betas = [placeholder_beta(nid, net_id, slot, ctx_anchor)
-                     for nid, _ in contribs]
-        return beacon(sorted(zip([nid for nid, _ in contribs], ctx_betas)))
+        ctx_betas = [placeholder_beta(row[0], net_id, slot, ctx_anchor)
+                     for row in contribs]
+        return beacon(sorted(zip([row[0] for row in contribs], ctx_betas)))
 
     pinned_bcn = beacon(contribs)
     # ground_noise models arbitrary unfinalized s-1 candidate contents (e.g. a
@@ -193,15 +213,21 @@ def run():
           "beacon (anchor chosen blind, before commits)",
           beacon_other_anchor.hex() != pinned_bcn.hex())
 
-    # --- Protocol acceptance verifier (used by V3/V7) ---
+    # --- Protocol acceptance verifier (used by V3/V7/V11) ---
     # Implements the mandatory acceptance rules of CAP-0089 before aggregation:
-    #   1) nodeID is a committed contributor (bound to its C_v = SHA-256(beta))
-    #   2) strictly NodeID-ascending, exactly one entry per contributor
-    #   3) SHA-256(beta) == committed C_v
-    #   4) transcriptHash == SHA-256(T_b(s)) exactly
+    #   1) nodeID is an AUTHENTICATED committed contributor (valid VRFCommit.sig
+    #      under the node's network/slot/commitHash scope)
+    #   2) SHA-256(beta) == committed C_v (the reveal binds to its commit)
+    #   3) transcriptHash == SHA-256(T_b(s)) exactly
+    #   4) strictly NodeID-ascending, exactly one entry per contributor
     #   5) VRF_verify(pk, T_b(s), beta, proof) -- delegated to PR #5409 harness
-    # The RFC proof (rule 5) is modeled by transcript/network/slot-scoped betas.
-    commit_map = {sha256(beta).hex(): nid for nid, beta in contribs}
+    # Only records whose commit signature verifies may contribute to Q.
+    def verify_commit(nid, commit_hash, sig):
+        return (nid in commit_auth
+                and commit_auth[nid] == (commit_hash, sig)
+                and sig == commit_signature(nid, net_id, slot, commit_hash))
+
+    commit_map = {ch.hex(): nid for nid, _, ch, _ in contribs}
 
     def accept_reveal(row, prev_node_bytes, transcript_hash_val):
         nid, beta, th = row
@@ -212,6 +238,11 @@ def run():
             return False
         if commit_map[c_v] != nid:
             return False
+        ch, sg = commit_auth[nid]
+        if not verify_commit(nid, ch, sg):
+            return False  # unauthenticated / scoped-mismatched commit is rejected
+        if sha256(beta) != ch:
+            return False  # reveal must bind to its committed hash
         if prev_node_bytes is not None and nid <= prev_node_bytes:
             return False  # strict ascending (duplicates / out-of-order)
         return True
@@ -239,14 +270,22 @@ def run():
           single_beacon.hex() == t["V2_single_withhold_beacon"]
           and single_beacon != pinned_bcn)
     fall_k = t["V2_fallback_k"]
-    lcl_fallback = sha256(anchor)
+    # Layer A LCL fallback is defined from LedgerHeaderHash(s-2), a DISTINCT
+    # value from the s-3 prior_context anchor. We keep the first `fall_k`
+    # contributors (drop the trailing Q - fall_k), so the partial set has
+    # exactly `fall_k` members, matching k < t.
+    fall_anchor = bytes.fromhex(t["V2_fallback_anchor"])
+    lcl_fallback = sha256(fall_anchor)
+    partial_set = contribs[:fall_k]
     check("V2  dropping to k < t re-enters the LCL fallback "
           "B(s) = SHA-256(LedgerHeaderHash(s-2))",
           fall_k == T - 1
           and n_withhold_for_fallback == Q - fall_k
-          and beacon(contribs[fall_k:]).hex() == t["V2_partial_beacon"]
+          and len(partial_set) == fall_k
+          and beacon(partial_set).hex() == t["V2_partial_beacon"]
           and lcl_fallback.hex() == t["V2_fallback_beacon_LCL"]
-          and beacon(contribs[fall_k:]) != lcl_fallback)
+          and beacon(partial_set) != lcl_fallback
+          and fall_anchor != anchor)
 
     # --- V3: commit/reveal binding (via the acceptance verifier) ---
     th_leader_b = transcript_hash(net_id, slot, 1, anchor)
@@ -255,10 +294,10 @@ def run():
     bad_row = (contribs[0][0], tampered_beta, th_leader_b)
     check("V3  commit/reveal binding: every honest reveal binds to its "
           "committed hash, and a tampered reveal is rejected by the verifier",
-          all(accept_reveal((nid, beta, th_leader_b),
+          all(accept_reveal((row[0], row[1], th_leader_b),
                             None if i == 0 else contribs[i-1][0],
                             th_leader_b)
-              for i, (nid, beta) in enumerate(contribs))
+              for i, row in enumerate(contribs))
           and not accept_reveal(bad_row, None, th_leader_b))
 
     # --- V4: cross-network replay ---
@@ -287,7 +326,7 @@ def run():
     # - A wrong transcriptHash must be rejected.
     wrong_th = (contribs[0][0], contribs[0][1], bytes(32))
     # - A duplicate NodeID anywhere in the set must be rejected.
-    honest_rows = [(nid, beta, th_leader_b) for nid, beta in contribs]
+    honest_rows = [(row[0], row[1], th_leader_b) for row in contribs]
     dup_set = ([honest_rows[0], honest_rows[1], honest_rows[1]]
                + honest_rows[2:])
     check("V7  honest fully-ordered reveal set is accepted",
@@ -298,6 +337,32 @@ def run():
           not accept_reveal(wrong_th, None, th_leader_b))
     check("V7  a set containing a duplicate NodeID is rejected",
           not accept_reveal_set(dup_set, th_leader_b))
+
+    # --- V11: authenticated VRFCommit.sig (dlN_g / dh2Qi) ---
+    # Each contributor's commit is authenticated by a per-NodeID, per-scope
+    # signature. verify_commit must accept the honest record and reject a
+    # flipped sig, a sig bound to a different NodeID, and a sig replayed under a
+    # different network / slot / commitHash. Only these authenticated commits
+    # define Q (a fabricated/unauthenticated commit cannot enter the set).
+    n0, b0, ch0, sg0 = contribs[0]
+    n1, b1, ch1, sg1 = contribs[1]
+    flipped = bytes(sg0); flipped = flipped[:-1] + bytes([flipped[-1] ^ 1])
+    other_ch = sha256(b1)  # a genuinely different commitHash than ch0
+    check("V11 an honest VRFCommit.sig verifies under its (node, network, slot, "
+          "commitHash) scope", verify_commit(n0, ch0, sg0))
+    check("V11 a flipped VRFCommit.sig is rejected",
+          not verify_commit(n0, ch0, flipped))
+    check("V11 a VRFCommit.sig bound to a different NodeID is rejected",
+          not verify_commit(n0, ch0, commit_signature(n1, net_id, slot, ch0)))
+    check("V11 a VRFCommit.sig replayed under a wrong slot is rejected",
+          sg0 != commit_signature(n0, net_id, slot + 1, ch0))
+    check("V11 a VRFCommit.sig replayed under a wrong commitHash is rejected",
+          sg0 != commit_signature(n0, net_id, slot, other_ch))
+    phantom_nid = sha256(b"unauthenticated-controller")
+    check("V11 a fabricated (unauthenticated) commit cannot define Q -- it has "
+          "no valid VRFCommit.sig and is not in the commit set",
+          phantom_nid not in commit_auth
+          and not verify_commit(phantom_nid, other_ch, sg0))
 
     # --- V6: purpose separation ---
     bcn = beacon(contribs)

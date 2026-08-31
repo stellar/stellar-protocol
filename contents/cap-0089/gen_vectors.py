@@ -39,11 +39,16 @@ NETWORK_ID_MAINNET = sha256(b"Public Global Stellar Network ; September 2015")
 DOMAIN = b"stellar-vrf"
 SUB_DOMAIN = b"stellar-vrf/sub"
 BETA_LABEL = b"stellar-vrf/beta"
+COMMIT_SIG_LABEL = b"stellar-vrf/commit-sig"
 VER = 0x01
 SLOT = 123456789
 # Canonical anchor: the existing 32-byte LedgerHeader hash of ledger (s-3).
 # prior_context(s) IS this hash; it is NOT re-hashed (avoids a double hash).
 ANCHOR = bytes(range(32))
+# The LCL fallback (Layer A) is defined from a DISTINCT
+# LedgerHeaderHash(s-2), never from the s-3 prior_context(s). Noot's catch:
+# reusing ANCHOR (s-3) as the fallback input made V2 pin the wrong source.
+FALLBACK_ANCHOR = sha256(ANCHOR)
 
 # Deterministic contributor set (validator public keys / NodeIDs). The
 # aggregation order is by NodeID (lexicographic, ascending), per the CAP.
@@ -80,18 +85,37 @@ def placeholder_beta(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> by
     return sha512(BETA_LABEL + bytes([VER]) + node_id + t_leader)[0:64]
 
 
+def commit_hash_of(beta: bytes) -> bytes:
+    # The XDR `VRFCommit.commitHash` is the 32-byte commitment to beta.
+    return sha256(beta)
+
+
+def commit_signature(node_id: bytes, net: bytes, slot: int, commit_hash: bytes) -> bytes:
+    """Protocol-level stand-in for the per-contributor Ed25519 `Signature sig`
+    over `"stellar-vrf/commit"|0x01|network_id|slot|commitHash`. Deterministic
+    in (node, network, slot, commitHash) so a sig binds to its NodeID and its
+    scope; a sig replayed under a different NodeID / network / slot / commitHash
+    must not verify. (Real Ed25519 is the signer's job; here we model the scope
+    and node binding the acceptance rule enforces.)"""
+    return sha512(COMMIT_SIG_LABEL + bytes([VER]) + net
+                  + slot.to_bytes(4, "big") + commit_hash + node_id)[0:64]
+
+
 def contributors(net, slot, anchor):
-    # Sorted by NodeID ascending; each entry is (node_id, beta).
+    # Sorted by NodeID ascending; each entry is (node_id, beta, commit_hash, sig).
     rows = sorted((nid for nid, _ in NODES))
-    by = {}
-    for nid, _ in NODES:
-        by[nid] = placeholder_beta(nid, net, slot, anchor)
-    return [(nid, by[nid]) for nid in rows]
+    out = []
+    for nid in rows:
+        beta = placeholder_beta(nid, net, slot, anchor)
+        ch = commit_hash_of(beta)
+        sg = commit_signature(nid, net, slot, ch)
+        out.append((nid, beta, ch, sg))
+    return out
 
 
 def beacon(contrib_rows) -> bytes:
     """B(s) = SHA-256( concat of verified betas ordered by NodeID, ascending )."""
-    return sha256(b"".join(beta for _, beta in contrib_rows))
+    return sha256(b"".join(row[1] for row in contrib_rows))
 
 
 def subseed(net: bytes, slot: int, purpose: int, bcn: bytes) -> bytes:
@@ -119,13 +143,17 @@ def fallback_beacon(anchor_prev: bytes) -> bytes:
 
 # V2: with Q=6, t=5. Withholding ONE reveal leaves k=5 >= t -> aggregate path
 # (never fallback). Dropping below t (k < t) requires Q - t + 1 = 2 withheld.
-single_withhold = contribs[1:]  # k=5
+single_withhold = contribs[1:]  # k=5 (drop the first contributor)
 single_beacon = beacon(single_withhold)
-# Drop (Q - t + 1) = 2 reveals to reach k = t - 1 = 4 < 5.
+# Drop (Q - t + 1) = 2 reveals to reach k = t - 1 = 4 < 5. We KEEP the first
+# `fallback_k` sorted contributors and drop the trailing 2, so the partial set
+# has exactly `fallback_k` = 4 members (previously the suffix slice
+# `contribs[fallback_k:]` kept only 2 and pinned the wrong scenario).
 fallback_k = T - 1
-partial_withhold = contribs[fallback_k:]  # keep the first `fallback_k` sorted
+partial_withhold = contribs[:fallback_k]  # keep first `fallback_k`, drop tail
 partial_beacon = beacon(partial_withhold)
-bfbk = fallback_beacon(ANCHOR)  # NOTE: anchor placeholder for LedgerHeader(s-2)
+# Layer A LCL fallback uses the DISTINCT s-2 header hash, not the s-3 anchor.
+bfbk = fallback_beacon(FALLBACK_ANCHOR)
 
 fixture = {
     "cap": "CAP-0089",
@@ -162,13 +190,16 @@ fixture = {
         "slot": SLOT,
         "anchor_ledger_header_hash": ANCHOR.hex(),
         "contributors": [
-            {"node_id": nid.hex(), "beta": beta.hex()} for nid, beta in contribs
+            {"node_id": nid.hex(), "beta": beta.hex(),
+             "commit_hash": ch.hex(), "sig": sg.hex()}
+            for nid, beta, ch, sg in contribs
         ],
         "beacon": bcn.hex(),
         "Q": Q,
         "threshold_t": T,
         "V2_single_withhold_beacon": single_beacon.hex(),
         "V2_fallback_k": fallback_k,
+        "V2_fallback_anchor": FALLBACK_ANCHOR.hex(),
         "V2_partial_beacon": partial_beacon.hex(),
         "V2_fallback_beacon_LCL": bfbk.hex(),
         "V1_transcript_hash_leader": transcript_hash(
