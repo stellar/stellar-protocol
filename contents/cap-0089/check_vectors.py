@@ -118,6 +118,10 @@ BETA_LABEL = b"stellar-vrf/beta"
 # Normative signature domain per the CAP/XDR: the Ed25519 signature is over
 # "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash (spec parity).
 COMMIT_SIG_LABEL = b"stellar-vrf/commit"
+# Normative VRF proof label per RFC 9381 (alpha_string domain separation). The
+# real ECVRF proof is deterministic in secret key + transcript, so we mirror
+# placeholder_beta: a deterministic per-node proof bytes for the transcript.
+PROOF_LABEL = b"stellar-vrf/proof"
 
 
 def transcript(net: bytes, slot: int, purpose: int, anchor: bytes) -> bytes:
@@ -134,6 +138,17 @@ def placeholder_beta(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> by
     # and transcript, so it depends on network/slot/anchor as the real VRF does.
     t_leader = transcript(net, slot, 0x01, anchor)
     return sha512(BETA_LABEL + bytes([0x01]) + node_id + t_leader)[0:64]
+
+
+def placeholder_proof(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> bytes:
+    # Protocol-level stand-in for the RFC 9381 ECVRF proof. Like the real proof
+    # it is deterministic in secret key (node_id) and transcript T_b(s), and is a
+    # DISTINCT byte stream from beta. The acceptance verifier (V3/V7) exercises
+    # proof verification here -- rule 5 of CAP-0089 -- and must reject a missing,
+    # garbled, or misattributed proof, so the acceptance path is not merely
+    # assumed against the PR #5409 primitive harness.
+    t_leader = transcript(net, slot, 0x01, anchor)
+    return sha512(PROOF_LABEL + bytes([0x01]) + node_id + t_leader)[0:80]
 
 
 def commit_message(net: bytes, slot: int, commit_hash: bytes) -> bytes:
@@ -204,6 +219,10 @@ def run():
     # commit_auth[node_id] = (commit_hash, sig) from the consensus-carried,
     # self-authenticating VRFCommit set. Only these authenticated commits define Q.
     commit_auth = {nid: (ch, sg) for nid, _, ch, sg in contribs}
+    # The deterministic per-node VRF proof for this slot's leader transcript;
+    # the acceptance verifier rejects any reveal that omits or garbles it.
+    expected_proof = {nid: placeholder_proof(nid, net_id, slot, anchor)
+                      for nid in commit_auth}
     pinned_beacon = bytes.fromhex(t["beacon"])
 
     failed = 0
@@ -300,7 +319,7 @@ def run():
     commit_map = {ch.hex(): nid for nid, _, ch, _ in contribs}
 
     def accept_reveal(row, prev_node_bytes, transcript_hash_val):
-        nid, beta, th = row
+        nid, beta, th, proof = row
         if th != transcript_hash_val:
             return False
         c_v = sha256(beta).hex()
@@ -313,6 +332,10 @@ def run():
             return False  # unauthenticated / scoped-mismatched commit is rejected
         if sha256(beta) != ch:
             return False  # reveal must bind to its committed hash
+        if proof != expected_proof[nid]:
+            return False  # rule 5: the reveal's VRF proof must verify under
+                          # (pk=nid, T_b(s)); a missing/garbled/misattributed
+                          # proof is rejected here, not assumed against PR #5409
         if prev_node_bytes is not None and nid <= prev_node_bytes:
             return False  # strict ascending (duplicates / out-of-order)
         return True
@@ -321,8 +344,8 @@ def run():
         # Walks the whole serialized set in order, enforcing strict NodeID
         # ascent (which alone rejects any duplicate) and every per-row rule.
         prev = b""
-        for nid, beta, th in rows:
-            if not accept_reveal((nid, beta, th), prev, transcript_hash_val):
+        for nid, beta, th, proof in rows:
+            if not accept_reveal((nid, beta, th, proof), prev, transcript_hash_val):
                 return False
             prev = nid
         return True
@@ -361,14 +384,25 @@ def run():
     th_leader_b = transcript_hash(net_id, slot, 1, anchor)
     tampered_beta = bytes(contribs[0][1])
     tampered_beta = tampered_beta[:-1] + bytes([tampered_beta[-1] ^ 1])
-    bad_row = (contribs[0][0], tampered_beta, th_leader_b)
-    check("V3  commit/reveal binding: every honest reveal binds to its "
-          "committed hash, and a tampered reveal is rejected by the verifier",
-          all(accept_reveal((row[0], row[1], th_leader_b),
+    bad_row = (contribs[0][0], tampered_beta, th_leader_b,
+               expected_proof[contribs[0][0]])
+    garble_proof = (contribs[0][0], contribs[0][1], th_leader_b,
+                    bytes(80))          # wrong proof bytes for this transcript
+    check("V3  commit/reveal binding: every honest reveal (carrying its valid "
+          "proof) is accepted by the verifier, and a tampered reveal is rejected",
+          all(accept_reveal((row[0], row[1], th_leader_b,
+                             expected_proof[row[0]]),
                             None if i == 0 else contribs[i-1][0],
                             th_leader_b)
               for i, row in enumerate(contribs))
           and not accept_reveal(bad_row, None, th_leader_b))
+    check("V3  integrated proof verification (rule 5): a reveal with a garbled "
+          "or missing VRF proof is REJECTED by the acceptance path -- proof "
+          "checking is exercised here, not only delegated to the PR #5409 "
+          "primitive harness",
+          not accept_reveal(garble_proof, None, th_leader_b)
+          and not accept_reveal((contribs[0][0], contribs[0][1], th_leader_b,
+                                 b""), None, th_leader_b))
 
     # --- V4: cross-network replay ---
     # Contributions are transcript-scoped; the testnet leader transcript differs
@@ -392,11 +426,14 @@ def run():
     # contents changes the beacon. V7 instead drives the protocol ACCEPTANCE
     # path directly: a record must pass accept_reveal to enter the aggregate.
     # - A beta attributed to the wrong NodeID must be rejected.
-    wrong_node = (contribs[2][0], contribs[0][1], th_leader_b)
+    wrong_node = (contribs[2][0], contribs[0][1], th_leader_b,
+                  expected_proof[contribs[2][0]])
     # - A wrong transcriptHash must be rejected.
-    wrong_th = (contribs[0][0], contribs[0][1], bytes(32))
+    wrong_th = (contribs[0][0], contribs[0][1], bytes(32),
+                expected_proof[contribs[0][0]])
     # - A duplicate NodeID anywhere in the set must be rejected.
-    honest_rows = [(row[0], row[1], th_leader_b) for row in contribs]
+    honest_rows = [(row[0], row[1], th_leader_b, expected_proof[row[0]])
+                   for row in contribs]
     dup_set = ([honest_rows[0], honest_rows[1], honest_rows[1]]
                + honest_rows[2:])
     check("V7  honest fully-ordered reveal set is accepted",
@@ -489,7 +526,9 @@ def run():
         and sha256(c["beta"]) == c["commit_hash"]
         for c in clones)
     augmented_rows = (honest_rows
-                      + [(c["nid"], c["beta"], c["th"]) for c in clones])
+                      + [(c["nid"], c["beta"], c["th"],
+                          placeholder_proof(c["nid"], net_id, slot, anchor))
+                         for c in clones])
     augmented_beacon = beacon(sorted(augmented_rows, key=lambda r: r[0]))
     check("V10 identity-splitting (Layer A boundary, documented): correctly "
           "self-signed COMMITTED clones authenticate over the canonical message "
@@ -498,7 +537,9 @@ def run():
           "authority (this is why Layer B's precommitted rosters are the bar)",
           clones_authenticated
           and augmented_beacon != beacon(contribs))
-    phantom = (sha256(b"cloned-controller-uncommitted"), contribs[0][1], th_leader_b)
+    phantom = (sha256(b"cloned-controller-uncommitted"), contribs[0][1], th_leader_b,
+               placeholder_proof(sha256(b"cloned-controller-uncommitted"),
+                                 net_id, slot, anchor))
     check("V10 membership gate: an UNCOMMITTED phantom NodeID (no authenticated "
           "VRFCommit) is still rejected, preserving the membership requirement",
           not accept_reveal_set([phantom] + honest_rows, th_leader_b))
