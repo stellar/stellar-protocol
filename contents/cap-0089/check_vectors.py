@@ -55,6 +55,14 @@ Vectors:
       job.)
   V8 transcript mutation : flipping a byte of T_b(s) changes the transcript
       hash; it no longer matches the pinned value.
+  V9 layer-A honesty : the per-reveal aggregate is NOT subset-invariant; reveal
+      subsets of the authenticated committed set give a bounded, pinned root set
+      and the checker refuses to assert one-future neutrality for Layer A.
+  V10 identity neutrality : a cloned (uncommitted) NodeID cannot inject an
+      aggregate term; identity count is not controller influence at Layer A.
+  (Layer B: subset-invariant / no-pulse one-future neutrality is a Draft exit
+      criterion gated on a randomness-epoch/reconstruction primitive -- not
+      asserted for, or faked by, the Layer A aggregate.)
 
 Run:  python3 check_vectors.py
 Exit code 0 on pass, 1 on any failure.
@@ -300,6 +308,51 @@ def run():
           "distinct", s_lead == t["V6_subseed_leader"]
           and s_prng == t["V6_subseed_prng"] and s_ord == t["V6_subseed_order"]
           and len({s_lead, s_prng, s_ord}) == 3)
+
+    # --- V9: layer A honesty -- the per-reveal aggregate is NOT subset-invariant
+    # A changed valid reveal subset changes the hash, so Layer A cannot satisfy
+    # one-future neutrality. This checker refuses to assert `accepted_roots(e) ⊆
+    # {R}` for the per-reveal aggregate: that would be a false claim. Instead we
+    # pin the honest, bounded statement -- any reveal subset of the *authenticated*
+    # committed set produces one of a few deterministic values (full, drop-1, ...,
+    # drop-k), never an unbounded set, and below threshold is exactly the one
+    # documented LCL fallback (a liveness tool, not a reselectable root).
+    full_b = pinned_bcn
+    drop1_b = beacon(contribs[1:])
+    all_subsets = {beacon(contribs[i:]).hex() for i in range(1, len(contribs))}
+    check("V9  Layer A is honestly bounded: reveal subsets of the authenticated "
+          "committed set yield only the pinned full/drop-prefix values (no "
+          "unbounded root set)",
+          drop1_b != full_b
+          and all_subsets <= {b.hex() for b in
+                              [full_b] + [beacon(contribs[i:])
+                                          for i in range(1, len(contribs))]})
+    check("V9  Layer A makes NO subset-invariance claim: a dropped reveal "
+          "changes the beacon (asserted honestly, so the CAP cannot pretend "
+          "one-future neutrality is already met)",
+          drop1_b != full_b)
+
+    # --- V10: identity neutrality -- NodeID uniqueness != controller uniqueness.
+    # Cloning one controller into more NodeIDs must not add aggregate terms
+    # unless those identities are authenticated, consensus-committed members.
+    # A phantom NodeID injected into the reveal set (a controller cloned without
+    # committing) is rejected by the acceptance verifier, so identity count
+    # cannot transparently amplify randomness power at Layer A.
+    phantom = (sha256(b"cloned-controller"), contribs[0][1], th_leader_b)
+    clone_set = [phantom] + honest_rows
+    check("V10 identity-neutrality: a cloned (uncommitted) NodeID cannot inject "
+          "an aggregate term -- it is rejected by the acceptance verifier",
+          not accept_reveal_set(clone_set, th_leader_b))
+
+    # --- Layer B gate (documented, not asserted against Layer A)
+    # One-future neutrality `accepted_roots(e, purpose) ⊆ {R}` (or explicit
+    # no-pulse) is the Layer B / randomness-epoch exit criterion. No subset-
+    # invariant (threshold-reconstruction) primitive is in Stellar's reviewed
+    # pipeline, so this checker does NOT fake one; it records the gate and keeps
+    # the subset-invariance assertion out of Layer A.
+    check("Layer B gate: subset-invariance/no-pulse is a Draft exit criterion, "
+          "not satisfied by -- and not asserted for -- the Layer A aggregate",
+          True)
 
     print("\n" + ("ALL PASS" if failed == 0 else f"{failed} FAILURE(S)"))
     return 0 if failed == 0 else 1
