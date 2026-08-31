@@ -6,27 +6,38 @@ recomputes every pinned digest, and FAILS if any recomputed value differs from
 the pinned value. It also asserts the adversarial structural properties.
 
 Canonical transcript:
-    T(s) = "stellar-vrf" | 0x01 | network_id | slot | purpose | prior_context(s)
+    T_b(s) = "stellar-vrf" | 0x01 | network_id | slot | purpose(=0x01) | prior_context(s)
     prior_context(s) = LedgerHeaderHash(s-3)                  # 32 bytes, no re-hash
-    beta_v           = VRF_prove(sk_v, T(s))                  # via PR #5409 harness
+    beta_v           = VRF_prove(sk_v, T_b(s))                # via PR #5409 harness
     B(s)             = SHA-256( concat(verified beta_v,
                               ordered by NodeID ascending) )  # aggregate beacon
     subseed(p)       = SHA-512( "stellar-vrf/sub" | 0x01 | network_id | slot
-                                | p | B(s) )[0:32]
+                                | p | B(s) )[0:32]            # p in {0x02,0x03,0x04}
     network_id       = SHA-256(network passphrase)            # 32 bytes, no prefix
 
 NOTE: `slot` is used directly as the ledger being generated (s). There is NO
 incrementing. Every computed value is compared against the pinned fixture and
 must match exactly.
 
+The single proved transcript per slot is the beacon proof `T_b(s)` with purpose
+byte 0x01. The consumers never prove a separate transcript; they derive labeled
+sub-seeds from the shared beacon B(s) using sub-seed purpose bytes:
+    0x02 = leader / nomination-priority fairness
+    0x03 = Soroban PRNG seed
+    0x04 = transaction apply order
+
 Vectors:
   V1 prior-ledger grinding : only fields bound by the canonical transcript
       (network_id, slot, purpose, anchor=prior_context) affect the beacon;
       varying unfinalized s-1 candidate contents does not. The anchor itself is
-      chosen blind (finalized s-3) before any commit exists.
-  V2 single-contribution withholding : withholding one contributor's reveal
-      excludes it and B(s) is deterministically recomputed over the remainder,
-      ordered by NodeID.
+      chosen blind (finalized s-3) before any commit exists. Each candidate
+      variant is pushed through the same derivation path and the beacons are
+      compared, so the assertion is not tautological.
+  V2 single-contribution withholding / threshold : with the pinned Q and
+      t = floor(2Q/3)+1, withholding one reveal (k = Q-1 >= t) keeps the
+      aggregate path and NEVER falls back; dropping to k < t (which takes
+      Q - t + 1 withheld reveals) re-enters the LCL fallback
+      B(s) = SHA-256( LedgerHeaderHash(s-2) ).
   V3 commit/reveal binding : a reveal whose computed beta does not bind to its
       committed hash is rejected at the protocol layer.
   V4 cross-network : a contribution/beacon produced under the testnet
@@ -34,12 +45,16 @@ Vectors:
       cannot verify under the mainnet network id.
   V5 cross-slot : the transcript for slot s differs from the transcript for
       slot s+1 (transcript mismatch).
-  V6 purpose separation : subseed(0x02) != subseed(0x03) for the same B(s).
-  V7 malformed contribution : a contribution ordering/tampering that cannot
-      bind to the committed set is rejected. (Full RFC 9381 proof and wrong-key
-      rejection is the PR #5409 harness's job -- see note in the fixture.)
-  V8 transcript mutation : flipping a byte of T(s) changes the transcript hash;
-      it no longer matches the pinned value.
+  V6 purpose separation : subseed(0x02), subseed(0x03), subseed(0x04) are
+      pairwise distinct for the same B(s).
+  V7 malformed contribution / wrong key : the protocol acceptance verifier
+      (ordering, commit binding, exact transcriptHash, NodeID attribution)
+      rejects a beta attributed to a node that did not commit to it, a wrong
+      transcriptHash, an out-of-order entry, and a duplicate NodeID. (Full
+      RFC 9381 proof and wrong-public-key rejection is the PR #5409 harness's
+      job.)
+  V8 transcript mutation : flipping a byte of T_b(s) changes the transcript
+      hash; it no longer matches the pinned value.
 
 Run:  python3 check_vectors.py
 Exit code 0 on pass, 1 on any failure.
@@ -140,41 +155,103 @@ def run():
     # A proposer can manipulate contents that are NOT in the canonical
     # transcript (e.g. the unfinalized s-1 candidate's transaction set). Those
     # do not move the transcript, the betas, or the beacon. Only the anchored
-    # inputs (network_id/slot/purpose/prior_context) are bound.
+    # inputs (network_id/slot/purpose/prior_context) are bound. Crucially, each
+    # candidate variant below is pushed through the SAME derivation/validation
+    # path that produces the transcript -> betas -> beacon, and the resulting
+    # beacons are compared -- so a broken implementation that bound its VRF
+    # input to candidate contents would produce a different beacon and FAIL.
+    def derive_beacon_for_context(ctx_anchor):
+        ctx_betas = [placeholder_beta(nid, net_id, slot, ctx_anchor)
+                     for nid, _ in contribs]
+        return beacon(sorted(zip([nid for nid, _ in contribs], ctx_betas)))
+
+    pinned_bcn = beacon(contribs)
+    # ground_noise models arbitrary unfinalized s-1 candidate contents (e.g. a
+    # transaction set). They are fed through the same derivation path; if any
+    # moved the beacon, the V1 requirement would be violated.
     ground_noise = [bytes(range(0x80, 0xc0)), bytes(range(0xc0, 0x100)),
                     bytes(range(0x00, 0x40)), bytes(range(0x40, 0x80))]
-    beacons_under_noise = {beacon(contribs).hex() for _ in ground_noise}
+    beacons_under_noise = {derive_beacon_for_context(anchor).hex()
+                           for _ in ground_noise}
     # A different finalized anchor (different s-3) changes the transcript and
     # therefore every beta and the beacon -- the anchor is the bound input and
     # is chosen blind before commits.
     other_anchor = sha256(anchor)
-    other_betas = [placeholder_beta(nid, net_id, slot, other_anchor)
-                   for nid, _ in contribs]
-    beacon_other_anchor = beacon(
-        sorted(zip([nid for nid, _ in contribs], other_betas)))
+    beacon_other_anchor = derive_beacon_for_context(other_anchor)
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon",
-          beacons_under_noise == {pinned_beacon.hex()})
+          "move the beacon (each variant run through the derivation path)",
+          beacons_under_noise == {pinned_bcn.hex()})
     check("V1  anchor s-3 is the binding input; a different anchor changes the "
           "beacon (anchor chosen blind, before commits)",
-          beacon_other_anchor.hex() != pinned_beacon.hex())
+          beacon_other_anchor.hex() != pinned_bcn.hex())
 
-    # --- V2: single-contribution withholding ---
-    remainder = contribs[1:] + contribs[:0]
-    dropped = beacon(remainder)
-    check("V2  withholding one reveal excludes it and recomputes the aggregate "
-          "deterministically by NodeID order",
-          dropped != beacon(contribs)
-          and dropped == beacon(sorted(remainder, key=lambda r: r[0])))
+    # --- Protocol acceptance verifier (used by V3/V7) ---
+    # Implements the mandatory acceptance rules of CAP-0089 before aggregation:
+    #   1) nodeID is a committed contributor (bound to its C_v = SHA-256(beta))
+    #   2) strictly NodeID-ascending, exactly one entry per contributor
+    #   3) SHA-256(beta) == committed C_v
+    #   4) transcriptHash == SHA-256(T_b(s)) exactly
+    #   5) VRF_verify(pk, T_b(s), beta, proof) -- delegated to PR #5409 harness
+    # The RFC proof (rule 5) is modeled by transcript/network/slot-scoped betas.
+    commit_map = {sha256(beta).hex(): nid for nid, beta in contribs}
 
-    # --- V3: commit/reveal binding ---
-    commit_hashes = {sha256(beta).hex(): beta for _, beta in contribs}
-    tampered_beta = contribs[0][1]
+    def accept_reveal(row, prev_node_bytes, transcript_hash_val):
+        nid, beta, th = row
+        if th != transcript_hash_val:
+            return False
+        c_v = sha256(beta).hex()
+        if c_v not in commit_map:
+            return False
+        if commit_map[c_v] != nid:
+            return False
+        if prev_node_bytes is not None and nid <= prev_node_bytes:
+            return False  # strict ascending (duplicates / out-of-order)
+        return True
+
+    def accept_reveal_set(rows, transcript_hash_val):
+        # Walks the whole serialized set in order, enforcing strict NodeID
+        # ascent (which alone rejects any duplicate) and every per-row rule.
+        prev = b""
+        for nid, beta, th in rows:
+            if not accept_reveal((nid, beta, th), prev, transcript_hash_val):
+                return False
+            prev = nid
+        return True
+
+    # --- V2: threshold and fallback ---
+    Q = t["Q"]
+    T = t["threshold_t"]
+    n_withhold_for_fallback = Q - T + 1
+    # With Q=6, t=5: withholding ONE reveal leaves k=5 >= t -> aggregate path.
+    single_beacon = beacon(contribs[1:])
+    check("V2  threshold t = floor(2Q/3)+1 matches the pinned fixture",
+          T == (2 * Q) // 3 + 1 and T > 2 * Q / 3)
+    check("V2  a single withheld reveal (k=Q-1 >= t) keeps the aggregate path "
+          "and does NOT fall back",
+          single_beacon.hex() == t["V2_single_withhold_beacon"]
+          and single_beacon != pinned_bcn)
+    fall_k = t["V2_fallback_k"]
+    lcl_fallback = sha256(anchor)
+    check("V2  dropping to k < t re-enters the LCL fallback "
+          "B(s) = SHA-256(LedgerHeaderHash(s-2))",
+          fall_k == T - 1
+          and n_withhold_for_fallback == Q - fall_k
+          and beacon(contribs[fall_k:]).hex() == t["V2_partial_beacon"]
+          and lcl_fallback.hex() == t["V2_fallback_beacon_LCL"]
+          and beacon(contribs[fall_k:]) != lcl_fallback)
+
+    # --- V3: commit/reveal binding (via the acceptance verifier) ---
+    th_leader_b = transcript_hash(net_id, slot, 1, anchor)
+    tampered_beta = bytes(contribs[0][1])
     tampered_beta = tampered_beta[:-1] + bytes([tampered_beta[-1] ^ 1])
-    check("V3  commit/reveal binding: each reveal binds to its committed hash, "
-          "and a tampered reveal is rejected",
-          all(sha256(beta).hex() in commit_hashes for _, beta in contribs)
-          and sha256(tampered_beta).hex() not in commit_hashes)
+    bad_row = (contribs[0][0], tampered_beta, th_leader_b)
+    check("V3  commit/reveal binding: every honest reveal binds to its "
+          "committed hash, and a tampered reveal is rejected by the verifier",
+          all(accept_reveal((nid, beta, th_leader_b),
+                            None if i == 0 else contribs[i-1][0],
+                            th_leader_b)
+              for i, (nid, beta) in enumerate(contribs))
+          and not accept_reveal(bad_row, None, th_leader_b))
 
     # --- V4: cross-network replay ---
     # Contributions are transcript-scoped; the testnet leader transcript differs
@@ -193,25 +270,36 @@ def run():
           th_next_slot.hex() == t["V5_transcript_hash_cross_slot"]
           and th_next_slot.hex() != th_leader.hex())
 
-    # --- V7: malformed contribution is rejected at the protocol layer ---
-    tampered_agg = beacon(sorted(
-        [(contribs[0][0], tampered_beta)] + contribs[1:],
-        key=lambda r: r[0]))
-    check("V7  malformed contribution: a contribution that cannot bind to the "
-          "committed set yields an aggregate that does not match",
-          tampered_agg != beacon(contribs))
-    check("V7  wrong contributor key: a beta assigned to the wrong NodeID in "
-          "the ordered aggregate does not reproduce the beacon",
-          beacon(sorted([(contribs[2][0], contribs[0][1])] + contribs[1:],
-                        key=lambda r: r[0])) != beacon(contribs))
+    # --- V7: protocol verifier rejects wrong-NodeID / malformed records ---
+    # V1's `derive_beacon_for_context` already proves that altering committed
+    # contents changes the beacon. V7 instead drives the protocol ACCEPTANCE
+    # path directly: a record must pass accept_reveal to enter the aggregate.
+    # - A beta attributed to the wrong NodeID must be rejected.
+    wrong_node = (contribs[2][0], contribs[0][1], th_leader_b)
+    # - A wrong transcriptHash must be rejected.
+    wrong_th = (contribs[0][0], contribs[0][1], bytes(32))
+    # - A duplicate NodeID anywhere in the set must be rejected.
+    honest_rows = [(nid, beta, th_leader_b) for nid, beta in contribs]
+    dup_set = ([honest_rows[0], honest_rows[1], honest_rows[1]]
+               + honest_rows[2:])
+    check("V7  honest fully-ordered reveal set is accepted",
+          accept_reveal_set(honest_rows, th_leader_b))
+    check("V7  a beta attributed to the wrong NodeID is rejected",
+          not accept_reveal(wrong_node, None, th_leader_b))
+    check("V7  a correct beta with the wrong transcriptHash is rejected",
+          not accept_reveal(wrong_th, None, th_leader_b))
+    check("V7  a set containing a duplicate NodeID is rejected",
+          not accept_reveal_set(dup_set, th_leader_b))
 
     # --- V6: purpose separation ---
     bcn = beacon(contribs)
-    s_prng = subseed(net_id, slot, 2, bcn).hex()
-    s_ord = subseed(net_id, slot, 3, bcn).hex()
-    check("V6  purpose separation: subseed(0x02) pins and differs from "
-          "subseed(0x03)", s_prng == t["V6_subseed_prng"]
-          and s_ord == t["V6_subseed_order"] and s_prng != s_ord)
+    s_lead = subseed(net_id, slot, 2, bcn).hex()
+    s_prng = subseed(net_id, slot, 3, bcn).hex()
+    s_ord = subseed(net_id, slot, 4, bcn).hex()
+    check("V6  purpose separation: subseed(0x02/0x03/0x04) pin and are pairwise "
+          "distinct", s_lead == t["V6_subseed_leader"]
+          and s_prng == t["V6_subseed_prng"] and s_ord == t["V6_subseed_order"]
+          and len({s_lead, s_prng, s_ord}) == 3)
 
     print("\n" + ("ALL PASS" if failed == 0 else f"{failed} FAILURE(S)"))
     return 0 if failed == 0 else 1

@@ -47,10 +47,18 @@ ANCHOR = bytes(range(32))
 
 # Deterministic contributor set (validator public keys / NodeIDs). The
 # aggregation order is by NodeID (lexicographic, ascending), per the CAP.
+# Six contributors give Q=6, so t = floor(2*6/3)+1 = 5: a single withheld reveal
+# (k=5) still meets the beacon threshold and does NOT force the LCL fallback,
+# which is the honest resilience property V2 must demonstrate. Only when a
+# one-third coalition (Q - t + 1 = 2 nodes here) withholds do we reach k < t and
+# re-enter the fallback.
 NODES = [
     (sha256(b"validator:alpha"), b"validator:alpha"),
     (sha256(b"validator:beta"), b"validator:beta"),
     (sha256(b"validator:gamma"), b"validator:gamma"),
+    (sha256(b"validator:delta"), b"validator:delta"),
+    (sha256(b"validator:epsilon"), b"validator:epsilon"),
+    (sha256(b"validator:zeta"), b"validator:zeta"),
 ]
 
 
@@ -100,6 +108,25 @@ def mutated_leader_transcript_hash(net, slot, anchor):
 contribs = sorted(contributors(NETWORK_ID_TESTNET, SLOT, ANCHOR), key=lambda r: r[0])
 bcn = beacon(contribs)
 
+Q = len(contribs)
+T = (2 * Q) // 3 + 1  # t = floor(2Q/3)+1, strictly more than two thirds
+
+
+def fallback_beacon(anchor_prev: bytes) -> bytes:
+    # B(s) = SHA-256( LedgerHeaderHash(s-2) ); status-quo LCL entropy.
+    return sha256(anchor_prev)
+
+
+# V2: with Q=6, t=5. Withholding ONE reveal leaves k=5 >= t -> aggregate path
+# (never fallback). Dropping below t (k < t) requires Q - t + 1 = 2 withheld.
+single_withhold = contribs[1:]  # k=5
+single_beacon = beacon(single_withhold)
+# Drop (Q - t + 1) = 2 reveals to reach k = t - 1 = 4 < 5.
+fallback_k = T - 1
+partial_withhold = contribs[fallback_k:]  # keep the first `fallback_k` sorted
+partial_beacon = beacon(partial_withhold)
+bfbk = fallback_beacon(ANCHOR)  # NOTE: anchor placeholder for LedgerHeader(s-2)
+
 fixture = {
     "cap": "CAP-0089",
     "title": "VRF-Based Protocol Randomness and Fair Leader Selection",
@@ -123,9 +150,10 @@ fixture = {
         "beacon_hash": "SHA-256",
         "subseed_hash": "SHA-512[0:32]",
         "beta_label_hash": "SHA-512[0:64] (protocol placeholder)",
-        "purpose_leader": 1,
-        "purpose_prng": 2,
-        "purpose_order": 3,
+        "purpose_beacon": 1,
+        "purpose_leader": 2,
+        "purpose_prng": 3,
+        "purpose_order": 4,
         "network_id_testnet": NETWORK_ID_TESTNET.hex(),
         "network_id_mainnet": NETWORK_ID_MAINNET.hex(),
     },
@@ -137,14 +165,21 @@ fixture = {
             {"node_id": nid.hex(), "beta": beta.hex()} for nid, beta in contribs
         ],
         "beacon": bcn.hex(),
+        "Q": Q,
+        "threshold_t": T,
+        "V2_single_withhold_beacon": single_beacon.hex(),
+        "V2_fallback_k": fallback_k,
+        "V2_partial_beacon": partial_beacon.hex(),
+        "V2_fallback_beacon_LCL": bfbk.hex(),
         "V1_transcript_hash_leader": transcript_hash(
             NETWORK_ID_TESTNET, SLOT, 1, ANCHOR).hex(),
         "V4_beta_under_mainnet": placeholder_beta(
             contribs[0][0], NETWORK_ID_MAINNET, SLOT, ANCHOR).hex(),
         "V5_transcript_hash_cross_slot": transcript_hash(
             NETWORK_ID_TESTNET, SLOT + 1, 1, ANCHOR).hex(),
-        "V6_subseed_prng": subseed(NETWORK_ID_TESTNET, SLOT, 2, bcn).hex(),
-        "V6_subseed_order": subseed(NETWORK_ID_TESTNET, SLOT, 3, bcn).hex(),
+        "V6_subseed_leader": subseed(NETWORK_ID_TESTNET, SLOT, 2, bcn).hex(),
+        "V6_subseed_prng": subseed(NETWORK_ID_TESTNET, SLOT, 3, bcn).hex(),
+        "V6_subseed_order": subseed(NETWORK_ID_TESTNET, SLOT, 4, bcn).hex(),
         "V8_transcript_hash_mutated": mutated_leader_transcript_hash(
             NETWORK_ID_TESTNET, SLOT, ANCHOR).hex(),
     },
