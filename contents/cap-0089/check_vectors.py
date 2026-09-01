@@ -141,14 +141,23 @@ def placeholder_beta(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> by
 
 
 def placeholder_proof(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> bytes:
-    # Protocol-level stand-in for the RFC 9381 ECVRF proof. Like the real proof
-    # it is deterministic in secret key (node_id) and transcript T_b(s), and is a
-    # DISTINCT byte stream from beta. The acceptance verifier (V3/V7) exercises
-    # proof verification here -- rule 5 of CAP-0089 -- and must reject a missing,
+    # Protocol-level stand-in for the RFC 9381 ECVRF proof, shaped EXACTLY like
+    # the real proof `pi = Gamma || c || s` (Gamma: 32-byte compressed point, c:
+    # 16-byte challenge, s: 32-byte scalar = 80 bytes total), matching the XDR
+    # `opaque vrfProof[80]` width (dnFW7). A bare 64-byte SHA-512 slice would
+    # never exercise the mandated 80-byte wire width, so the honest path is now
+    # built at the full 80-byte length. Like the real proof it is deterministic
+    # in secret key (node_id) and transcript T_b(s), and is a DISTINCT byte
+    # stream from beta. The acceptance verifier (V3/V7) exercises proof
+    # verification here -- rule 5 of CAP-0089 -- and must reject a missing,
     # garbled, or misattributed proof, so the acceptance path is not merely
     # assumed against the PR #5409 primitive harness.
     t_leader = transcript(net, slot, 0x01, anchor)
-    return sha512(PROOF_LABEL + bytes([0x01]) + node_id + t_leader)[0:80]
+    h = sha512(PROOF_LABEL + bytes([0x01]) + node_id + t_leader)
+    gamma = h[0:32]                                             # 32-byte point
+    c = h[32:48]                                                # 16-byte challenge
+    s = sha512(b"s" + PROOF_LABEL + bytes([0x01]) + node_id + t_leader)[0:32]
+    return gamma + c + s                                        # 80 bytes total
 
 
 def commit_message(net: bytes, slot: int, commit_hash: bytes) -> bytes:
@@ -240,6 +249,11 @@ def run():
           and net_id == sha256(b"Test SDF Network ; September 2015"))
     check("constants: network ids are 32 bytes (no 0x00 prefix)",
           len(net_id) == 32 and len(net_main) == 32)
+    check("rule 5 proof width (dnFW7): every honest VRF proof is exactly 80 bytes "
+          "(Gamma||c||s), matching the XDR `opaque vrfProof[80]` -- a truncated "
+          "64-byte placeholder would never exercise the real wire width",
+          all(len(p) == 80 for p in expected_proof.values())
+          and len(expected_proof) == len(commit_auth))
 
     # --- V8: transcript mutation (and canonical byte checks) ---
     th_leader = transcript_hash(net_id, slot, 1, anchor)

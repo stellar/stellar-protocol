@@ -84,6 +84,10 @@ PURPOSE_NOMINATION = 2
 PURPOSE_POST = 3
 OUTCOME_ROOT_REQUIRED = 0x01
 OUTCOME_NO_PULSE = 0x02
+# The two-state protocol surface is exhaustive: only these two bytes are legal
+# outcome classes. Any other byte is an undefined class and MUST be rejected
+# rather than silently treated as ROOT_REQUIRED (dnFV6).
+VALID_OUTCOME_CLASSES = frozenset({OUTCOME_ROOT_REQUIRED, OUTCOME_NO_PULSE})
 
 
 def sha256(b: bytes) -> bytes:
@@ -114,13 +118,19 @@ class EpochDescriptor:
         self.event_mapping = event_mapping         # e.g. "EventLock/v1"
         self.scheme = scheme
         # ONE hash over every rule: format | scheme | key | roster | activation |
-        # retirement | threshold | root_rule | event_mapping.
+        # retirement | threshold | root_rule | event_mapping. Every VARIABLE-length
+        # field (scheme, authority_key, membership_commitment, root_rule,
+        # event_mapping) is length-prefixed so the encoding is injective -- no two
+        # distinct rule tuples can parse to the same byte string (dnFWC).
+        def lp(b: bytes) -> bytes:
+            return struct.pack(">I", len(b)) + b
+
         self.hash = sha256(
             b"Epoch"
-            + struct.pack(">I", format_version) + scheme
-            + authority_key + membership_commitment
+            + struct.pack(">I", format_version) + lp(scheme)
+            + lp(authority_key) + lp(membership_commitment)
             + struct.pack(">QQ", activation, retirement)
-            + struct.pack(">I", threshold) + root_rule + event_mapping)
+            + struct.pack(">I", threshold) + lp(root_rule) + lp(event_mapping))
 
     def active_at(self, slot: int) -> bool:
         return self.activation <= slot < self.retirement
@@ -193,25 +203,29 @@ class RandomnessSource:
 
     def __init__(self, epoch: EpochDescriptor):
         self.epoch = epoch
-        self._admitted = {}      # locked_object_hash -> canonical witness digest
+        self._admitted = {}      # event_hash -> canonical witness digest
 
-    def admit(self, locked_object_hash: bytes, witness: bytes):
-        # Canonical protocol state admits the witness for this lock object once
-        # the last mutable input is fixed. After this point the source may produce
-        # a valid proof for the (single) event carrying that lock object.
-        self._admitted[locked_object_hash] = witness
+    def admit(self, ev: EventLock, witness: bytes):
+        # Canonical protocol state admits the witness for the WHOLE event -- its
+        # canonical event hash folds in epoch, network, slot, purpose, locked
+        # object, and outcome class (dnFWo). Admitting one event therefore does
+        # NOT make every different event that happens to share the same
+        # locked_object_hash valid: only this exact event's proof may become
+        # available, once its last mutable input is fixed.
+        self._admitted[ev.hash] = witness
 
     def has_valid_proof(self, ev: EventLock) -> bool:
-        # A valid proof exists for an event iff its lock object was canonically
-        # admitted (and the event is not a pre-locked NO_PULSE). Before admission
-        # there is NO valid proof -- this is the S2 causal seal, independent of
-        # local timing/arrival.
+        # A valid proof exists for an event iff THIS event (by its full canonical
+        # event hash) was canonically admitted, and it is not a pre-locked
+        # NO_PULSE. Before admission there is NO valid proof -- this is the S2
+        # causal seal, independent of local timing/arrival.
         if ev.outcome_class == OUTCOME_NO_PULSE:
             return False
-        return ev.locked_object_hash in self._admitted
+        return ev.hash in self._admitted
 
     def proof(self, ev: EventLock) -> "bytes | None":
-        # The complete valid proof, present only after canonical admission.
+        # The complete valid proof, present only after canonical admission of the
+        # exact event.
         if not self.has_valid_proof(ev):
             return None
         return unique_root(self.epoch, ev)
@@ -228,20 +242,36 @@ def resolve(epoch: EpochDescriptor, ev: EventLock, source: RandomnessSource,
 
     Gate 0 (integrity): the event's hash must match its declared fields; a
         tampered event is REJECTED before any field is trusted.
-    Gate 1 (epoch): an event outside [activation, retirement) is never accepted.
-    Gate 2 (class):  NO_PULSE is pre-locked and never accepts any later proof.
-    Gate 3 (proof):  a ROOT_REQUIRED event with no proof stays UNKNOWN; with a
-    proof it becomes ROOT(R) only if the proof VERIFIES, otherwise REJECTED.
+    Gate 1 (epoch): the event must be BOTH active in the horizon AND bound to
+        THIS epoch (ev.epoch_hash == epoch.hash) -- a self-consistent event
+        created under another active epoch cannot be resolved here (dnFVu).
+    Gate 2 (class):   NO_PULSE is pre-locked and never accepts any later proof;
+        any outcome_class byte other than the two legal values is REJECTED as
+        undefined rather than silently treated as ROOT_REQUIRED (dnFV6).
+    Gate 3 (source + proof): before a ROOT could be returned, the source must
+        have CANONICALLY ADMITTED this exact event (dnFVg) AND the proof must
+        verify. A ROOT_REQUIRED event with no proof stays UNKNOWN; a proof that
+        is supplied for an event the source never admitted, or that fails
+        verification, is REJECTED.
     There is no timeout/non-arrival -> NO_PULSE transition anywhere."""
     if not ev.validate():
         return {"event_hash": ev.hash.hex(), "outcome": "REJECTED"}
-    if not epoch.active_at(ev.slot):
+    if ev.epoch_hash != epoch.hash or not epoch.active_at(ev.slot):
+        # the event must be bound to THIS epoch, not merely inside another active
+        # window of a coincidentally-active epoch (dnFVu)
+        return {"event_hash": ev.hash.hex(), "outcome": "REJECTED"}
+    if ev.outcome_class not in VALID_OUTCOME_CLASSES:
+        # an undefined outcome class is not a valid event (dnFV6)
         return {"event_hash": ev.hash.hex(), "outcome": "REJECTED"}
     if ev.outcome_class == OUTCOME_NO_PULSE:
         return {"event_hash": ev.hash.hex(), "outcome": "NO_PULSE"}
     if proof is None:
         # operational non-delivery = UNKNOWN, never NO_PULSE (no timeout rule).
         return {"event_hash": ev.hash.hex(), "outcome": "UNKNOWN"}
+    if not source.has_valid_proof(ev):
+        # a proof for an event the source never canonically admitted does not
+        # yield a valid outcome -- pre-lock unavailability enforced here (dnFVg)
+        return {"event_hash": ev.hash.hex(), "outcome": "REJECTED"}
     if not verify_proof(epoch, ev, proof):
         return {"event_hash": ev.hash.hex(), "outcome": "REJECTED"}
     root = unique_root(epoch, ev)
@@ -336,8 +366,9 @@ def main():
           "REJECTED)", not verify_proof(epoch, ev_b, proof_a)
           and resolve(epoch, ev_b, source, proof_a)
           == {"event_hash": ev_b.hash.hex(), "outcome": "REJECTED"})
-    # Source only admits B's witness; A is not admitted here, so no valid proof.
-    source.admit(txset_a, witness=sha256(b"canonical-witness-A"))
+    # Source only admits A's event; B is not admitted here, so no valid proof.
+    # Admission is keyed by the FULL event (dnFWo), not just the lock object.
+    source.admit(ev_a, witness=sha256(b"canonical-witness-A"))
     check("B2 the proof for tx-set A DOES verify against tx-set A once A is "
           "canonically admitted",
           resolve(epoch, ev_a, source, proof_a)
@@ -356,6 +387,93 @@ def main():
           epoch.active_at(ev_root.slot)
           and resolve(epoch, ev_root, source, root_proof)["outcome"] == "ROOT")
 
+    # ---------- Review-gate conformance (dnFVg / dnFVu / dnFV6 / dnFWo / dnFWC)
+    # dnFVg: resolve must consult the source's ADMISSION before returning ROOT.
+    # A publicly-computable `unique_root` is the primitive's mathematical value,
+    # NOT a valid proof until the event is canonically admitted. An unadmitted
+    # pre-lock event must be REJECTED, never resolve to ROOT.
+    unadmitted = EventLock(epoch, slot, PURPOSE_POST,
+                           sha256(b"never-admitted-object"), OUTCOME_ROOT_REQUIRED)
+    check("dnFVg resolve consults the source: an UNadmitted event whose publicly "
+          "computable root is passed is REJECTED, never ROOT (a bare hash is not "
+          "a valid proof until canonical admission)",
+          not source.has_valid_proof(unadmitted)
+          and resolve(epoch, unadmitted, source, unique_root(epoch, unadmitted))
+          == {"event_hash": unadmitted.hash.hex(), "outcome": "REJECTED"})
+
+    # dnFVu: the epoch gate must bind the event TO THIS EPOCH. A self-consistent
+    # event created under a DIFFERENT (also active) epoch must not resolve here.
+    other_epoch = EpochDescriptor(
+        format_version=epoch.format_version,
+        authority_key=epoch.authority_key,
+        membership_commitment=epoch.membership_commitment,
+        activation=epoch.activation, retirement=epoch.retirement,
+        threshold=epoch.threshold + 2,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping)
+    ev_foreign = EventLock(other_epoch, slot, PURPOSE_POST, txset_a,
+                           OUTCOME_ROOT_REQUIRED)
+    # a source bound to the foreign epoch (with the event admitted under it) that
+    # the event would legitimately resolve against, distinct from the primary one:
+    foreign_source = RandomnessSource(other_epoch)
+    foreign_source.admit(ev_foreign, witness=sha256(b"foreign-witness"))
+    check("dnFVu epoch binding: an event bound to a DIFFERENT epoch (with an "
+          "identical activation window) is REJECTED under the calling epoch, not "
+          "resolved here; it resolves only under its OWN epoch+source",
+          other_epoch.hash != epoch.hash
+          and other_epoch.active_at(ev_foreign.slot)
+          and ev_foreign.epoch_hash != epoch.hash
+          and resolve(other_epoch, ev_foreign, foreign_source,
+                      unique_root(other_epoch, ev_foreign))["outcome"] == "ROOT"
+          and resolve(epoch, ev_foreign, source,
+                      unique_root(other_epoch, ev_foreign))["outcome"] == "REJECTED")
+
+    # dnFV6: an undefined outcome class (any byte other than 0x01/0x02) is not a
+    # valid event and MUST be rejected, not silently treated as ROOT_REQUIRED.
+    ev_undef = EventLock(epoch, slot, PURPOSE_POST, txset_a, 0x03)
+    check("dnFV6 two-state surface is exhaustive: an event with an undefined "
+          "outcome_class (0x03) is REJECTED, never resolved to a valid root",
+          ev_undef.outcome_class not in VALID_OUTCOME_CLASSES
+          and resolve(epoch, ev_undef, source, unique_root(epoch, ev_undef))
+          == {"event_hash": ev_undef.hash.hex(), "outcome": "REJECTED"})
+
+    # dnFWo: admission is keyed by the FULL event hash, so admitting one event
+    # does NOT give a valid proof to a DIFFERENT event that shares only its
+    # locked_object_hash (a different slot / purpose / class is a different id).
+    shared_obj = sha256(b"shared-lock-object")
+    ev_shared_slot2 = EventLock(epoch, slot + 1, PURPOSE_POST,
+                                shared_obj, OUTCOME_ROOT_REQUIRED)
+    source.admit(EventLock(epoch, slot, PURPOSE_POST,
+                           shared_obj, OUTCOME_ROOT_REQUIRED),
+                 witness=sha256(b"witness-shared"))
+    check("dnFWo admission is full-event keyed: admitting one event does NOT make "
+          "a different event sharing only its locked_object_hash valid (its proof "
+          "is REJECTED by resolve)",
+          not source.has_valid_proof(ev_shared_slot2)
+          and resolve(epoch, ev_shared_slot2, source,
+                      unique_root(epoch, ev_shared_slot2))
+          == {"event_hash": ev_shared_slot2.hash.hex(), "outcome": "REJECTED"})
+    # B2 already admitted ev_a == ev_root, so ev_root ROOT here is unaffected.
+
+    # dnFWC: the epoch preimage length-prefixes every variable-length field, so
+    # the encoding is INJECTIVE -- swapping boundaries between two descriptors
+    # with the same total bytes yields a DIFFERENT epoch hash.
+    pair1 = EpochDescriptor(format_version=epoch.format_version,
+                            authority_key=epoch.authority_key,
+                            membership_commitment=epoch.membership_commitment,
+                            activation=epoch.activation,
+                            retirement=epoch.retirement, threshold=epoch.threshold,
+                            root_rule=b"a", event_mapping=b"bc")
+    pair2 = EpochDescriptor(format_version=epoch.format_version,
+                            authority_key=epoch.authority_key,
+                            membership_commitment=epoch.membership_commitment,
+                            activation=epoch.activation,
+                            retirement=epoch.retirement, threshold=epoch.threshold,
+                            root_rule=b"ab", event_mapping=b"c")
+    check("dnFWC epoch preimage is injective (length-prefixed): the ambiguous "
+          "descriptor pair (root_rule=b'a',event_mapping=b'bc') vs "
+          "(root_rule=b'ab',event_mapping=b'c') yields DIFFERENT epoch hashes",
+          pair1.hash != pair2.hash)
+
     # ---------- B3: transport/replay composition (schedule-driven) -------------
     n_events = 601
     events, classes = [], []
@@ -367,7 +485,7 @@ def main():
         classes.append(cls)
         # NO_PULSE events get no proof; ROOT events are admitted -> valid proof
         if cls == OUTCOME_ROOT_REQUIRED:
-            source.admit(obj, witness=sha256(b"witness:%d" % i))
+            source.admit(events[i], witness=sha256(b"witness:%d" % i))
     truths = [unique_root(epoch, events[i]) for i in range(n_events)]
     # delivery schedules: at observation index i, has this ROOT_REQUIRED event's
     # proof arrived YET? (NO_PULSE events have no proof by construction.)
@@ -447,10 +565,13 @@ def main():
           "caller flag)",
           all(not src_cold.has_valid_proof(ce) for ce in cand_events)
           and all(src_cold.proof(ce) is None for ce in cand_events))
-    # admit EXACTLY one real witness after lock -> only that event gets a proof
+    # admit EXACTLY one real event after lock -> only that event gets a proof.
+    # Admission is keyed by the full event (dnFWo): the OTHER candidates sharing
+    # the same purpose/class but a different lock object, and even a DIFFERENT
+    # event that coincidentally shares `real_object`, are unaffected.
     real_object = sha256(b"cand:3")
-    src_cold.admit(real_object, witness=sha256(b"externalized-real"))
     real_ev = EventLock(epoch, slot, PURPOSE_POST, real_object, OUTCOME_ROOT_REQUIRED)
+    src_cold.admit(real_ev, witness=sha256(b"externalized-real"))
     # the OTHER candidates still have no valid proof
     others_unavailable = all(
         src_cold.proof(ce) is None
@@ -535,14 +656,35 @@ def main():
           "(delivery schedule x wire order, each driven through the state "
           "machine) the convergent canonical slot-ordered sequence is IDENTICAL "
           "-- no 2^n fan-out" % n_routes, converged_ok)
-    # prefix stability: every canonical prefix len k has |H_k| = 1
+    # prefix stability (dnFWP): every canonical prefix has |H_k| = 1. This is
+    # NOT a self-comparison: each prefix is built TWO ways -- (a) the direct
+    # `canonical_value_seq` on the first k events, and (b) by resolving each of
+    # those k events through the full state machine (validate -> epoch-binding ->
+    # class -> source-admission -> proof) and extracting the resulting
+    # ROOT/NO_PULSE values in canonical slot order -- and both must agree bit-for-
+    # bit. Prefixes are measured in WHOLE events (each is a 32-byte root or the
+    # 7-byte "NOPULSE" marker), never a blind `32*k` byte slice that mis-cuts
+    # around the NO_PULSE marker.
     prefix_ok = True
     for k in range(8, n_events + 1, 97):
-        p = base_seq[: 32 * k]
-        if any(canonical_value_seq(events)[: 32 * k] != p for _ in [0]):
+        order = sorted(range(k), key=lambda j: events[j].slot)
+        direct = b"".join(
+            (unique_root(epoch, events[i]) if classes[i] != OUTCOME_NO_PULSE
+             else b"NOPULSE")
+            for i in order)
+        rows = [resolve(epoch, events[i], source,
+                        None if classes[i] == OUTCOME_NO_PULSE else truths[i])
+                for i in order]
+        via_resolver = b"".join(
+            (bytes.fromhex(r["source_root"]) if r["outcome"] == "ROOT"
+             else b"NOPULSE")
+            for r in rows)
+        if direct != via_resolver:
             prefix_ok = False
-    check("C prefix-stability: |H_k| = 1 for every sampled canonical prefix (no "
-          "repeated-cycle predicate advantage compounds)", prefix_ok)
+    check("C prefix-stability |H_k|=1: every sampled canonical prefix (whole-event "
+          "units, mixing 32-byte roots and the NOPULSE marker) is identical whether "
+          "derived directly or through the full state-machine resolver -- no "
+          "repeated-cycle predicate advantage compounds", prefix_ok)
 
     # ---------- K: the three kill questions (adversarial) ----------------------
     # K1 "create several equivalent valid events and choose later?"
@@ -624,8 +766,8 @@ def main():
                 None if classes[i] == OUTCOME_NO_PULSE else truths[i])
         for i in range(n_events)])
     comp_seq_digest = sha256(base_seq).hex()
-    EXP_B3 = "db7f136f5c7e16b94ba459a23f8c5e0de8986fc29b1a587d22614f639a248a63"
-    EXP_COMP = "9f9aecea23998437aed656b5cc54d37761340e4ba5444602ddea2cc92f5b7f83"
+    EXP_B3 = "6f247279e87c7b330104efe22d3b25f218072e7673f67135b3cb27cefd0d2773"
+    EXP_COMP = "71e12e816428806cf7d5ac1de60946a0038177f2b799143e159b31a001f3ca9b"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literal (a drift in EventLock/transition/epoch encoding "
           "changes the live digest): %s" % pinned_b3, pinned_b3 == EXP_B3)
