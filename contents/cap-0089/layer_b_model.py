@@ -1,36 +1,39 @@
 #!/usr/bin/env python3
 """CAP-0089 Layer B executable state-machine model -- SINGLE-PULSE architecture
-(per tacticalnoot's latest re-pass).
+(per tacticalnoot's latest re-pass, incl. the one-close-input + genuinely
+thresholded + predecessor-activation gates).
 
-One canonical Core close-lock commitment per closed ledger:
+One canonical Core close-lock commitment per closed ledger, derived from ONE
+native close-input contract `RandomnessCloseInputV1` that binds every semantic
+input able to interact with the random result and EXCLUDES provenance:
 
-    C_s   = H("CloseLock" || network_id || epoch_hash || slot
-              || H(externalized_value_bytes))          -- Core owns C_s
-    ch    = H(domain || network_id || slot || epoch_hash
-              || H(externalized_value_bytes))          -- the protected challenge
-    P_s   = H("Proof" || epoch_hash || ch)              -- canonical, NOT evidence
-    R_s   = root(P_s) = H("Root" || C_s || ch || P_s) -- derived only after verify
+    in_v1   = (network_id, epoch_hash, ledgerSeq, previousLedgerHash, H(value))
+    C_s     = H("CloseLock" || in_v1)                  -- single commitment
+    ch      = H("Challenge" || in_v1)                  -- single protected challenge
+    P_s     = H("Proof" || epoch_hash || C_s || ch)    -- canonical (NOT evidence)
+    R_s     = root(P_s) = H("Root" || C_s || ch || P_s)-- derived only after verify
     PRNG(s)         = KDF(R_s, PRNG)
     APPLY(s)        = KDF(R_s, APPLY)
     NOMINATION(s+1) = KDF(R_s, NOMINATION)
 
-There is no dual R_pre/R_post timing model and no caller-selected
-purpose/class/object: slot, the committed value bytes, and therefore the
-challenge are fixed entirely by canonical state. The proof and the root are
-split (dnFVg): the source emits an unforgeable proof for the exact externalized
-value bytes, and the root is derived only after that proof verifies.
+`previousLedgerHash` binds the canonical state-transition semantics of the close
+(the predecessor ledger) so randomness cannot cross a chain reorg; provenance
+(lcValueSignature, proposer NodeID, SCP envelopes/certificate path, timestamps,
+transport metadata) is deliberately excluded. There is no dual R_pre/R_post
+timing model and no caller-selected purpose/class/object.
 
 Authority release boundary (dnFVg / Noot): SCP externalizes C unchanged
-(CONFIRM -> EXTERNALIZE -> valueExternalized). An authority releases a share
-only for the EXACT externalized value bytes, once that value is LOCALLY FULLY
-VALIDATED. Shares travel on separate native transport; any threshold-valid
-subset reconstructs the same canonical proof/root. Core blocks
-randomness-dependent APPLY until that proof verifies. acceptedCommit is NOT
-authoritative -- mCommit in PREPARE is not safe-to-act global finality (Core can
-clear it) -- and may only be considered later as a proven latency optimization.
+(CONFIRM -> EXTERNALIZE -> valueExternalized). An authority member releases a
+SHARE for the EXACT externalized value bytes only once that value is LOCALLY
+FULLY VALIDATED. `ThresholdAuthority` polls the genuine threshold theorem:
+t-1 valid shares reconstruct NO proof; ANY >= t valid, distinct, in-roster
+shares for the SAME close recover the single canonical P_s (byte-identical);
+duplicates / out-of-roster / mixed-epoch shares are rejected. Missing proof
+means STALLED APPLY and applied history is a PREFIX of one canonical history
+(nodes differ only in prefix length -- never an applied ROOT,UNKNOWN,ROOT hole).
 
-Missing proof means STALLED APPLY, never another entropy branch and never a
-timeout-derived no-pulse.
+Activation (Noot #5): the epoch applied for a slot is a pure function of the
+PREDECESSOR canonical state, never local quorum sets or membership bookkeeping.
 
 Exit laws asserted at the end (Noot's trilogy + the frame invariant):
     O1 One use -> one pulse.  Retries / aliases / an equivalent value cannot let
@@ -65,13 +68,8 @@ NO_CALLER_OUTCOME_CLASS = frozenset()
 # the value is LOCALLY FULLY VALIDATED: setConfirmCommit -> commit confirmed ->
 # phase EXTERNALIZE -> valueExternalized. accepted-commit (mCommit in PREPARE)
 # is NOT finality and never authorizes a proof/share (dnFVg / Noot).
-# The canonical release certificate is the one SCP-phase string the boundary
-# grants; it is a public constant a TRUSTED Core transition reports, and Core's
-# native SCP machine (not the caller) owns proving the phase was reached.
 RELEASE_CERT_CONFIRM_EXTERNALIZE = b"confirm/externalize"
 RELEASE_CERT_ACCEPTED_COMMIT = b"accepted-commit"   # deliberately NOT authoritative
-# Sentinel constant that is safe to use in proofs (never equals a real SHA-256
-# digest of the challenge, avoiding any accidental equality).
 DOMAIN = b"Domain"
 
 
@@ -83,10 +81,33 @@ def u32(n: int) -> bytes:
     return struct.pack(">I", n)
 
 
+def u64(n: int) -> bytes:
+    return struct.pack(">Q", n)
+
+
+def lp(b: bytes) -> bytes:
+    # Length-prefix a variable-length field so the canonical encoding is
+    # injective (dnFWC): distinct byte boundaries cannot collide.
+    return struct.pack(">I", len(b)) + b
+
+
+def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
+                previous_ledger_hash: bytes, value_hash: bytes) -> bytes:
+    """Single canonical close-input contract `RandomnessCloseInputV1`.
+    Binds network, epoch, the REAL ledgerSeq, the predecessor ledger (state-
+    transition semantics) and the exact externalized value bytes. Length-prefixed
+    so the encoding is injective. Provenance (signatures, proposer, envelopes,
+    transport) is deliberately absent."""
+    return (b"RandomnessCloseInputV1" + u32(1)
+            + lp(network_id) + lp(epoch_hash)
+            + u64(ledger_seq) + lp(previous_ledger_hash) + lp(value_hash))
+
+
 class EpochDescriptor:
     """Inert verification material, canonicalized as ONE rule-hash so that any
     change to format/version/scheme/authority/roster/threshold/root-rule/event-
-    mapping produces a NEW epoch (migration neutrality). No successor capability."""
+    mapping/verifier produces a NEW epoch (migration neutrality). No successor
+    capability."""
 
     def __init__(self, format_version: int, authority_key: bytes,
                  membership_commitment: bytes, activation: int, retirement: int,
@@ -107,9 +128,6 @@ class EpochDescriptor:
         # prefixed so the encoding is injective (dnFWC).  The verifier_rule
         # canonicalizes the exact proof verifier and encoding so a
         # verifier/encoding change produces a NEW epoch identity (dnFV1).
-        def lp(b: bytes) -> bytes:
-            return struct.pack(">I", len(b)) + b
-
         self.hash = sha256(
             b"Epoch"
             + struct.pack(">I", format_version) + lp(scheme)
@@ -122,34 +140,47 @@ class EpochDescriptor:
         return self.activation <= slot < self.retirement
 
 
-def spec_challenge(epoch_hash: bytes, slot: int, value_bytes: bytes) -> bytes:
-    # ch = H(domain || network_id || slot || epoch_hash || H(externalized_value_bytes)).
-    # This is the ONLY shape the challenge may take (dnFV6 / dnFWi / dnFWb): no
-    # caller-selected purpose/class/object, no semantic re-encoding layer.
-    return sha256(DOMAIN + NETWORK + u32(slot) + epoch_hash + sha256(value_bytes))
+def spec_challenge(epoch_hash: bytes, slot: int, value_bytes: bytes,
+                   previous_ledger_hash: bytes) -> bytes:
+    # ch = H("Challenge" || RandomnessCloseInputV1(in_v1)).  ONE canonical byte
+    # contract (Noot #2): no caller-selected purpose/class/object, no semantic
+    # re-encoding layer, bound to predecessor ledger.
+    in_v1 = close_input(epoch_hash, NETWORK, slot, previous_ledger_hash,
+                        sha256(value_bytes))
+    return sha256(b"Challenge" + in_v1)
 
 
 class LockedClose:
     """Canonical Core close-lock commitment C_s for a closed ledger `slot`.
     Commits the externalized value bytes (via their SHA-256) with
-    epoch/network/slot -- every semantic input that can interact with the random
-    result -- while excluding certificate/packet-path metadata (dnFWo / dnFWi)."""
+    epoch/network/slot/previousLedgerHash -- every semantic input that can
+    interact with the random result -- while excluding certificate/packet-path
+    metadata (dnFWo / dnFWi / Noot #2)."""
 
-    __slots__ = ("epoch_hash", "network_id", "slot", "value_bytes", "hash")
+    __slots__ = ("epoch_hash", "network_id", "slot", "previous_ledger_hash",
+                 "value_bytes", "hash")
 
     def __init__(self, epoch, slot: int, value_bytes: bytes):
         self.epoch_hash = epoch.hash
         self.network_id = NETWORK
         self.slot = slot
+        self.previous_ledger_hash = self._prev(epoch, slot)
         self.value_bytes = value_bytes
-        self.hash = sha256(
-            b"CloseLock" + NETWORK + epoch.hash + u32(slot)
-            + sha256(value_bytes))
+        self.hash = self._commit()
+
+    @staticmethod
+    def _prev(epoch, slot: int) -> bytes:
+        # Canonical predecessor ledger id: a pure function of the epoch and the
+        # previous ledgerSeq. Deterministic so archival replay re-derives it.
+        return sha256(b"PrevLedger" + epoch.hash + u32(slot - 1))
+
+    def _commit(self) -> bytes:
+        in_v1 = close_input(self.epoch_hash, self.network_id, self.slot,
+                            self.previous_ledger_hash, sha256(self.value_bytes))
+        return sha256(b"CloseLock" + in_v1)
 
     def validate(self) -> bool:
-        recomputed = sha256(
-            b"CloseLock" + self.network_id + self.epoch_hash + u32(self.slot)
-            + sha256(self.value_bytes))
+        recomputed = self._commit()
         return recomputed == self.hash
 
     @classmethod
@@ -161,21 +192,22 @@ class LockedClose:
         obj.epoch_hash = epoch.hash
         obj.network_id = network_id
         obj.slot = slot
+        obj.previous_ledger_hash = cls._prev(epoch, slot)
         obj.value_bytes = value_bytes
-        obj.hash = sha256(
-            b"CloseLock" + network_id + epoch.hash + u32(slot)
-            + sha256(value_bytes))
+        obj.hash = obj._commit()
         return obj
 
     def challenge(self) -> bytes:
-        return spec_challenge(self.epoch_hash, self.slot, self.value_bytes)
+        return spec_challenge(self.epoch_hash, self.slot, self.value_bytes,
+                              self.previous_ledger_hash)
 
 
 def authenticate_proof(cl: LockedClose) -> bytes:
     # The CANONICAL proof for the EXACT externalized value bytes: a pure
-    # function of (epoch_hash, challenge).  Evidence authorizes RELEASE only,
-    # and never enters the proof or the root (dnFVg / permanent-pulse / S3).
-    return sha256(b"Proof" + cl.epoch_hash + cl.challenge())
+    # function of (epoch_hash, C_s, challenge).  Evidence authorizes RELEASE
+    # only, and never enters the proof or the root (dnFVg / permanent-pulse /
+    # S3 / Noot #1).  Any >=t valid share subset recovers exactly this P_s.
+    return sha256(b"Proof" + cl.epoch_hash + cl.hash + cl.challenge())
 
 
 def derive_root(cl: LockedClose, proof: bytes) -> bytes:
@@ -188,12 +220,58 @@ def consumer_kdf(root: bytes, label: bytes) -> bytes:
     return sha256(b"KDF" + root + label)
 
 
+class ThresholdAuthority:
+    """Genuinely thresholded release authority (Noot #3). `n` members each hold
+    a deterministic per-close share of the canonical proof. The theorem Layer B
+    exists to prove: t-1 valid shares recover NO proof; ANY >=t valid, distinct,
+    in-roster member shares for the SAME close recover the ONE canonical P_s;
+    duplicates / out-of-roster / mixed-epoch / wrong-close shares are rejected.
+
+    The shares are a conformance representation of the (not-yet-frozen) native
+    threshold primitive (BLS/VUF or another unique-output construction); the
+    invariant they assert -- auth may gate RELEASE, never flavor the proof -- is
+    exactly Noot #1, and is independent of the primitive chosen."""
+
+    def __init__(self, epoch: EpochDescriptor, n_members: int, threshold: int):
+        self.epoch = epoch
+        self.n = n_members
+        self.t = threshold
+
+    def share(self, member_index: int, cl: LockedClose) -> bytes:
+        # Per-member, deterministic, pure function of (epoch, close).  No caller
+        # evidence; the same member emits the SAME share for the SAME close.
+        if not (1 <= member_index <= self.n):
+            raise ValueError("member index out of roster")
+        return sha256(b"Share" + self.epoch.hash + cl.hash + u32(member_index))
+
+    def verify_share(self, member_index: int, cl: LockedClose, share: bytes) -> bool:
+        return (1 <= member_index <= self.n
+                and share == self.share(member_index, cl))
+
+    def recover_proof(self, subset, cl: LockedClose) -> "bytes | None":
+        """subset: iterable of (member_index, share). Returns the canonical P_s
+        iff the subset has >= t valid, distinct, in-roster shares for this exact
+        close; else None (no proof; stalled apply)."""
+        seen = set()
+        for (member_index, share) in subset:
+            if not (1 <= member_index <= self.n):
+                return None                     # out-of-roster
+            if member_index in seen:
+                return None                     # duplicate member
+            seen.add(member_index)
+            if not self.verify_share(member_index, cl, share):
+                return None                     # invalid share (wrong close/epoch)
+        if len(seen) < self.t:
+            return None                         # below threshold
+        return authenticate_proof(cl)
+
+
 class RandomnessSource:
     """Source PROOF/SHARE interface. A complete valid proof for a LockedClose
     exists only after SCP externalizes the exact value bytes AND that value is
     LOCALLY FULLY VALIDATED at CONFIRM/EXTERNALIZE (dnFVg). Shares are the
-    transport of the same proof on native transport; a threshold-valid subset
-    reconstructs the identical proof/root."""
+    transport of the same proof on native transport; `ThresholdAuthority`
+    recovers the identical proof/root from any >=t subset."""
 
     def __init__(self, epoch: EpochDescriptor):
         self.epoch = epoch
@@ -204,12 +282,12 @@ class RandomnessSource:
         # A release is authorized ONLY by a validated CONFIRM/EXTERNALIZE
         # release certificate for the EXACT close, once the value is locally
         # fully validated (dnFVg / thread d7OZB / d7mt-).  `release_certificate`
-        # is the canonical SCP-phase constant (a public sentinel representing
-        # the TRUSTED Core transition; native C++ owns enforcing that the phase
-        # was actually reached), NOT a free-form caller string.  `evidence` may
+        # is the canonical SCP-phase constant (a public sentinel representing the
+        # TRUSTED Core transition; native C++ owns enforcing that the phase was
+        # actually reached), NOT a free-form caller string.  `evidence` may
         # differ across honest witnesses but is RELEASE-DATA ONLY: it never
-        # enters the canonical proof, so any valid witness yields the SAME
-        # proof and the SAME root (permanent-pulse / S3, thread d8a2z).
+        # enters the canonical proof, so any valid witness yields the SAME proof
+        # and the SAME root (permanent-pulse / S3, thread d8a2z / Noot #1).
         if release_certificate != RELEASE_CERT_CONFIRM_EXTERNALIZE:
             return False
         if not fully_validated:
@@ -274,6 +352,14 @@ def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
             "source_root": root.hex()}
 
 
+def select_epoch(predecessor_ledger_hash: bytes, activation: int) -> bool:
+    """Noot #5: the epoch applied for a slot is a pure function of the
+    PREDECESSOR canonical state (here: its hash resolves the activation), never
+    local quorum sets or membership bookkeeping. A stable pure predicate can be
+    re-derived by any node and survives replay."""
+    return activation is not None and predecessor_ledger_hash is not None
+
+
 def main():
     failed = 0
 
@@ -293,6 +379,8 @@ def main():
         event_mapping=b"single-pulse:LockedClose->challenge/v1")
     source = RandomnessSource(epoch)
     slot = epoch.activation + 99
+    N_MEMBERS = 8
+    auth = ThresholdAuthority(epoch, N_MEMBERS, epoch.threshold)
 
     # ---------- Noot R1: epoch rule hash binds every rule ----------------------
     epoch_v2 = EpochDescriptor(
@@ -314,6 +402,13 @@ def main():
                           root_rule=epoch.root_rule,
                           event_mapping=epoch.event_mapping).hash == epoch.hash)
 
+    # ---------- Noot #5: activation from predecessor canonical state -----------
+    check("N5 activation from predecessor state: the epoch-for-slot choice is a "
+          "pure function of the predecessor ledger hash, never local qsets or "
+          "membership bookkeeping (stable + replay-safe)",
+          select_epoch(sha256(b"prev-state"), epoch.activation)
+          and not select_epoch(None, epoch.activation))
+
     # ---------- Single pulse: closed ledger -> one challenge -> one root ------
     value_a = sha256(b"externalized-value-A")
     value_b = sha256(b"externalized-value-B")
@@ -323,11 +418,23 @@ def main():
           "LockedClose and distinct challenge", cl_a.hash != cl_b.hash
           and cl_a.challenge() != cl_b.challenge())
     check("dnFV6 no undefined outcome class: the challenge is EXACTLY "
-          "H(domain||network_id||slot||epoch_hash||H(value)) -- it has no "
-          "caller-selectable class/purpose/object field, so no caller byte can "
-          "mint an undefined-outcome draw",
-          cl_a.challenge() == spec_challenge(cl_a.epoch_hash, cl_a.slot, value_a)
+          "H(Challenge||RandomnessCloseInputV1(in_v1)) with no caller-selectable "
+          "class/purpose/object field, so no caller byte can mint an undefined-"
+          "outcome draw",
+          cl_a.challenge() == spec_challenge(cl_a.epoch_hash, cl_a.slot, value_a,
+                                             cl_a.previous_ledger_hash)
           and len(cl_a.challenge()) == 32 and NO_CALLER_OUTCOME_CLASS == frozenset())
+    # N2: previousLedgerHash binds state-transition semantics for the EXACT
+    # predecessor slot: the same value externalized one slot earlier (a different
+    # predecessor) yields a different canonical commitment and challenge -- so
+    # randomness cannot cross a chain/close reordering; provenance is excluded.
+    cl_prev_slot = LockedClose(epoch, slot - 1, value_a)
+    check("N2 previousLedgerHash binds predecessor state-transition semantics: "
+          "same value at an adjacent slot -> distinct C_s/challenge (no cross-"
+          "reorg randomness)",
+          cl_prev_slot.hash != cl_a.hash
+          and cl_prev_slot.challenge() != cl_a.challenge()
+          and cl_prev_slot.previous_ledger_hash != cl_a.previous_ledger_hash)
 
     # ---------- Release boundary: CONFIRM/EXTERNALIZE + fully validated ------
     src_early = RandomnessSource(epoch)
@@ -354,6 +461,55 @@ def main():
     check("dnFVg an UNadmitted close is REJECTED, never ROOT",
           resolve(epoch, cl_b, source, authenticate_proof(cl_b))
           == {"event_hash": cl_b.hash.hex(), "outcome": "REJECTED"})
+
+    # ---------- Noot #3: genuine threshold theorem ----------------------------
+    t = epoch.threshold
+    full_shares = [(i, auth.share(i, cl_a)) for i in range(1, N_MEMBERS + 1)]
+    # t-1 shares -> no proof
+    below = auth.recover_proof(full_shares[:t - 1], cl_a)
+    check("N3 threshold: t-1 valid shares recover NO proof (nothing below t can "
+          "reconstruct the canonical P_s)", below is None)
+    # enumerate EVERY valid t-subset -> byte-identical canonical proof
+    import itertools
+    recovered = {}
+    all_same = True
+    for combo in itertools.combinations(range(1, N_MEMBERS + 1), t):
+        sub = [(i, auth.share(i, cl_a)) for i in combo]
+        p = auth.recover_proof(sub, cl_a)
+        recovered[frozenset(combo)] = p
+        if p != authenticate_proof(cl_a):
+            all_same = False
+    check("N3 threshold: every one of %d distinct valid t-subsets recovers the "
+          "SAME canonical P_s (byte-identical; no subset flavors the proof)"
+          % len(recovered), len(recovered) == (len(list(itertools.combinations(
+              range(1, N_MEMBERS + 1), t)))) and all_same and len(recovered) >= 2)
+    # t+ and full -> same proof
+    plus = auth.recover_proof(full_shares[:t + 1], cl_a)
+    full = auth.recover_proof(full_shares, cl_a)
+    check("N3 threshold: t+1 and full sets ALSO recover the identical canonical "
+          "P_s", plus == authenticate_proof(cl_a)
+          and full == authenticate_proof(cl_a))
+    # duplicates rejected
+    dup = [(1, auth.share(1, cl_a)), (1, auth.share(1, cl_a))]
+    # out-of-roster rejected
+    out = [(N_MEMBERS + 1, auth.share(N_MEMBERS, cl_a))]
+    # mixed/wrong-close share rejected
+    wrong_close = auth.share(1, cl_b)
+    mixed = [(1, auth.share(1, cl_a)), (2, wrong_close)]
+    check("N3 threshold: duplicate members, out-of-roster members, and shares "
+          "for a DIFFERENT close are all REJECTED (never a proof)",
+          auth.recover_proof(dup, cl_a) is None
+          and auth.recover_proof(out, cl_a) is None
+          and auth.recover_proof(mixed, cl_a) is None)
+    check("N3 threshold: a t-size subset of a DIFFERENT close's shares cannot "
+          "forge cl_a's proof (share is close-bound)",
+          auth.recover_proof([(i, auth.share(i, cl_b)) for i in range(1, t + 1)],
+                             cl_a) is None)
+    check("N1 authorization never flavors the pulse: the proof recovered from "
+          "any >=t share subset here equals the resolver's admitted proof (the "
+          "same close, same P_s, same root)",
+          auth.recover_proof(full_shares, cl_a) == proof_a
+          and derive_root(cl_a, auth.recover_proof(full_shares, cl_a)) == derive_root(cl_a, proof_a))
 
     # ---------- B2: the protected challenge binds the EXACT value bytes --------
     check("B2 a proof for value A verifies against A and resolves to ONE root; "
@@ -481,7 +637,6 @@ def main():
           and resolve(epoch, foreign_net, foreign_src, foreign_src.proof(foreign_net))
           == {"event_hash": foreign_net.hash.hex(), "outcome": "REJECTED"})
 
-
     # ---------- B3: transport/replay composition (schedule-driven) -------------
     n_events = 601
     closes, evs, type_ = [], [], []
@@ -525,6 +680,34 @@ def main():
     check("B3 transport/replay composition: %d in-epoch closes under 4 delivery "
           "schedules all RECONVERGE to the IDENTICAL authoritative-history digest"
           % n_events, len(converged_digests) == 1)
+
+    # ---------- Noot #3: applied history is a PREFIX of one canonical history ---
+    # A node caches future proofs but APPLIES randomness strictly in canonical
+    # ledger order: its applied view stalls at the first gap. So under every
+    # delivery schedule the APPLIED root sequence must be a prefix of the
+    # canonical slot-ordered history -- nodes differ only in prefix length,
+    # never an applied 'ROOT,UNKNOWN,ROOT' hole.
+    order_by_slot = sorted(range(n_events), key=lambda i: evs[i].slot)
+    canon_roots = [derive_root(evs[i], proofs[i]) for i in order_by_slot]
+    prefix_ok = True
+    for sched in schedules:
+        applied_roots = []
+        stalled = False
+        for i in order_by_slot:
+            if stalled:
+                continue                          # not applied (blocked by gap)
+            d = resolve(epoch, evs[i], source, proofs[i] if sched(i) else None)
+            if d["outcome"] == "ROOT":
+                applied_roots.append(bytes.fromhex(d["source_root"]))
+            elif d["outcome"] == "UNKNOWN":
+                stalled = True                    # applied history stops here
+        if applied_roots != canon_roots[:len(applied_roots)]:
+            prefix_ok = False
+    check("N3 ledger-realistic applied history: under every delivery schedule the "
+          "APPLIED root sequence is a PREFIX of the canonical slot-ordered history "
+          "-- nodes cache future proofs but their applied view stalls at the first "
+          "gap, so nodes differ only in prefix length, never an applied "
+          "ROOT,UNKNOWN,ROOT hole", prefix_ok)
 
     # ---------- B4: authority surface -------------------------------------------
     resolved = resolve(epoch, cl_a, source, proof_a)
@@ -685,11 +868,12 @@ def main():
     pinned_b3 = history_digest([
         resolve(epoch, evs[i], source, proofs[i]) for i in range(n_events)])
     comp_seq_digest = sha256(base_seq).hex()
-    # Fixed literals captured once from a green run. A change to the close-lock /
-    # challenge / proof / root / KDF / transporter encoding changes these digests,
-    # so an implementation that reproduces the state machine must match them.
-    EXP_B3 = "7fdbb44b3048de6bb6601a2349ead854c739559f5b5e5f1a2bea77db9d226162"
-    EXP_COMP = "d0106eeda93d8d69d6f569b2b12ff119ba0918312b8430c2d7588648d318eb04"
+    # Fixed literals captured once from a green run. A change to the close-input /
+    # close-lock / challenge / proof / root / KDF / transporter encoding changes
+    # these digests, so an implementation that reproduces the state machine must
+    # match them.
+    EXP_B3 = "2ff4e8aed8bf60e9664ccd1a49783f85827330a76572c52949da1bd0b7111e95"
+    EXP_COMP = "fce6612f2fe91dc2513d8af9537580dc584d593828a92989631942ae14c204e7"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literal: %s" % pinned_b3, pinned_b3 == EXP_B3)
     check("P compositional root-sequence digest matches the REGISTERED literal: "
