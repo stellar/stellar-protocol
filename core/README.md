@@ -16,9 +16,11 @@
   due to the issues that may arise during an initial implementation.
 - **Implemented** - A CAP that has been implemented with the protocol version specified in the CAP,
   and whose [exit criteria](../cap-template.md#exit-criteria) have been met. It will graduate to
-  **Final** when it has been formally accepted by a majority of validators (nodes) on the network.
-- **Final** — A CAP that has been accepted by a majority of validators (nodes) on the network. A
-  final CAP should only be updated to correct errata.
+  **Final** when it has been formally accepted by a Stellar Consensus Protocol (SCP) quorum of
+  validators (nodes) on the network.
+- **Final** — A CAP that has been accepted by an SCP quorum of validators (nodes) on the network.
+  Final CAPs can be updated only to follow procedure, add implementation considerations, or correct
+  errata (such as typos).
 
 ### Additional Statuses
 - **Rejected** - A CAP that has been formally rejected by the CAP Core Team, and will not be
@@ -56,14 +58,14 @@
 | [CAP-0038](cap-0038.md) | 18 | Automated Market Makers | Jonathan Jove | Final |
 | [CAP-0040](cap-0040.md) | 19 | Ed25519 Signed Payload Signer for Transaction Signature Disclosure | Leigh McCulloch | Final |
 | [CAP-0042](cap-0042.md) | - | Multi-Part Transaction Sets | Nicolas Barry | Final |
-| [CAP-0046](cap-0046.md) | 20 |Soroban smart contract system overview | Graydon Hoare | Final |
+| [CAP-0046](cap-0046.md) | 20 | Soroban smart contract system overview | Graydon Hoare | Final |
 | [CAP-0046-01 (formerly 0046)](cap-0046-01.md) | 20 | WebAssembly Smart Contract Runtime Environment | Graydon Hoare | Final |
 | [CAP-0046-02 (formerly 0047)](cap-0046-02.md) | 20 | Smart Contract Lifecycle | Siddharth Suresh | Final |
 | [CAP-0046-03 (formerly 0051)](cap-0046-03.md) | 20 | Smart Contract Host Functions | Jay Geng | Final |
 | [CAP-0046-05 (formerly 0053)](cap-0046-05.md) | 20 | Smart Contract Data | Graydon Hoare | Final |
 | [CAP-0046-06 (formerly 0054)](cap-0046-06.md) | 20 | Smart Contract Standardized Asset | Jonathan Jove | Final |
 | [CAP-0046-07 (formerly 0055)](cap-0046-07.md) | 20 | Fee model in smart contracts | Nicolas Barry | Final |
-| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | 20 |Smart Contract Logging | Siddharth Suresh | Final |
+| [CAP-0046-08 (formerly 0056)](cap-0046-08.md) | 20 | Smart Contract Logging | Siddharth Suresh | Final |
 | [CAP-0046-09](cap-0046-09.md) | 20 | Network Configuration Ledger Entries | Dmytro Kozhevin | Final |
 | [CAP-0046-10](cap-0046-10.md) | 20 | Smart Contract Budget Metering | Jay Geng | Final |
 | [CAP-0046-11](cap-0046-11.md) | 20 | Soroban Authorization Framework | Dmytro Kozhevin | Final |
@@ -324,8 +326,8 @@ issues arise, a CAP team member moves it to **Implemented**.
 ### CAP Finalization
 
 Once an implemented CAP has been released in a specified version, the CAP should be updated with
-the protocol version that the implementation targets. From there, once a majority of validators on
-the network have accepted the implementation, it will move to **Final**.
+the protocol version that the implementation targets. From there, once an SCP quorum of validators
+on the network has accepted the implementation, it will move to **Final**.
 
 ## CAP Team Members
 
