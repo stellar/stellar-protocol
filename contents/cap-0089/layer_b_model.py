@@ -8,8 +8,8 @@ One canonical Core close-lock commitment per closed ledger:
               || H(externalized_value_bytes))          -- Core owns C_s
     ch    = H(domain || network_id || slot || epoch_hash
               || H(externalized_value_bytes))          -- the protected challenge
-    P_s   = unique threshold proof for C_s             -- Rust owns proof
-    R_s   = root(P_s)                                  -- derived only after verify
+    P_s   = H("Proof" || epoch_hash || ch)              -- canonical, NOT evidence
+    R_s   = root(P_s) = H("Root" || C_s || ch || P_s) -- derived only after verify
     PRNG(s)         = KDF(R_s, PRNG)
     APPLY(s)        = KDF(R_s, APPLY)
     NOMINATION(s+1) = KDF(R_s, NOMINATION)
@@ -65,8 +65,11 @@ NO_CALLER_OUTCOME_CLASS = frozenset()
 # the value is LOCALLY FULLY VALIDATED: setConfirmCommit -> commit confirmed ->
 # phase EXTERNALIZE -> valueExternalized. accepted-commit (mCommit in PREPARE)
 # is NOT finality and never authorizes a proof/share (dnFVg / Noot).
-RELEASE_BOUNDARY = b"confirm/externalize"
-RELEASE_ACCEPTED_COMMIT = b"accepted-commit"   # deliberately NOT authoritative
+# The canonical release certificate is the one SCP-phase string the boundary
+# grants; it is a public constant a TRUSTED Core transition reports, and Core's
+# native SCP machine (not the caller) owns proving the phase was reached.
+RELEASE_CERT_CONFIRM_EXTERNALIZE = b"confirm/externalize"
+RELEASE_CERT_ACCEPTED_COMMIT = b"accepted-commit"   # deliberately NOT authoritative
 # Sentinel constant that is safe to use in proofs (never equals a real SHA-256
 # digest of the challenge, avoiding any accidental equality).
 DOMAIN = b"Domain"
@@ -88,6 +91,7 @@ class EpochDescriptor:
     def __init__(self, format_version: int, authority_key: bytes,
                  membership_commitment: bytes, activation: int, retirement: int,
                  threshold: int, root_rule: bytes, event_mapping: bytes,
+                 verifier_rule: bytes = b"vrf-threshold/v1",
                  scheme: bytes = EPOCH_SCHEME):
         self.format_version = format_version
         self.authority_key = authority_key
@@ -95,11 +99,14 @@ class EpochDescriptor:
         self.activation = activation
         self.retirement = retirement
         self.threshold = threshold
+        self.verifier_rule = verifier_rule
         self.root_rule = root_rule
         self.event_mapping = event_mapping
         self.scheme = scheme
         # ONE hash over every rule; every VARIABLE-length field is length-
-        # prefixed so the encoding is injective (dnFWC).
+        # prefixed so the encoding is injective (dnFWC).  The verifier_rule
+        # canonicalizes the exact proof verifier and encoding so a
+        # verifier/encoding change produces a NEW epoch identity (dnFV1).
         def lp(b: bytes) -> bytes:
             return struct.pack(">I", len(b)) + b
 
@@ -108,7 +115,8 @@ class EpochDescriptor:
             + struct.pack(">I", format_version) + lp(scheme)
             + lp(authority_key) + lp(membership_commitment)
             + struct.pack(">QQ", activation, retirement)
-            + struct.pack(">I", threshold) + lp(root_rule) + lp(event_mapping))
+            + struct.pack(">I", threshold) + lp(verifier_rule)
+            + lp(root_rule) + lp(event_mapping))
 
     def active_at(self, slot: int) -> bool:
         return self.activation <= slot < self.retirement
@@ -135,24 +143,39 @@ class LockedClose:
         self.slot = slot
         self.value_bytes = value_bytes
         self.hash = sha256(
-            b"CloseLock" + epoch.hash + NETWORK + u32(slot)
+            b"CloseLock" + NETWORK + epoch.hash + u32(slot)
             + sha256(value_bytes))
 
     def validate(self) -> bool:
         recomputed = sha256(
-            b"CloseLock" + self.epoch_hash + self.network_id + u32(self.slot)
+            b"CloseLock" + self.network_id + self.epoch_hash + u32(self.slot)
             + sha256(self.value_bytes))
         return recomputed == self.hash
+
+    @classmethod
+    def with_network(cls, epoch, slot: int, value_bytes: bytes,
+                     network_id: bytes) -> "LockedClose":
+        """Build a self-consistent LockedClose under an ARBITRARY network id
+        (used only to prove the resolver rejects a cross-network close)."""
+        obj = cls.__new__(cls)
+        obj.epoch_hash = epoch.hash
+        obj.network_id = network_id
+        obj.slot = slot
+        obj.value_bytes = value_bytes
+        obj.hash = sha256(
+            b"CloseLock" + network_id + epoch.hash + u32(slot)
+            + sha256(value_bytes))
+        return obj
 
     def challenge(self) -> bytes:
         return spec_challenge(self.epoch_hash, self.slot, self.value_bytes)
 
 
-def authenticate_proof(cl: LockedClose, evidence: bytes) -> bytes:
-    # The UNFORGEABLE proof for the EXACT externalized value bytes: an
-    # authenticator over (epoch, challenge, release evidence). DISTINCT from the
-    # root (proof/root split, dnFVg).
-    return sha256(b"Proof" + cl.epoch_hash + cl.challenge() + evidence)
+def authenticate_proof(cl: LockedClose) -> bytes:
+    # The CANONICAL proof for the EXACT externalized value bytes: a pure
+    # function of (epoch_hash, challenge).  Evidence authorizes RELEASE only,
+    # and never enters the proof or the root (dnFVg / permanent-pulse / S3).
+    return sha256(b"Proof" + cl.epoch_hash + cl.challenge())
 
 
 def derive_root(cl: LockedClose, proof: bytes) -> bytes:
@@ -176,11 +199,30 @@ class RandomnessSource:
         self.epoch = epoch
         self._admitted = {}      # C_s.hash -> evidence
 
-    def admit(self, cl: LockedClose, stage: bytes, fully_validated: bool,
-              evidence: bytes) -> bool:
-        if stage != RELEASE_BOUNDARY or not fully_validated:
+    def admit(self, cl: LockedClose, release_certificate: bytes,
+              fully_validated: bool, evidence: bytes) -> bool:
+        # A release is authorized ONLY by a validated CONFIRM/EXTERNALIZE
+        # release certificate for the EXACT close, once the value is locally
+        # fully validated (dnFVg / thread d7OZB / d7mt-).  `release_certificate`
+        # is the canonical SCP-phase constant (a public sentinel representing
+        # the TRUSTED Core transition; native C++ owns enforcing that the phase
+        # was actually reached), NOT a free-form caller string.  `evidence` may
+        # differ across honest witnesses but is RELEASE-DATA ONLY: it never
+        # enters the canonical proof, so any valid witness yields the SAME
+        # proof and the SAME root (permanent-pulse / S3, thread d8a2z).
+        if release_certificate != RELEASE_CERT_CONFIRM_EXTERNALIZE:
+            return False
+        if not fully_validated:
+            return False
+        if not cl.validate():
+            return False
+        if cl.network_id != NETWORK:
             return False
         if cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        if evidence is None:
             return False
         self._admitted[cl.hash] = evidence
         return True
@@ -191,7 +233,7 @@ class RandomnessSource:
     def proof(self, cl: LockedClose) -> "bytes | None":
         if not self.has_valid_proof(cl):
             return None
-        return authenticate_proof(cl, self._admitted[cl.hash])
+        return authenticate_proof(cl)
 
 
 def verify_proof(source: RandomnessSource, cl: LockedClose, proof: bytes) -> bool:
@@ -199,7 +241,7 @@ def verify_proof(source: RandomnessSource, cl: LockedClose, proof: bytes) -> boo
         return False
     if not source.has_valid_proof(cl):
         return False
-    return proof == authenticate_proof(cl, source._admitted[cl.hash])
+    return proof == authenticate_proof(cl)
 
 
 def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
@@ -210,7 +252,7 @@ def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
     source_root?}.
 
     Gate 0 (integrity): LockedClose hash must match its declared fields.
-    Gate 1 (epoch):     close bound to THIS epoch and active (dnFVu).
+    Gate 1 (epoch+network): close bound to THIS epoch, THIS network, and active.
     Gate 2 (boundary + proof): source must have boundary-admitted the exact
         close (CONFIRM/EXTERNALIZE + locally fully validated) and the proof must
         verify. No proof -> UNKNOWN (stalled apply, never NO_PULSE, never
@@ -218,7 +260,8 @@ def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
     """
     if not cl.validate():
         return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
-    if cl.epoch_hash != epoch.hash or not epoch.active_at(cl.slot):
+    if (cl.epoch_hash != epoch.hash or cl.network_id != NETWORK
+            or not epoch.active_at(cl.slot)):
         return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
     if proof is None:
         return {"event_hash": cl.hash.hex(), "outcome": "UNKNOWN"}
@@ -288,18 +331,18 @@ def main():
 
     # ---------- Release boundary: CONFIRM/EXTERNALIZE + fully validated ------
     src_early = RandomnessSource(epoch)
-    early_ok = src_early.admit(cl_a, RELEASE_ACCEPTED_COMMIT, True,
+    early_ok = src_early.admit(cl_a, RELEASE_CERT_ACCEPTED_COMMIT, True,
                                sha256(b"ev-early"))
     check("dnFVg release boundary: a proof/share is NOT released at "
           "accepted-commit (mCommit in PREPARE is not safe-to-act finality)",
           not early_ok and src_early.proof(cl_a) is None
           and resolve(epoch, cl_a, src_early, None)["outcome"] == "UNKNOWN")
     alien_stage = RandomnessSource(epoch)
-    not_validated = alien_stage.admit(cl_a, RELEASE_BOUNDARY, False,
+    not_validated = alien_stage.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, False,
                                       sha256(b"ev-not-validated"))
     check("dnFVg release boundary: externalize WITHOUT local full validation "
           "releases no proof", not not_validated and alien_stage.proof(cl_a) is None)
-    ok_boundary = source.admit(cl_a, RELEASE_BOUNDARY, True,
+    ok_boundary = source.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True,
                                sha256(b"ext-validated-A"))
     proof_a = source.proof(cl_a)
     check("dnFVg release boundary + proof/root split: after CONFIRM/EXTERNALIZE "
@@ -309,7 +352,7 @@ def main():
           and proof_a != derive_root(cl_a, proof_a)
           and verify_proof(source, cl_a, proof_a))
     check("dnFVg an UNadmitted close is REJECTED, never ROOT",
-          resolve(epoch, cl_b, source, authenticate_proof(cl_b, sha256(b"x")))
+          resolve(epoch, cl_b, source, authenticate_proof(cl_b))
           == {"event_hash": cl_b.hash.hex(), "outcome": "REJECTED"})
 
     # ---------- B2: the protected challenge binds the EXACT value bytes --------
@@ -329,7 +372,7 @@ def main():
           and consumer_kdf(root_a, LABEL_PRN) == prng_a)
     # B2: proof for A must FAIL against B (different externalized bytes).
     source_b = RandomnessSource(epoch)
-    source_b.admit(cl_b, RELEASE_BOUNDARY, True, sha256(b"ext-validated-B"))
+    source_b.admit(cl_b, RELEASE_CERT_CONFIRM_EXTERNALIZE, True, sha256(b"ext-validated-B"))
     check("B2 the challenge binds the externalized value: a proof for value A "
           "FAILS against value B (distinct challenge), and B resolves only under "
           "its own admitted proof",
@@ -347,7 +390,7 @@ def main():
         root_rule=epoch.root_rule, event_mapping=epoch.event_mapping)
     foreign_source = RandomnessSource(other_epoch)
     cl_foreign = LockedClose(other_epoch, slot, value_a)
-    foreign_source.admit(cl_foreign, RELEASE_BOUNDARY, True,
+    foreign_source.admit(cl_foreign, RELEASE_CERT_CONFIRM_EXTERNALIZE, True,
                          sha256(b"foreign-ev"))
     check("dnFVu epoch binding: a close derived under a DIFFERENT epoch is "
           "REJECTED under the calling epoch, not resolved here; it resolves only "
@@ -362,7 +405,7 @@ def main():
     # ---------- Admission keyed by the EXACT close (dnFWo) ---------------------
     cl_c = LockedClose(epoch, slot + 5, value_a)      # same value, DIFFERENT slot
     src_slot = RandomnessSource(epoch)
-    src_slot.admit(cl_c, RELEASE_BOUNDARY, True, sha256(b"slot-ev"))
+    src_slot.admit(cl_c, RELEASE_CERT_CONFIRM_EXTERNALIZE, True, sha256(b"slot-ev"))
     check("dnFWo admission by the exact close: admitting one close (value+slot) "
           "does NOT stock a valid proof for a DIFFERENT close sharing only the "
           "value bytes -- cl_a's proof is absent and its stale try is REJECTED",
@@ -389,6 +432,56 @@ def main():
           "(root_rule=b'a',event_mapping=b'bc') vs (root_rule=b'ab',event_mapping"
           "=b'c') yields DIFFERENT epoch hashes", pair1.hash != pair2.hash)
 
+    # ---------- dnFV1: the proof verifier/encoding is canonicalized in the -----
+    # ---------- epoch identity (Copilot d7OY2) --------------------------------
+    verif_change = EpochDescriptor(format_version=epoch.format_version,
+                                    authority_key=epoch.authority_key,
+                                    membership_commitment=epoch.membership_commitment,
+                                    activation=epoch.activation,
+                                    retirement=epoch.retirement,
+                                    threshold=epoch.threshold,
+                                    root_rule=epoch.root_rule,
+                                    event_mapping=epoch.event_mapping,
+                                    verifier_rule=b"vrf-threshold/v2-alt")
+    check("dnFV1 the proof verifier/encoding is a canonical member of the epoch "
+          "rule-hash: a verifier/encoding change alone produces a NEW epoch "
+          "identity (single-interpretation + permanent-pulse invariant)",
+          verif_change.hash != epoch.hash
+          and verif_change.verifier_rule != epoch.verifier_rule)
+
+    # ---------- canonical proof is NOT a function of caller evidence -----------
+    # (Copilot d8a2z): admitting the SAME close under ANY two distinct valid
+    # witnesses yields the IDENTICAL proof and root (permanent-pulse / S3).
+    src_w1 = RandomnessSource(epoch)
+    src_w2 = RandomnessSource(epoch)
+    ok_w1 = src_w1.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True,
+                         sha256(b"witness-variant-one"))
+    ok_w2 = src_w2.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True,
+                         sha256(b"witness-variant-two"))
+    p_w1, p_w2 = src_w1.proof(cl_a), src_w2.proof(cl_a)
+    r_w1 = derive_root(cl_a, p_w1)
+    r_w2 = derive_root(cl_a, p_w2)
+    check("dnFVg canonical proof/root: two DIFFERENT honest witnesses for the "
+          "SAME close emit the SAME canonical proof and the SAME root -- "
+          "evidence authorizes release only and never changes the future "
+          "permanent-pulse value",
+          ok_w1 and ok_w2 and p_w1 == p_w2 and r_w1 == r_w2
+          and p_w1 is not None and p_w1 == authenticate_proof(cl_a))
+
+    # ---------- cross-network binding (Copilot d7OZI) --------------------------
+    foreign_net = LockedClose.with_network(epoch, slot, value_a,
+                                           sha256(b"SomeOtherNetwork"))
+    foreign_src = RandomnessSource(epoch)
+    admitted_foreign = foreign_src.admit(
+        foreign_net, RELEASE_CERT_CONFIRM_EXTERNALIZE, True, sha256(b"net-ev"))
+    check("dnFVu cross-network binding: a self-consistent close rebuilt under a "
+          "NON-local network id is REJECTED by the resolver (never ROOT), and is "
+          "never admitted by this source",
+          not admitted_foreign
+          and resolve(epoch, foreign_net, foreign_src, foreign_src.proof(foreign_net))
+          == {"event_hash": foreign_net.hash.hex(), "outcome": "REJECTED"})
+
+
     # ---------- B3: transport/replay composition (schedule-driven) -------------
     n_events = 601
     closes, evs, type_ = [], [], []
@@ -398,7 +491,7 @@ def main():
         closes.append(c)
         evs.append(c)
         type_.append("root")
-        source.admit(c, RELEASE_BOUNDARY, True, sha256(b"witness:%d" % i))
+        source.admit(c, RELEASE_CERT_CONFIRM_EXTERNALIZE, True, sha256(b"witness:%d" % i))
     proofs = {i: source.proof(evs[i]) for i in range(n_events)}
     schedules = [
         lambda i: True,                                       # [proof]
@@ -478,7 +571,7 @@ def main():
           all(not src_cold.has_valid_proof(c) for c in cand_closes)
           and all(src_cold.proof(c) is None for c in cand_closes))
     real = cand_closes[3]
-    src_cold.admit(real, RELEASE_BOUNDARY, True, sha256(b"real-ev"))
+    src_cold.admit(real, RELEASE_CERT_CONFIRM_EXTERNALIZE, True, sha256(b"real-ev"))
     check("O2 once EXACTLY ONE close is boundary-admitted, only that close has a "
           "valid proof/root; every other candidate yields none (no post-hoc "
           "selection among previewed candidates)",
@@ -595,8 +688,8 @@ def main():
     # Fixed literals captured once from a green run. A change to the close-lock /
     # challenge / proof / root / KDF / transporter encoding changes these digests,
     # so an implementation that reproduces the state machine must match them.
-    EXP_B3 = "4380f4de8db886900813d11dd795ca91a5ecb80ac61ec90657701eee0a1d997a"
-    EXP_COMP = "ae66b20d6babc74cf058e22404dc1d953982c74bc1405c7195d9f7404da17be5"
+    EXP_B3 = "7fdbb44b3048de6bb6601a2349ead854c739559f5b5e5f1a2bea77db9d226162"
+    EXP_COMP = "d0106eeda93d8d69d6f569b2b12ff119ba0918312b8430c2d7588648d318eb04"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literal: %s" % pinned_b3, pinned_b3 == EXP_B3)
     check("P compositional root-sequence digest matches the REGISTERED literal: "
