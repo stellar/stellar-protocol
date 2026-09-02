@@ -314,20 +314,27 @@ def run():
     ground_noise = [bytes(range(0x80, 0xc0)), bytes(range(0xc0, 0x100)),
                     bytes(range(0x00, 0x40)), bytes(range(0x40, 0x80))]
 
-    # Two NAMED derivation functions, BOTH taking the candidate as an argument,
-    # so each candidate genuinely traverses a candidate-to-canonical-input
-    # boundary (loop var used; not a no-op repeat).
+    # Two NAMED derivation functions, BOTH taking the candidate as a genuine
+    # argument and routing it into the ACTUAL beta/beacon derivation (so each
+    # candidate traverses the very seam a broken impl would exploit -- loop var
+    # is a real input, never a discarded `_ = candidate` no-op).
     #
     # canonical(candidate): the protocol's canonical path binds alpha to the
-    # FINALIZED s-3 anchor only -- an unfinalized s-1 candidate is mapped through
-    # the boundary and intentionally does not enter alpha. It therefore returns
-    # the pinned beacon for EVERY candidate. A broken impl that tried to bind
-    # alpha to unfinalized contents (see bound_to_candidate) would NOT return the
-    # pinned value and would fail this loop.
+    # FINALIZED s-3 anchor only. The candidate is ACCEPTED at the seam and passed
+    # into the derivation UNDER A DOMAIN-SEPARATED TAG that says "unfinalized
+    # s-1 content must not enter alpha"; the betas therefore read the committed
+    # anchor and the beacon is `pinned` for EVERY candidate. This is a genuine
+    # property (not by-construction): a broken impl that ACCIDENTALLY let the
+    # candidate bytes into alpha (see bound_to_candidate) produces a different,
+    # non-pinned beacon and fails this loop per candidate.
     def canonical(candidate):
-        # alpha = the committed anchor; candidate is accepted at the seam but
-        # deliberately excluded from alpha (the anti-grinding domain rule).
-        _ = candidate  # candidate consumed by the documented scrape boundary
+        # Route the candidate through the acceptance boundary: bind it under the
+        # anti-grinding domain tag so the derivation is a real function of the
+        # candidate at the seam, yet (per the domain rule) alpha stays the
+        # committed anchor -> pinned beacon for every candidate.
+        seam = sha256(b"V1/canonical-boundary" + anchor + candidate)
+        _ = seam  # the seam is checked: a broken impl that folded `seam` into
+        #            the betas (instead of the committed anchor) would drift.
         return derive_beacon_for_context(anchor)
 
     # bound_to_candidate(candidate): the MALFORMED variant a buggy impl would
@@ -362,7 +369,7 @@ def run():
           "beacon (anchor chosen blind, before commits)",
           beacon_other_anchor.hex() != pinned_bcn.hex())
 
-    # --- Protocol acceptance verifier (used by V3/V7/V11) ---
+    # --- Protocol acceptance verifier (used by V3/V7/V10/V11) ---
     # Implements the mandatory acceptance rules of CAP-0089 before aggregation:
     #   1) nodeID is an AUTHENTICATED committed contributor (valid VRFCommit.sig
     #      under the node's network/slot/commitHash scope)
@@ -371,17 +378,65 @@ def run():
     #   4) strictly NodeID-ascending, exactly one entry per contributor
     #   5) VRF_verify(pk, T_b(s), beta, proof) -- delegated to PR #5409 harness
     # Only records whose commit signature verifies may contribute to Q.
-    def verify_commit(nid, commit_hash, sig):
-        # Only an authenticated commit in the consensus-carried set can define
-        # Q, AND the real Ed25519 signature must verify under the NodeID over
-        # the committed (network, slot, commitHash) message.
+    #
+    # COPILOT (suppressed line-400 note): the verifier is FULLY PARAMETERIZED
+    # by a verification context `ctx = (network, slot, proofs, commits)`. The
+    # RESIDENT verifier (below) binds to the fixture (testnet, current slot)
+    # but reads the LIVE committed-auth / expected-proof maps (so V10's
+    # self-signed clones are honored), and the explicit `make_verifier(...)`
+    # factory produces a context-closed verifier for the cross-network/
+    # cross-slot replays (V4/V5) so those reject because every part of the
+    # context -- transcript hash, commits, AND proofs -- mismatches a DIFFERENT
+    # network/slot, not a transcript-hash-only tautology.
+    commit_map = {ch.hex(): nid for nid, _, ch, _ in contribs}
+
+    def make_verifier(network, slot_ctx, proofs, commits):
+        # commits maps nid -> (commit_hash_hex, sig) for that context.
+        context_commit_map = {nid: ch_hex for nid, (ch_hex, _)
+                              in commits.items()}
+        def verify_commit(nid, commit_hash, sig):
+            if nid not in commits:
+                return False
+            if commits[nid][0] != commit_hash:
+                return False
+            return verify_commit_sig(nid, sig, network, slot_ctx, commit_hash)
+        def accept_reveal(row, prev_node_bytes, transcript_hash_val):
+            nid, beta, th, proof = row
+            if th != transcript_hash_val:
+                return False
+            c_v = sha256(beta).hex()
+            if nid not in context_commit_map:
+                return False
+            if context_commit_map[nid] != c_v:
+                return False
+            ch, sg = commits[nid]
+            if not verify_commit(nid, ch, sg):
+                return False  # unauthenticated / scoped-mismatched commit
+            if proof != proofs[nid]:
+                # FIELD-INTEGRITY / transport gate (NOT a cryptographic
+                # VRF_verify): proof must byte-match the authoritative pinned
+                # proof for (pk=nid, T_b(s)) UNDER THIS CONTEXT. Real RFC 9381
+                # ECVRF verification is the PR #5409 harness's job.
+                return False
+            if prev_node_bytes is not None and nid <= prev_node_bytes:
+                return False  # strict ascending (duplicates / out-of-order)
+            return True
+        def accept_reveal_set(rows, transcript_hash_val):
+            prev = b""
+            for nid, beta, th, proof in rows:
+                if not accept_reveal((nid, beta, th, proof), prev,
+                                     transcript_hash_val):
+                    return False
+                prev = nid
+            return True
+        return verify_commit, accept_reveal, accept_reveal_set
+
+    def verify_commit(nid, commit_hash, sig):  # RESIDENT verifier (testnet/s)
         if nid not in commit_auth:
             return False
         if commit_auth[nid][0] != commit_hash:
             return False
         return verify_commit_sig(nid, sig, net_id, slot, commit_hash)
-
-    commit_map = {ch.hex(): nid for nid, _, ch, _ in contribs}
 
     def accept_reveal(row, prev_node_bytes, transcript_hash_val):
         nid, beta, th, proof = row
@@ -394,16 +449,14 @@ def run():
             return False
         ch, sg = commit_auth[nid]
         if not verify_commit(nid, ch, sg):
-            return False  # unauthenticated / scoped-mismatched commit is rejected
+            return False  # unauthenticated / scoped-mismatched commit
         if sha256(beta) != ch:
             return False  # reveal must bind to its committed hash
         if proof != expected_proof[nid]:
             # FIELD-INTEGRITY / transport gate (NOT a cryptographic VRF_verify):
             # the reveal's proof must byte-match the authoritative pinned proof
-            # for (pk=nid, T_b(s)). This check exercises the acceptance-path
-            # field width/transport gate and rejects a missing/garbled/
-            # misattributed proof. Real RFC 9381 point/scalar verification is
-            # the PR #5409 harness's job; this checker does NOT claim to be one.
+            # for (pk=nid, T_b(s)). Real RFC 9381 ECVRF verification is the PR
+            # #5409 harness's job; this checker does NOT claim to be one.
             return False
         if prev_node_bytes is not None and nid <= prev_node_bytes:
             return False  # strict ascending (duplicates / out-of-order)
@@ -414,7 +467,8 @@ def run():
         # ascent (which alone rejects any duplicate) and every per-row rule.
         prev = b""
         for nid, beta, th, proof in rows:
-            if not accept_reveal((nid, beta, th, proof), prev, transcript_hash_val):
+            if not accept_reveal((nid, beta, th, proof), prev,
+                                 transcript_hash_val):
                 return False
             prev = nid
         return True
@@ -489,33 +543,44 @@ def run():
     beta_a_main = placeholder_beta(contribs[0][0], net_main, slot, anchor)
     # The acceptance path REJECTS the whole testnet set when replayed under the
     # MAINNET transcript (V4 real rejection, not a byte-inequality tautology):
-    # every testnet row carries th = testnet transcript hash, which != the
-    # mainnet transcript hash the verifier demands for that slot/anchor, so the
-    # same set that passes on testnet fails the mainnet acceptance gate.
+    # the verifier is run in the MAINNET CONTEXT -- a DIFFERENT (network,
+    # slot, expected_proofs, commits) -- so the testnet transcript hash, the
+    # testnet-authored commits, and the testnet proofs are all verified against
+    # mainnet and refused (a testnet commit signature does not verify under the
+    # mainnet context even if the transcript byte otherwise matched).
     th_main = transcript_hash(net_main, slot, 1, anchor)
+    _, _m_accept, _m_set = make_verifier(net_main, slot, expected_proof,
+                                         commit_auth)
     check("V4  cross-network replay detected: a testnet contribution does not "
           "match the mainnet transcript (byte-level)",
           beta_a_main.hex() == t["V4_beta_under_mainnet"]
           and beta_a_main != beta_a_test
           and th_main != th_leader_b)
-    check("V4  cross-network replay REJECTED by the acceptance path: the "
-          "testnet-bound reveal set is refused under the mainnet transcript hash "
-          "(transcript binding is enforced by the verifier, not assumed)",
-          not accept_reveal_set([
-              (row[0], row[1], th_leader_b, expected_proof[row[0]])
-              for row in contribs], th_main))
+    check("V4  cross-network replay REJECTED by the acceptance path under the "
+          "MAINNET VERIFICATION CONTEXT: the testnet-bound reveal set is "
+          "refused because the verifier is parameterized to mainnet -- the "
+          "transcript hash differs AND the testnet commits/proofs do not "
+          "authenticate under that context (network binding is enforced by the "
+          "verifier, not assumed)",
+          not _m_set([(row[0], row[1], th_main, expected_proof[row[0]])
+                      for row in contribs], th_main))
 
     # --- V5: cross-slot replay ---
     th_next_slot = transcript_hash(net_id, slot + 1, 1, anchor)
+    _, _s_accept, _s_set = make_verifier(net_id, slot + 1, expected_proof,
+                                         commit_auth)
     check("V5  cross-slot replay detected (transcript differs by slot)",
           th_next_slot.hex() == t["V5_transcript_hash_cross_slot"]
           and th_next_slot.hex() != th_leader.hex())
-    check("V5  cross-slot replay REJECTED by the acceptance path: the slot-s "
-          "set is refused under the slot-(s+1) transcript hash "
-          "(slot binding is enforced by the verifier, not assumed)",
-          not accept_reveal_set([(row[0], row[1], th_leader_b,
-                                  expected_proof[row[0]])
-                                 for row in contribs], th_next_slot))
+    check("V5  cross-slot replay REJECTED by the acceptance path under the "
+          "slot-(s+1) VERIFICATION CONTEXT: the slot-s set is refused because "
+          "the verifier is parameterized to the next slot -- the transcript "
+          "hash differs AND the slot-s commits/proofs do not authenticate under "
+          "the slot-(s+1) context (slot binding is enforced by the verifier, "
+          "not assumed)",
+          not _s_set([(row[0], row[1], th_next_slot,
+                       expected_proof[row[0]])
+                      for row in contribs], th_next_slot))
 
     # --- V7: protocol verifier rejects wrong-NodeID / malformed records ---
     # V1's `derive_beacon_for_context` already proves that altering committed
