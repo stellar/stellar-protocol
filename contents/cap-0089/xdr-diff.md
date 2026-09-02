@@ -1,5 +1,15 @@
 # CAP-0089 XDR changes
 
+**Status: this diff is conformance/evidence only.** It records the Layer-A
+trailing-field shape that CAP-0089 deliberately **never serializes in any
+shipping protocol version** (see [`core/cap-0089.md`]
+(../../core/cap-0089.md), "Status and the Layer A / Layer B deployment fork" and
+the exit criteria): it exists so an implementer can audit and reproduce the
+machine-checked evidence of CAP-0089's cryptographic claims. The protocol
+randomness format that ships is the single runtime-discriminated Layer-B
+representation, **not** the `#ifdef` trailing members shown below. Implementers
+must not implement this file's shape as a deployable format.
+
 This file records, as a canonical unified diff, the changes to the XDR in the
 [stellar-xdr](https://github.com/stellar/stellar-xdr) repository required by
 CAP-0089. The authoritative copy of this diff — which is machine-checked by the

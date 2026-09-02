@@ -265,6 +265,25 @@ def run():
     check("V8  mutated transcript hash differs and matches pinned value",
           sha256(bytes(t_mut)).hex() == t["V8_transcript_hash_mutated"]
           and sha256(bytes(t_mut)).hex() != th_leader.hex())
+    # V8 also covers mutation of the COMMITTED B(s) (the `vrfBeaconNext` carried
+    # in the header). The recompute path derives B(s) from the accepted reveal
+    # set and requires it to equal the committed beacon: a flipped committed B(s)
+    # fails the recomputed-beacon equality gate. (The T(s)-side rejection of a
+    # reveal bound to a mutated transcript is asserted below, next to the
+    # acceptance verifier it depends on.)
+    recomputed_beacon = beacon(sorted(
+        [(row[0], row[1]) for row in contribs]))
+    committed_beacon = pinned_beacon
+    committed_match = recomputed_beacon == committed_beacon
+    flipped_committed = bytes(committed_beacon)
+    flipped_committed = flipped_committed[:-1] \
+        + bytes([flipped_committed[-1] ^ 1])
+    dropped_or_flipped = recomputed_beacon != flipped_committed
+    check("V8  committed-beacon path: recomputing B(s) from the ACCEPTED reveal "
+          "set equals the committed vrfBeaconNext, and a FLIPPED committed "
+          "beacon fails the recomputed-equality gate (mutation of the committed "
+          "B(s) causes protocol rejection)",
+          committed_match and dropped_or_flipped)
 
     # --- Aggregation orders by NodeID and matches the pinned beacon ---
     check("contributors are aggregated ordered by NodeID ascending",
@@ -410,13 +429,21 @@ def run():
                             th_leader_b)
               for i, row in enumerate(contribs))
           and not accept_reveal(bad_row, None, th_leader_b))
-    check("V3  integrated proof verification (rule 5): a reveal with a garbled "
-          "or missing VRF proof is REJECTED by the acceptance path -- proof "
-          "checking is exercised here, not only delegated to the PR #5409 "
-          "primitive harness",
+    check("V3  placeholder-field integrity (rule 5 boundary): a reveal with a "
+          "garbled or missing placeholder proof field is REJECTED by the "
+          "acceptance path -- this exercises the acceptance-path field "
+          "integrity here; real RFC 9381 ECVRF point/scalar verification is "
+          "delegated to the PR #5409 primitive harness",
           not accept_reveal(garble_proof, None, th_leader_b)
           and not accept_reveal((contribs[0][0], contribs[0][1], th_leader_b,
                                  b""), None, th_leader_b))
+    check("V8  a reveal bound to the TRANSCRIPT-mutated hash is REJECTED by the "
+          "acceptance path (the committed reveals carry the original leader "
+          "transcriptHash; flipping a byte of T(s) changes the expected "
+          "transcriptHash, so the same honest set no longer verifies)",
+          not accept_reveal_set([
+              (row[0], row[1], th_leader_b, expected_proof[row[0]])
+              for row in contribs], sha256(bytes(t_mut))))
 
     # --- V4: cross-network replay ---
     # Contributions are transcript-scoped; the testnet leader transcript differs
@@ -539,17 +566,38 @@ def run():
         verify_commit_sig(c["nid"], c["sig"], net_id, slot, c["commit_hash"])
         and sha256(c["beta"]) == c["commit_hash"]
         for c in clones)
-    augmented_rows = (honest_rows
-                      + [(c["nid"], c["beta"], c["th"],
-                          placeholder_proof(c["nid"], net_id, slot, anchor))
-                         for c in clones])
-    augmented_beacon = beacon(sorted(augmented_rows, key=lambda r: r[0]))
+    # Make the clones genuinely COMMITTED so they enter Q exactly the way an
+    # independent, correctly self-signed validator does: insert them into the
+    # authenticated commit set (commit_auth) and the beta->id reverse map
+    # (commit_map) that `accept_reveal`/`accept_reveal_set` consult, and extend
+    # the expected-proof map. Otherwise `accept_reveal_set` would reject every
+    # clone as uncommitted and the test would prove nothing.
+    for c in clones:
+        commit_auth[c["nid"]] = (c["commit_hash"], c["sig"])
+        commit_map[sha256(c["beta"]).hex()] = c["nid"]
+        expected_proof[c["nid"]] = placeholder_proof(c["nid"], net_id, slot, anchor)
+    # Drive the SAME protocol verifier the honest path uses: the augmented set
+    # (NodeID-ascending, exactly like the honest ordered set) must be accepted
+    # row-by-row -- authenticated commits -> clones enter Q and the aggregate --
+    # then the aggregate beacon over the augmented set differs from the honest
+    # beacon.
+    augmented_rows = sorted(
+        honest_rows
+        + [(c["nid"], c["beta"], c["th"],
+            placeholder_proof(c["nid"], net_id, slot, anchor))
+           for c in clones],
+        key=lambda r: r[0])
+    augmented_ok = accept_reveal_set(augmented_rows, th_leader_b) \
+        and all(accept_reveal(row, None, th_leader_b) for row in augmented_rows)
+    augmented_beacon = beacon(augmented_rows)
     check("V10 identity-splitting (Layer A boundary, documented): correctly "
-          "self-signed COMMITTED clones authenticate over the canonical message "
-          "and inflate the aggregate term count at constant consensus influence "
-          "-- so Layer A's raw identity count is not controller-independent "
-          "authority (this is why Layer B's precommitted rosters are the bar)",
-          clones_authenticated
+          "self-signed COMMITTED clones are inserted into the authenticated "
+          "commit set and pass the SAME accept_reveal_set protocol verifier as "
+          "honest reveals -- they enter Q and inflate the aggregate term count at "
+          "constant consensus influence -- so Layer A's raw identity count is not "
+          "controller-independent authority (this is why Layer B's precommitted "
+          "rosters are the bar)",
+          clones_authenticated and augmented_ok
           and augmented_beacon != beacon(contribs))
     phantom = (sha256(b"cloned-controller-uncommitted"), contribs[0][1], th_leader_b,
                placeholder_proof(sha256(b"cloned-controller-uncommitted"),
