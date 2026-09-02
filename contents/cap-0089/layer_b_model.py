@@ -206,16 +206,121 @@ def _spf_pub(d: int) -> bytes:
     return pow(_GRP_G, d, _GRP_P).to_bytes(32, "big")
 
 
-def group_pub_from_seed(seed: bytes) -> bytes:
-    # The epoch's committed authority/public key: Y = G^d, d from the recovered
-    # group secret. This is what `verify` binds every accepted proof to.
-    d = _spf_scalar(seed)
-    return _spf_pub(d)
+def _poly_coeffs(seed: bytes, threshold: int, n: int):
+    """Deterministic Shamir polynomial coefficients over GF(q). The GREEDY/group
+    secret is `f(0) = d`; the leading coefficients are derived from the setup
+    seed only (never from epoch/close bytes, so `d`, the epoch public key, and
+    the polynomial are stable across restarts and independent of any single
+    message). Reproducible from (seed, threshold, n) exactly as a real DKG
+    would publish a committed polynomial (this review: reconstruction must come
+    from the supplied shares, not a stored master)."""
+    return [(_spf_scalar(b"PolyCoeff" + u32(k) + b"cap-0089-v1" + seed)
+             % _GRP_Q) for k in range(threshold)]
+
+
+def _poly_share(seed: bytes, threshold: int, n: int, member_index: int) -> int:
+    """f(i) mod q -- the member's SECRET polynomial share (a Shamir share), the
+    actual value `recover_proof` Lagrange-interpolates. Fixed per member and
+    independent of the close (close-binding is enforced separately by the
+    sign-once/authorization gates in `share`)."""
+    coeffs = _poly_coeffs(seed, threshold, n)
+    x = member_index % _GRP_Q
+    acc = 0
+    for k, a in enumerate(coeffs):
+        acc = (acc + a * pow(x, k, _GRP_Q)) % _GRP_Q
+    return acc
+
+
+def _group_secret(seed: bytes, threshold: int, n: int) -> int:
+    """d = f(0) -- the unique recovered group secret. Defined from the same
+    polynomial the shares are evaluations of, so any t-subset Lagrange-
+    interpolates to this EXACT value (one-future / byte-identical P_s)."""
+    return _poly_coeffs(seed, threshold, n)[0]
+
+
+def _lagrange_recover(shares):
+    """Reconstruct f(0) by Lagrange interpolation over GF(q) from >= t distinct
+    (x_i, f(x_i)) pairs. `shares`: {member_index (as x): y}. Uses ONLY the
+    supplied share values -- there is NO master secret on, or needed by, this
+    path (Copilot this review). Returns the unique scalar `d = f(0)`."""
+    xs = list(shares.keys())
+    acc = 0
+    for i in xs:
+        xi = i % _GRP_Q
+        yi = shares[i] % _GRP_Q
+        num = 1
+        den = 1
+        for j in xs:
+            if j == i:
+                continue
+            xj = j % _GRP_Q
+            # L_i(0) = prod_{j!=i} (0 - xj) / (xi - xj)  over GF(q)
+            num = (num * ((-xj) % _GRP_Q)) % _GRP_Q
+            den = (den * ((xi - xj) % _GRP_Q)) % _GRP_Q
+        li = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+        acc = (acc + yi * li) % _GRP_Q
+    return acc % _GRP_Q
+
+
+def group_pub_from_seed(seed: bytes, threshold: int, n: int) -> bytes:
+    # The epoch's committed authority/public key: Y = G^d, d = f(0) from the
+    # same Shamir polynomial the n members hold shares of. `verify` binds every
+    # accepted proof to this committed key.
+    return _spf_pub(_group_secret(seed, threshold, n))
+
+
+def _member_confirm(seed: bytes, member_index: int) -> int:
+    """Per-member CONFIRM (SCP/externalization) sub-key `k_i` (separate from the
+    randomness threshold share -- key separation, RFC 9381 ss2 spirit + this
+    review's #9). Used ONLY to authenticate a member's CONFIRM->EXTERNALIZE
+    vote to the boundary; never to sign/verify the randomness proof."""
+    return _spf_scalar(sha256(b"ConfirmSubKey" + seed + u32(member_index) + b"v1"))
+
+
+def _member_confirm_pub(seed: bytes, member_index: int) -> bytes:
+    """Public verification key K_i = G^{k_i} for a member's CONFIRM vote."""
+    return _spf_pub(_member_confirm(seed, member_index))
+
+
+def _confirm_vote(k_i: int, epoch_hash: bytes, C_s: bytes) -> bytes:
+    # Member CONFIRM vote = deterministic Schnorr signature over
+    # ("CONFIRM", epoch_hash, C_s) under the member subkey k_i. Sealed and
+    # verifiable via K_i; a caller cannot mint one without k_i.
+    r = _spf_scalar(sha256(b"ConfirmNonce" + k_i.to_bytes(32, "big")
+                           + epoch_hash + C_s))
+    R = pow(_GRP_G, r, _GRP_P)
+    R_bytes = R.to_bytes(32, "big")
+    K = pow(_GRP_G, k_i, _GRP_P)
+    c = int.from_bytes(sha256(b"ConfirmChal" + epoch_hash + C_s
+                              + R_bytes + K.to_bytes(32, "big") + b"v1"), "big") % _GRP_Q
+    s = (r + c * k_i) % _GRP_Q
+    return R_bytes + s.to_bytes(32, "big")
+
+
+def _confirm_vote_verify(K_i_pub: bytes, epoch_hash: bytes, C_s: bytes,
+                         vote: bytes) -> bool:
+    if K_i_pub is None or len(K_i_pub) != 32 or vote is None or len(vote) != 64:
+        return False
+    K = int.from_bytes(K_i_pub, "big")
+    if not (0 < K < _GRP_P):
+        return False
+    R_bytes, s_bytes = vote[:32], vote[32:]
+    R = int.from_bytes(R_bytes, "big")
+    s = int.from_bytes(s_bytes, "big")
+    if not (0 < R < _GRP_P) or not (1 <= s < _GRP_Q):
+        return False
+    c = int.from_bytes(sha256(b"ConfirmChal" + epoch_hash + C_s
+                              + R_bytes + K_i_pub + b"v1"), "big") % _GRP_Q
+    return pow(_GRP_G, s, _GRP_P) == (R * pow(K, c, _GRP_P)) % _GRP_P
 
 
 def _spf_sign(d: int, epoch_hash: bytes, C_s: bytes) -> bytes:
-    # Deterministic, secret-nonce Schnorr signature. Unique per (d, epoch, C_s):
-    # no ride-along randomness, so a slot yields exactly one proof (I1-I4).
+    # Deterministic, secret-nonce Schnorr signature (the model's CANONICAL
+    # signature; RFC-6979-style). The model's own producer emits exactly one
+    # byte-string per (d, epoch, C_s). NOTE: the accepted ROOT does not depend
+    # on these signature bytes (see UniqueThresholdProof.verify) -- a second
+    # mathematically-valid signature under the same Y/yields the identical root,
+    # which is the one-future bound (Copilot this review).
     d_bytes = d.to_bytes(32, "big")
     r = _spf_scalar(sha256(b"SpfNonce" + d_bytes + epoch_hash + C_s))
     R = pow(_GRP_G, r, _GRP_P)
@@ -298,9 +403,15 @@ class EpochDescriptor:
         #     `n - f` honest members can actually gather `t` valid shares. If
         #     `t > n - f`, then with the f tolerated Byzantine members withholding
         #     (Layer B has NO fallback key), fewer than t honest shares exist and
-        #     ledger apply stalls indefinitely. E.g. (n=8, t=7) with default
-        #     f=5 passes the intersection bound 2*7-8=6>5 yet is UNPROVABLE
-        #     (7 <= 8-5 = 3 is false); such an epoch is now REJECTED.
+        #     ledger apply stalls indefinitely.
+        # The DEFAULT f is the largest value that satisfies BOTH bounds:
+        #     f = min(2*t - n - 1, n - t).
+        # For (n=8, t=7) the availability bound is binding -- n - t = 1 -- so the
+        # default is f = 1 and the epoch is VALID and provable (7 <= 8-1 = 7).
+        # A caller who FORCES a higher f (e.g. f = 5) gets it PRESERVED (never
+        # silently re-clamped down) and then an honest FAIL-CLOSED rejection when
+        # `t <= n - f` is violated (7 <= 3 is false). The clamp is applied to the
+        # DEFAULT only, never to a configured/declared f (Copilot this review).
         n = len(self.roster)
         default_f = max(0, min(2 * threshold - n - 1, n - threshold))
         self.byzantine_bound = (default_f if byzantine_bound is None
@@ -343,13 +454,18 @@ class EpochDescriptor:
 
 
 def roster_bytes(roster) -> bytes:
-    """Canonical sorted roster encoding: the whole list length-prefixed (injective
-    container), each member key as a Core `opaque Hash[32]` (fixed 32 bytes, no
-    per-element length prefix -- XDR `<opaque Hash[32]^*>`). `membership_commitment
-    = H(roster_bytes)`. This is what `from_epoch` re-derives, so substituted
-    (n, t, roster) mappings are a different commitment and cannot verify under
-    the epoch."""
-    return lp(b"".join(hash32(k) for k in sorted(roster)))
+    """Canonical sorted roster encoding as Core XDR `<opaque Hash[32]<>` (a
+    variable-length array). XDR prefixes a variable-length array with the
+    ELEMENT COUNT `n` (a uint32), not the byte length: the wire is `u32(n)`
+    followed by `n` fixed-width 32-byte elements, each `Hash[32]` with no
+    per-element length prefix. (A byte-length prefix of `32*n` would be the
+    XDR encoding of a single `opaque<3968>` blob, NOT of `<Hash[32]>` -- a
+    native implementation would derive a different membership commitment and
+    epoch hash. Copilot this review.) `membership_commitment = H(roster_bytes)`.
+    This is what `from_epoch` re-derives, so substituted (n, t, roster)
+    mappings are a different commitment and cannot verify under the epoch."""
+    ordered = sorted(roster)
+    return struct.pack(">I", len(ordered)) + b"".join(hash32(k) for k in ordered)
 
 
 class LockedClose:
@@ -408,40 +524,28 @@ def canonical_proof(proof: bytes):
 
     NOTE: shape-canonicalization is NOT verification. `verify()` additionally
     checks the public-key Schnorr equation, so an arbitrary 64-byte value that
-    merely has the right length is REJECTED (Copilot line-519)."""
+    merely has the right length is REJECTED (Copilot line-519). The canonical
+    shape feeds authentication only; the ROOT is the proof-independent unique
+    function of the committed authority key + the close (see `canonical_root`),
+    so malleability of a valid signature cannot split the root."""
     if proof is None or len(proof) != 64:
         return None
     return proof
 
 
-def canonical_root(C_s: bytes, proof: bytes):
-    """R_s derived from the CANONICAL proof bytes ONLY (dnFVg). This is called
-    only AFTER `UniqueThresholdProof.verify` has accepted the proof against the
-    epoch public key -- it never turns an arbitrary byte string into a root on
-    its own (see `verify`)."""
-    p = canonical_proof(proof)
-    if p is None:
-        return None
-    return sha256(b"Root" + C_s + p)
-
-
-def _member_secret(seed: bytes, member_index: int) -> bytes:
-    # Per-member SECRET share key. Derived at authority-construction time from
-    # the authority seed only (setup material, never committed). The model uses
-    # the same deterministic re-derivation a real DKG/VUF holder would have from
-    # its generated key material; ROUND-TRIP is what a restart needs, and it is
-    # exactly reproducible from (epoch, seed).
-    return sha256(b"MemberSecret" + seed + u32(member_index))
-
-
-def _full_member_commit(seed: bytes, epoch_n: int) -> bytes:
-    # Constant for (seed, n): the algebraic "interpolated group secret" that any
-    # >=t valid share SUBSET recovers to the SAME value (in a real scheme,
-    # Lagrange reconstruction of any t shares yields the identical secret; here
-    # the committed re-derivation is over the full canonical membership so every
-    # valid subset reproduces the byte-identical canonical proof).
-    return sha256(b"MemberCommit" + b"".join(
-        _member_secret(seed, i) for i in range(1, epoch_n + 1)))
+def canonical_root(C_s: bytes, authority_key: bytes, epoch_hash: bytes):
+    """R_s -- the UNIQUE source root, derived as a deterministic pure function of
+    PUBLIC committed inputs ONLY: `R_s = H("Root", authority_key, epoch_hash,
+    C_s)`. Because the root is a function of the committed authority key and the
+    close challenge -- NOT of the (malleable) signature bytes -- any two valid
+    authenticating proofs for the same (authority_key, C_s) produce the
+    IDENTICAL root (Copilot this review "identical canonical R"): the one-future
+    law holds even under signature-nonce malleability, and a catchup/a fresh
+    node needs only the committed authority_key + the close + a valid proof.
+    `verify` calls this ONLY after the public-key Schnorr check has authenticated
+    the proof; it never turns an arbitrary byte string into a root (see
+    `UniqueThresholdProof.verify`)."""
+    return sha256(b"Root" + authority_key + epoch_hash + C_s)
 
 
 class ThresholdAuthority:
@@ -503,8 +607,13 @@ class ThresholdAuthority:
         return cls(epoch, seed)
 
     def _share_for(self, member_index: int, cl_hash: bytes) -> bytes:
-        return sha256(b"Share" + _member_secret(self.seed, member_index)
-                      + self.epoch.hash + cl_hash)
+        # The member's Shamir polynomial share f(i) mod q (32-byte wire value),
+        # the ACTUAL value `recover_proof` Lagrange-interpolates. Close-binding
+        # and sign-once are enforced by the caller `share()`/`recover_proof`
+        # gates; the share value itself is the fixed evaluation f(i). Encoding
+        # to bytes is the canonical 32-byte affine coordinate.
+        return (_poly_share(self.seed, self.epoch.threshold, self.epoch.n,
+                            member_index) % _GRP_Q).to_bytes(32, "big")
 
     def _set_boundary_cap(self, cap: bytes) -> None:
         """Bind a RELEASE capability derived from the source's boundary secret.
@@ -570,40 +679,28 @@ class ThresholdAuthority:
         """subset: iterable of (member_index, share). Returns the canonical P_s
         iff >= t VALID, distinct, in-roster shares for THIS exact close are
         present; invalid/duplicate/out-of-epoch/wrong-close shares are discarded
-        individually and never poison t otherwise-valid shares."""
+        individually and never poison t otherwise-valid shares.
+
+        GENUINE THRESHOLD RECONSTRUCTION (Copilot this review): the secret
+        signing scalar `d = f(0)` is obtained by LAGRANGE INTERPOLATION over the
+        field GF(q), using ONLY the supplied (index, share) values -- the master
+        secret is NOT available on this path (nothing reads a stored seed to
+        recompute `d`; the polynomial `f` is never re-generated here). With `t`
+        distinct valid shares, `f(0)` is algebraically uniquely determined, so
+        EVERY >= t subset reconstructs the byte-identical canonical proof (I3)."""
         if cl.epoch_hash != self.epoch.hash:
             return None
-        valid = set()
+        t = self.epoch.threshold
+        n = self.epoch.n
+        valid = {}
         for (member_index, share) in subset:
-            if (1 <= member_index <= self.epoch.n
-                    and member_index not in valid
+            if (1 <= member_index <= n and member_index not in valid
                     and self.verify_share(member_index, cl, share)):
-                valid.add(member_index)
-        if len(valid) < self.epoch.threshold:
+                valid[member_index] = share
+        if len(valid) < t:
             return None                             # below t: no proof, stall
-        # SECRET-bound canonical proof (Copilot 3917696336 + this review). The
-        # proof is a Schnorr signature over the recovered GROUP SECRET G (from
-        # >= t valid SECRET shares) and the message C_s:
-        #
-        #     G   = _full_member_commit(seed, n)     -- recovered group secret
-        #     d   = H(G) mod q                       -- secret scalar
-        #     P_s = Sign(d, epoch_hash, C_s)         -- genuinely verifiable
-        #
-        # where G is the algebraic "interpolated group secret" any valid
-        # t-subset recovers to the SAME value (in a real scheme, Lagrange
-        # reconstruction of any t shares yields the identical secret; here the
-        # committed re-derivation is over the full canonical membership so every
-        # valid subset reproduces the byte-identical canonical proof).
-        #
-        # Because signing needs `d` (a one-way function of G), the proof is NOT
-        # derivable from public epoch fields alone and CANNOT be forged by a
-        # public-only actor: `verify` checks the Schnorr equation under the
-        # epoch's committed PUBLIC key, so an arbitrary 64-byte value is
-        # rejected, not accepted (negative-synthesis gate below asserts this).
-        # Threshold unforgeability lives in the PRODUCER (requires the secret),
-        # while `verify` is a genuinely public, secret-free check.
-        G = _full_member_commit(self.seed, self.epoch.n)
-        d = _spf_scalar(G)
+        d = _lagrange_recover({i: int.from_bytes(s, "big") % _GRP_Q
+                               for i, s in valid.items()})
         return _spf_sign(d, self.epoch.hash, cl.hash)
 
     def restart(self) -> "ThresholdAuthority":
@@ -643,16 +740,27 @@ class UniqueThresholdProof:
 
         It is a GENUINELY public verification bound to the epoch's committed
         PUBLIC key (`epoch.authority_key`): it runs the Schnorr stand-in
-        signature check `G^s == R * Y^c (mod p)` and returns the one source root
-        R_s = root(C_s, canonical(P_s)) ONLY if that check passes. An arbitrary
-        archive byte string (a forged 64-byte value, a wrong-epoch proof, or a
-        replayed proof) is REJECTED -- it does not satisfy the equation under Y
-        (Copilot line-519: no longer does a bare canonical-length value derive a
-        root).
+        signature check `G^s == R * Y^c (mod p)` and, only if that passes,
+        returns the one UNIQUE source root `R_s = H("Root", authority_key,
+        epoch_hash, C_s)`. An arbitrary archive byte string (a forged 64-byte
+        value, a wrong-epoch proof, or a replayed proof) is REJECTED -- it does
+        not satisfy the equation under Y (Copilot line-519: no longer does a
+        bare canonical-length value derive a root).
+
+        PROVENANCE-INDEPENDENT (Copilot this review, Gate): the root depends
+        only on (authority_key, epoch_hash, C_s) and AUTHENTICATION of the
+        proof against that public key -- NOT on which authority produced the
+        proof or whether THIS node cached it. A valid proof received from
+        another authority, or loaded during catchup, resolves to the identical
+        root: a non-producing consumer (fresh catchup node) needs only the
+        committed authority_key + the close + a valid proof. The root is
+        proof-independent, so a second mathematically-valid Schnorr signature
+        for the same (Y, C_s) yields the SAME root (one-future, Copilot this
+        review's "genuinely unique proof primitive/output").
 
         What it does NOT do -- and what a public verifier with no secret MUST
         not do -- is *produce* the accepted proof. The proof is the secret-bound
-        Schnorr output needing the recovered group secret (`d = H(G)`), so this
+        Schnorr output needing the recovered group secret (`d = f(0)`), so this
         verifier cannot and does not regenerate or forge it from public inputs
         (Copilot 3917696336). In production the primitive's public-key check
         (BLS pairing / RFC 9381 VUF equation) is the real math; the model's
@@ -663,7 +771,7 @@ class UniqueThresholdProof:
             return None
         if not _spf_verify(epoch.authority_key, epoch.hash, C_s, p):
             return None
-        return canonical_root(C_s, p)
+        return canonical_root(C_s, epoch.authority_key, epoch.hash)
 
 
 def consumer_kdf(root: bytes, label: bytes) -> bytes:
@@ -692,16 +800,28 @@ class ConfirmExternalizeBoundary:
         # accepts, mirroring real per-process/per-validator finality evidence.
         self._secret = (boundary_secret if boundary_secret is not None else
                         sha256(b"cap-0089:boundary:secret:v1" + os.urandom(16)))
+        # PUBLIC per-member CONFIRM verification keys K_i = G^{k_i} for the
+        # roster (key-separation subkeys, Copilot this review #9). These are
+        # AUTHENTICATION keys for the CONFIRM->EXTERNALIZE edge only; they are
+        # never secrets and are registered here (like Core validators exchanging
+        # verification keys), so the boundary verifies a CONFIRM quorum-cert
+        # WITHOUT holding any member sub-secret.
+        self._confirm_pub = {
+            i: _member_confirm_pub(GROUP_SK, i) for i in range(1, epoch.n + 1)}
         # C_s.hash -> True iff the CONFIRM->EXTERNALIZE transition actually
         # ran for that lock. Populated ONLY by `externalize` (the trusted edge).
         self._externalized = {}
 
-    def externalize(self, cl: LockedClose, fully_validated: bool) -> bool:
+    def externalize(self, cl: LockedClose, confirm_cert: dict) -> bool:
         # The genuine CONFIRM -> EXTERNALIZE edge. The transition type and full
         # validation are FACTS OF THE EDGE, not caller flags the producer later
-        # re-asserts: this method is the single place a close becomes released.
-        # accepted-commit is never authoritative -- only entering EXTERNALIZE
-        # with the value locally fully validated releases a close.
+        # re-asserts (Copilot this review #2): a close becomes released ONLY when
+        # a QUORUM-CERT of >= t DISTINCT, VALID member CONFIRM votes is present
+        # for that exact C_s, each verified under the member's public subkey
+        # K_i. Passing a bare boolean (or votes that do not authenticate, or
+        # fewer than t distinct valid votes) is REJECTED -- no caller-asserted
+        # `fully_validated` flag exists. accepted-commit is never authoritative;
+        # only entering EXTERNALIZE behind a genuine quorum releases a close.
         if cl is None or not cl.validate():
             return False
         if cl.network_id != NETWORK:
@@ -710,7 +830,22 @@ class ConfirmExternalizeBoundary:
             return False
         if not self.epoch.active_at(cl.slot):
             return False
-        if not fully_validated:
+        if not isinstance(confirm_cert, dict):
+            return False
+        valid = 0
+        seen = set()
+        for idx, vote in confirm_cert.items():
+            if not isinstance(idx, int) or not (1 <= idx <= self.epoch.n):
+                continue
+            if idx in seen:
+                continue
+            seen.add(idx)
+            K_i = self._confirm_pub.get(idx)
+            if K_i is None:
+                continue
+            if _confirm_vote_verify(K_i, cl.epoch_hash, cl.hash, vote):
+                valid += 1
+        if valid < self.epoch.threshold:
             return False
         self._externalized[cl.hash] = True
         return True
@@ -860,14 +995,14 @@ def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
         return {"event_hash": cl.hash.hex(), "outcome": "UNKNOWN"}
     if not source.has_valid_proof(cl):
         return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
-    # Gate 2b (Copilot 3917696336): ONLY the GENUINE recovered proof resolves a
-    # close to ROOT. verify() is an abstract PURE relation (accepts any
-    # canonical 32-byte proof), so alone it cannot tell a forged canonical-looking
-    # proof from the real one -- the SOURCE's cached genuine proof does that.
-    # A public-only formula or any 32-byte candidate != the recovered proof is
-    # therefore REJECTED even though it is canonical.
-    if source.genuine_proof(cl) != proof:
-        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    # Gate 2 (Copilot this review #7): authentication is PROVENANCE-INDEPENDENT.
+    # The pure archival verifier needs only (epoch, C_s, P_s): it authenticates
+    # P_s against the committed `authority_key` (public Schnorr equation) and
+    # returns the unique root H("Root", authority_key, epoch_hash, C_s). A proof
+    # produced by ANOTHER authority, or loaded during catchup (never cached by
+    # THIS node as `genuine_proof`), is accepted -- a non-producing consumer can
+    # derive the root -- while a forged/public-only/random proof still fails the
+    # equation and is REJECTED (negative-synthesis gate).
     root = UniqueThresholdProof.verify(epoch, cl.hash, proof)
     if root is None:
         return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
@@ -900,12 +1035,21 @@ def main():
     def mk_roster(n):
         return [sha256(b"member-verify:%d" % i) for i in range(1, n + 1)]
 
-    def boundary_release(src, cl, fully_validated=True):
+    def boundary_release(src, cl, n_votes=None):
         # Wraps the REAL transition: the genuine CONFIRM->EXTERNALIZE edge runs
         # `externalize` BEFORE `admit`. Only then does the source hold a release
-        # witness. `externalize` is the authority over the transition (it takes
-        # no caller bytes; it IS the transition).
-        if src._boundary.externalize(cl, fully_validated):
+        # witness. `externalize` is the authority over the transition: it takes a
+        # QUORUM-CERT of >= t signed member CONFIRM votes (each verified under a
+        # per-member public subkey K_i) -- THERE IS NO caller-asserted boolean
+        # (Copilot this review #2). By default the helper emits a FULL threshold
+        # of genuine votes (the honest validators who reached CONFIRM); passing
+        # n_votes < threshold yields an incomplete cert and the boundary REJECTS
+        # (mirrors a close that did not actually reach the externalize quorum).
+        n_votes = epoch.threshold if n_votes is None else n_votes
+        cert = {i: _confirm_vote(_member_confirm(GROUP_SK, i),
+                                 cl.epoch_hash, cl.hash)
+                for i in range(1, n_votes + 1)}
+        if src._boundary.externalize(cl, cert):
             return src.admit(cl)
         return False
 
@@ -929,7 +1073,7 @@ def main():
     # key Y = G^d mod p derived from the recovered GROUP SECRET G. `verify`
     # binds every accepted proof to this committed key, so the genuine
     # threshold-recovered proofs verify and arbitrary bytes are rejected.
-    epoch_pub = group_pub_from_seed(_full_member_commit(GROUP_SK, N_MEMBERS))
+    epoch_pub = group_pub_from_seed(GROUP_SK, 5, N_MEMBERS)
     epoch = EpochDescriptor(
         format_version=1,
         authority_key=epoch_pub,
@@ -1026,6 +1170,21 @@ def main():
               threshold=5, byzantine_bound=2,
               root_rule=b"unique-threshold/v1",
               event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          # AVAILABILITY fail-closed (Copilot this review): a caller-forced f is
+          # PRESERVED (never re-clamped down) and then rejected when t <= n-f is
+          # violated. n=8, t=7 with a forced f=5 must REJECT (7 <= 3 is false),
+          # while the DEFAULT f = n - t = 1 is valid and provable.
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=sha256(b"authority:group-key"),
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=7, byzantine_bound=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and EpochDescriptor(
+              format_version=1, authority_key=sha256(b"authority:group-key"),
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=7, root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1").byzantine_bound == 1
           and epoch.byzantine_bound == 1)  # n=8,t=5 => default f = 2t-n-1 = 1
     rogue_auth = ThresholdAuthority.from_epoch(epoch, sha256(b"rogue-seed"))
 
@@ -1074,7 +1233,7 @@ def main():
                                slot) is None
           and epoch_for_transition(sha256(b"prev-canonical-state"), committed,
                                    epoch.retirement + 1) is None)
-    other_win_pub = group_pub_from_seed(_full_member_commit(GROUP_SK, 4))
+    other_win_pub = group_pub_from_seed(GROUP_SK, 3, 4)
     other_win = EpochDescriptor(
         format_version=1, authority_key=other_win_pub,
         roster=mk_roster(4), activation=epoch.activation - 50,
@@ -1122,11 +1281,24 @@ def main():
           and src_early.proof(cl_a, auth) is None
           and resolve(epoch, cl_a, src_early, None)["outcome"] == "UNKNOWN")
     alien_stage = RandomnessSource(epoch)
-    not_validated = boundary_release(alien_stage, cl_a, fully_validated=False)
+    # A bare/incomplete CONFIRM cert (< t votes) is REJECTED by the edge: there
+    # is no caller boolean, only a quorum-cert that must authenticate and reach
+    # the threshold (Copilot this review #2).
+    stage_boundary = alien_stage._boundary
+    weak_cert = {i: _confirm_vote(_member_confirm(GROUP_SK, i),
+                                  cl_a.epoch_hash, cl_a.hash)
+                 for i in range(1, epoch.threshold)}        # t-1 votes only
+    bogus_cert = {1: b"\x00" * 64}                          # unauthenticated
+    not_validated = (not stage_boundary.externalize(cl_a, weak_cert)
+                     and not stage_boundary.externalize(cl_a, bogus_cert)
+                     and not stage_boundary.has_externalized(cl_a)
+                     and not boundary_release(alien_stage, cl_a, n_votes=0))
     check("dnFVg release boundary: the CONFIRM/EXTERNALIZE transition itself "
-          "rejects a value that was NOT locally fully validated (externalize "
-          "returns False; no witness, no proof, no share)",
-          not not_validated
+          "rejects a value whose quorum-cert is absent, INCOMPLETE (< t distinct "
+          "valid votes) or unauthenticated (externalize returns False; no "
+          "witness, no proof, no share) -- there is NO caller-asserted "
+          "`fully_validated` boolean",
+          not_validated
           and not alien_stage._boundary.has_externalized(cl_a)
           and alien_stage.proof(cl_a, auth) is None)
     ok_boundary = boundary_release(source, cl_a)
@@ -1187,7 +1359,8 @@ def main():
     check("N1 authorization never flavors the pulse: the proof recovered from "
           "any >=t share subset equals the resolver's admitted proof -- the same "
           "close, same P_s, same root, whatever the witness/release path",
-          full == proof_a and canonical_root(cl_a.hash, full) == root_a)
+          full == proof_a and canonical_root(cl_a.hash, epoch.authority_key,
+                                             epoch.hash) == root_a)
 
     # ---------- Durable sign-once per event (Noot) ----------------------------
     auth2 = auth.restart()
@@ -1242,9 +1415,13 @@ def main():
         sha256(b"externalized-value-B-ALT")))
     check("N3 durable sign-once keyed by (member, slot): one authority signs "
           "DISTINCT future slots (a real ledger sequence) and refuses only a "
-          "competing C_s for the SAME slot -- consecutive closed ledgers are "
-          "not accidentally serialized into one event (thread e6Vduq)",
-          s1 == auth.share(1, cl_a) and s2 is not None and s2 != s1
+          "competing C_s for the SAME already-signed slot -- consecutive closed "
+          "ledgers are not accidentally serialized into one event (thread "
+          "e6Vduq). The SHARE VALUE is member-fixed (real Shamir: f(i) is "
+          "independent of the slot/close), so s1 == s2 -- but the durable "
+          "_signed lock still refuses a competing C_s at a signed slot, and the "
+          "proof for each slot remains recovered from the same members",
+          s1 == auth.share(1, cl_a) and s2 is not None and s2 == s1
           and refused_s2 is None)
     # e6Vdt1: restart CARRIES the durable sign-once locks, so a crash window
     # cannot equivocate -- after restart the member still refuses the alternate
@@ -1381,7 +1558,7 @@ def main():
           "the boundary witness authorizes release only and never changes the "
           "permanent pulse",
           ok_w1 and ok_w2 and p_w1 == p_w2 and p_w1 == proof_a
-          and canonical_root(cl_a.hash, p_w1) == root_a)
+          and canonical_root(cl_a.hash, epoch.authority_key, epoch.hash) == root_a)
 
     # ---------- cross-network binding (Copilot d7OZI) --------------------------
     foreign_net = LockedClose.rebuild(epoch, slot, prev_hash,
@@ -1597,8 +1774,7 @@ def main():
     # This is a stronger assertion than byte-inequality: the PUBLIC-only proof is
     # not merely "different bytes" -- it is REJECTED by the public verifier it
     # would have to pass.
-    true_G = _full_member_commit(GROUP_SK, epoch.n)
-    true_d = _spf_scalar(true_G)
+    true_d = _group_secret(GROUP_SK, epoch.threshold, epoch.n)
 
     def genuine_expression(c):
         # EXACTLY the genuine proof: recover_proof and this agree byte-for-byte.
@@ -1675,6 +1851,38 @@ def main():
           "PURE and archived-stable -- same triple, same root, every time (I4)",
           I1 and I2 and I3 and I4)
 
+    # Copilot this review (#4): deterministic nonce alone does NOT make Schnorr
+    # verification unique -- a signer holding `d` may pick a different nonce and
+    # mint a second VALID signature for the same (Y, C_s). The one-future law is
+    # preserved BECAUSE the accepted root is the proof-independent function
+    # H("Root", authority_key, epoch_hash, C_s): two mathematically-valid
+    # same-message proofs yield the IDENTICAL root, and a non-canonically-nonced
+    # valid proof is still accepted (authenticated by the public equation) yet
+    # cannot split the pulse.
+    _d = _group_secret(GROUP_SK, epoch.threshold, epoch.n)
+    c_e = cl_a.hash
+    # Two distinct deterministic-nonce signatures (default vs an alternate nonce
+    # derived from a different label) -- BOTH satisfy the Schnorr equation.
+    p_dflt = _spf_sign(_d, epoch.hash, c_e)
+    r2 = _spf_scalar(sha256(b"SpfNonce2" + _d.to_bytes(32, "big") + epoch.hash + c_e))
+    R2 = pow(_GRP_G, r2, _GRP_P)
+    R2b = R2.to_bytes(32, "big")
+    c2 = int.from_bytes(sha256(b"SpfChal" + epoch.hash + c_e
+                               + R2b + epoch.authority_key + b"cap-0089-v1"),
+                        "big") % _GRP_Q
+    s2 = (r2 + c2 * _d) % _GRP_Q
+    p_alt = R2b + s2.to_bytes(32, "big")
+    check("I4/O2 unique-root (Copilot #4): two mathematically-valid Schnorr "
+          "signatures for the same (Y, C_s) -- different nonces -- BOTH verify "
+          "under the committed public key, yet yield the SAME unique root, so "
+          "signature-nonce malleability can never split the one-future pulse",
+          p_alt != p_dflt
+          and _spf_verify(epoch.authority_key, epoch.hash, c_e, p_alt)
+          and _spf_verify(epoch.authority_key, epoch.hash, c_e, p_dflt)
+          and UniqueThresholdProof.verify(epoch, c_e, p_alt)
+          == UniqueThresholdProof.verify(epoch, c_e, p_dflt)
+          == root_a)
+
     # ---------- O3: permanent pulse ----------------------------------------------
     pulse_a = consumer_kdf(root_a, LABEL_NOM)
     pulse_a2 = consumer_kdf(UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a),
@@ -1746,12 +1954,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "fcd1f8ff9a9c78cda149cc14985522500f7dd3c26b977bc379305238805a27e0",
-        "716effd0ad83dede43ae5dad7c592ab69b560802bb6e9a2d8267f7195ab0a785",
-        "53b580b9eb844e219db29095ba0fc0d013b0d6a8f58cf6e6ce03cf0bf73c31b4",
-        "ca720132506c0a01a767a4bc6049b10618045ac8a7e9519f065a1b71f19e4269",
+        "06e8d7efb416ad9e4e3e0ad8db4e6084b7b1b00105fe83caf78dc0b5c71183b0",
+        "0d82ab847f14337fba59ad7a879b3180f31be147bcd8636f01401907e33b1101",
+        "4175a222e9282566b1ec3dea5d34b411ba4836ae912358ffeeb24c6e3d92a1f0",
+        "2c3022ead1cdfe83a22de86c0d03ffc93d72488f81396e1ec43955bde6572a95",
     )
-    EXP_COMP = "de070b5912849f0016883c8665b101451ee7b6f651ad06a8a45aeee58b387cf1"
+    EXP_COMP = "eb1f558c0474be9a226c883a8b26d66aee2ac2af39fff10fa9e5bae88ee2a338"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),

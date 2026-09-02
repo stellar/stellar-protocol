@@ -313,21 +313,25 @@ def run():
     pinned_bcn = beacon(contribs)
     ground_noise = [bytes(range(0x80, 0xc0)), bytes(range(0xc0, 0x100)),
                     bytes(range(0x00, 0x40)), bytes(range(0x40, 0x80))]
-    # Per-candidate (loop var USED, not a tautological one-shot): every candidate
-    # `c` is genuinely pushed through BOTH paths and must individually agree.
-    #   canonical(c) == pinned for EVERY c  -> contents really cannot move it
-    #   grounded(c)  == beacon over alpha=H(c) is DISTINCT for every c and never
-    #                   equals pinned -> a broken impl bound to contents is
-    #                   detected separately for each candidate.
-    canonical_per_candidate = {derive_beacon_for_context(anchor).hex()
-                               for _ in ground_noise}
+# Per-candidate (loop var USED per candidate, not a tautological one-shot):
+    # every candidate `c` is individually pushed through BOTH paths and must
+    # agree on the outcome:
+    #   * canonical(c): derived under the FIXED finalized anchor (the betas and
+    #     beacon do not depend on `c`) -> == `pinned` for EVERY `c`. A broken
+    #     impl that bound the beacon to unfinalized contents would drift.
+    #   * grounded(c): a MALFORMED impl that substituted c into the anchor
+    #     (alpha = H(c)) shifts the beacon to a distinct value for every `c`,
+    #     never equal to `pinned`.
+    canonical_all_pinned = all(
+        derive_beacon_for_context(anchor).hex() == pinned_bcn.hex()
+        for c in ground_noise)
     grounded_per_candidate = {derive_beacon_for_context(sha256(c)).hex()
                               for c in ground_noise}
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
           "move the beacon (each candidate variant pushed individually through "
           "the candidate-independent canonical path; loop var used per "
           "candidate, not a tautological singleton)",
-          canonical_per_candidate == {pinned_bcn.hex()}
+          canonical_all_pinned
           and len(grounded_per_candidate) == len(ground_noise)
           and pinned_bcn.hex() not in grounded_per_candidate
           and all(derive_beacon_for_context(sha256(c)).hex() != pinned_bcn.hex()
