@@ -18,8 +18,11 @@ CAP-0089. The authoritative copy of this diff — which is machine-checked by th
 [`core/cap-0089.md`](../../core/cap-0089.md) under the caption
 `diff mddiffcheck.base=03cbf40cec4d89f82171bf895ef7598458d83e1b`.
 
-The change is additive and versioned behind the `VRF_RANDOMNESS` guard. It adds
-a **new orthogonal top-level field** to `struct StellarValue` rather than a new
+The change is additive and gated by a **compile-time schema guard** — the
+`VRF_RANDOMNESS` build-time guard selects whether the trailing field exists in
+the generated schema; it is not a runtime version discriminator that would let a
+single wire format flip behavior per connection. It adds a **new orthogonal
+top-level field** to `struct StellarValue` rather than a new
 arm of the `ext` union, so it coexists with CAP-0088's `MS_CLOSE_TIME` arms
 (and the empty-tx-set arms) of that union. Its type is a `Hash`
 (`opaque Hash[32]`), matching the `SHA-256` width used throughout CAP-0089.
