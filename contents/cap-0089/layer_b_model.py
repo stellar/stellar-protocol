@@ -156,7 +156,13 @@ class EpochDescriptor:
                  scheme: bytes = EPOCH_SCHEME):
         self.format_version = format_version
         self.authority_key = authority_key
-        self.roster = tuple(sorted(roster))
+        roster_tup = tuple(sorted(roster))
+        if len(set(roster_tup)) != len(roster_tup):
+            # thread e6WbkN: duplicate roster keys would let one verification
+            # identity occupy multiple threshold indices -- reject before n and
+            # membership_commitment are derived.
+            raise ValueError("roster must contain distinct member keys")
+        self.roster = roster_tup
         self.membership_commitment = sha256(roster_bytes(self.roster))
         self.activation = activation
         self.retirement = retirement
@@ -584,6 +590,16 @@ def main():
               roster=roster, activation=12300, retirement=13000,
               threshold=len(roster) + 1,
               root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1")))
+    dup_roster = [roster[0], roster[0]] + [sha256(b"member-verify:dup")] * 3
+    check("R2 duplicate roster keys are rejected at epoch construction (thread "
+          "e6WbkN): one verification identity would occupy multiple threshold "
+          "indices, violating 1:1 membership -- such a roster raises ValueError "
+          "before n / membership_commitment are derived",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=sha256(b"authority:group-key"),
+              roster=dup_roster, activation=12300, retirement=13000,
+              threshold=3, root_rule=b"unique-threshold/v1",
               event_mapping=b"single-pulse:LockedClose->C_s/v1")))
     rogue_auth = ThresholdAuthority.from_epoch(epoch, sha256(b"rogue-seed"))
 
