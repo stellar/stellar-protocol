@@ -95,6 +95,12 @@ LABEL_PRN = b"PRNG"
 LABEL_APPLY = b"APPLY"
 LABEL_NOM = b"NOMINATION"
 NO_CALLER_OUTCOME_CLASS = frozenset()
+# The CONFIRM->EXTERNALIZE edge vs accepted-commit: the transition TYPE is now a
+# fact INSIDE `ConfirmExternalizeBoundary` (the ONLY producer of release
+# witnesses -- Copilot this review: no caller-asserted transition bytes). These
+# names remain as the documented protocol roles; the boundary's `externalize()`
+# is the only operation that realises CONFIRM/EXTERNALIZE, and accepted-commit
+# is deliberately NOT authoritative (never externalizes).
 RELEASE_CERT_CONFIRM_EXTERNALIZE = b"confirm/externalize"
 RELEASE_CERT_ACCEPTED_COMMIT = b"accepted-commit"   # deliberately NOT authoritative
 
@@ -115,28 +121,135 @@ def u32(n: int) -> bytes:
 
 
 def lp(b: bytes) -> bytes:
-    # Length-prefix a variable-length field so the canonical encoding is
-    # injective (dnFWC): distinct byte boundaries cannot collide.
+    # Length-prefix a VARIABLE-length field so the canonical encoding is
+    # injective (dnFWC): distinct byte boundaries cannot collide. Used only for
+    # genuinely variable-length elements (schemes, rule labels, list containers)
+    # and NEVER for fixed-width wire types (see hash32 below).
     return struct.pack(">I", len(b)) + b
+
+
+def hash32(b: bytes) -> bytes:
+    # Core-native wire type for a fixed-width `opaque Hash[32]` (XDR) /
+    # uint256: a FIXED 32-byte element with NO length prefix. Validation is
+    # explicit so a caller cannot feed a malformed length and silently change
+    # the canonical encoding (Copilot 3917696404 round-2 follow-up / this
+    # review's B1 wire-type note). Rejects anything that is not exactly 32 bytes.
+    if b is None or len(b) != 32:
+        raise ValueError("Hash[32] wire element must be exactly 32 bytes")
+    return b
 
 
 def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
                 previous_ledger_hash: bytes, value_hash: bytes) -> bytes:
     """Single canonical close-input contract `RandomnessCloseInputV1`.
 
-    Wire shape (documented in B1, matches Core XDR widths): literal contract
-    tag `"RandomnessCloseInputV1"` + a `uint32` arm version (currently `1`),
-    then length-prefixed single elements for the variable-length fields and a
-    `uint32` `ledgerSeq` (Core's `LedgerSeq` XDR type). Length-prefixed so the
-    encoding is injective. Binds network, epoch, the REAL ledgerSeq, the
-    predecessor ledger (state-transition semantics) and the exact externalized
-    value bytes. Provenance (signatures, proposer, envelopes, transport) is
-    deliberately absent. (The epoch's separate `format_version` canonical
-    identity byte is committed in `EpochDescriptor.hash`, NOT in this close
-    input.)"""
+    Wire shape (documented in B1, matches Core XDR widths EXACTLY): literal
+    contract tag `"RandomnessCloseInputV1"` + a `uint32` arm version (currently
+    `1`), then the four fixed-width hashes `epoch_hash`, `network_id`,
+    `previous_ledger_hash`, `value_hash` each as a Core `opaque Hash[32]`
+    (a FIXED 32 bytes, NO length prefix -- the `lp()` length prefix is a
+    variable-length string encoding and is NOT the XDR encoding for a fixed
+    Hash[32]; using it here would make a native implementation derive a
+    different C_s), and a `uint32` `ledgerSeq` (Core's `LedgerSeq` XDR type).
+    A native implementation following the declared XDR widths therefore derives
+    the SAME C_s. Binds network, epoch, the REAL ledgerSeq, the predecessor
+    ledger (state-transition semantics) and the exact externalized value bytes.
+    Provenance (signatures, proposer, envelopes, transport) is deliberately
+    absent. (The epoch's separate `format_version` canonical identity byte is
+    committed in `EpochDescriptor.hash`, NOT in this close input.)"""
     return (b"RandomnessCloseInputV1" + u32(1)
-            + lp(network_id) + lp(epoch_hash)
-            + u32(ledger_seq) + lp(previous_ledger_hash) + lp(value_hash))
+            + hash32(network_id) + hash32(epoch_hash)
+            + u32(ledger_seq) + hash32(previous_ledger_hash) + hash32(value_hash))
+
+
+# --- Verifiable stand-in bound to the epoch public key (Copilot 3917696376 /
+# this review's line-519 note) ------------------------------------------------
+# A pure-hash "canonical 32-byte value" is NOT a proof: any attacker can conjure
+# one, and a public verifier could not tell it from the real value. `verify`
+# therefore validates a GENUINE asymmetric signature relation bound to the
+# epoch's committed PUBLIC key, using a small, self-contained Schnorr-style
+# scheme over a hardcoded 256-bit safe-prime group (no external crypto library;
+# Python built-in `pow`/`%`). This is an HONEST STAND-IN: it demonstrates the
+# public-key seam a real BLS/VUF primitive must satisfy (public verification,
+# secret-only production, deterministic unique per-message output, reject of
+# arbitrary bytes) using algebra instead of a hash placeholder. It is NOT the
+# production primitive -- RFC 9381/BLS pairing lives in the separately-reviewed
+# harness (PR #5409); the model only proves the interface contract.
+#
+# Group: p = 2*q + 1 (safe prime, 256-bit), q prime, generator G = 4 (order q).
+#   d (secret scalar) = H(G_secret) mod q            -- only the recovered group
+#       secret can compute it (threshold-only production)
+#   pub Y            = G^d mod p                      -- committed in epoch
+#   sign d over msg: r = H("SpfNonce", d, epoch, msg) mod q    (deterministic,
+#       SECRET nonce -- revealing it would leak d), R = G^r mod p,
+#       c = H("SpfChal", epoch, msg, R_bytes, Y_bytes), s = r + c*d mod q
+#   proof             = R_bytes (32) || s_bytes (32)  -- 64 bytes
+#   verify (public, needs only Y):
+#       c = H("SpfChal", epoch, msg, R_bytes, Y_bytes)
+#       accept iff G^s mod p == R * Y^c mod p
+# The verifier needs NO secret and NO secret-derived value, yet can only accept
+# proofs minted with `d` -- so a bare 64-byte grab-bag is REJECTED, while the
+# genuine threshold-recovered proof verifies (Copilot line-519).
+_GRP_P = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff72ef
+_GRP_Q = (_GRP_P - 1) // 2
+_GRP_G = 4                        # generator of the order-q subgroup
+
+
+def _spf_scalar(secret: bytes) -> int:
+    # Deterministic secret scalar d in [1, q) from the recovered group secret.
+    # Only the group-secret holder (>= t valid shares) can compute this.
+    d = int.from_bytes(sha256(b"SpfScalar" + secret + b"cap-0089-v1"), "big")
+    return (d % (_GRP_Q - 1)) + 1     # ensure 1 <= d < q
+
+
+def _spf_pub(d: int) -> bytes:
+    return pow(_GRP_G, d, _GRP_P).to_bytes(32, "big")
+
+
+def group_pub_from_seed(seed: bytes) -> bytes:
+    # The epoch's committed authority/public key: Y = G^d, d from the recovered
+    # group secret. This is what `verify` binds every accepted proof to.
+    d = _spf_scalar(seed)
+    return _spf_pub(d)
+
+
+def _spf_sign(d: int, epoch_hash: bytes, C_s: bytes) -> bytes:
+    # Deterministic, secret-nonce Schnorr signature. Unique per (d, epoch, C_s):
+    # no ride-along randomness, so a slot yields exactly one proof (I1-I4).
+    d_bytes = d.to_bytes(32, "big")
+    r = _spf_scalar(sha256(b"SpfNonce" + d_bytes + epoch_hash + C_s))
+    R = pow(_GRP_G, r, _GRP_P)
+    R_bytes = R.to_bytes(32, "big")
+    Y = pow(_GRP_G, d, _GRP_P)
+    Y_bytes = Y.to_bytes(32, "big")
+    c = int.from_bytes(sha256(b"SpfChal" + epoch_hash + C_s
+                              + R_bytes + Y_bytes + b"cap-0089-v1"), "big")
+    c %= _GRP_Q
+    s = (r + c * d) % _GRP_Q
+    return R_bytes + s.to_bytes(32, "big")
+
+
+def _spf_verify(pub32: bytes, epoch_hash: bytes, C_s: bytes, proof: bytes) -> bool:
+    # PURE public verification bound to the committed public key `pub32`.
+    # Rejects anything that is not a valid signature under Y -- arbitrary bytes,
+    # a wrong-epoch proof, a replayed cross-slot proof all fail here.
+    if pub32 is None or len(pub32) != 32 or proof is None or len(proof) != 64:
+        return False
+    R_bytes, s_bytes = proof[:32], proof[32:]
+    Y = int.from_bytes(pub32, "big")
+    if not (0 < Y < _GRP_P):
+        return False
+    R = int.from_bytes(R_bytes, "big")
+    if not (0 < R < _GRP_P):
+        return False
+    s = int.from_bytes(s_bytes, "big")
+    if not (1 <= s < _GRP_Q):
+        return False
+    c = int.from_bytes(sha256(b"SpfChal" + epoch_hash + C_s
+                              + R_bytes + pub32 + b"cap-0089-v1"), "big")
+    c %= _GRP_Q
+    # G^s == R * Y^c (mod p)
+    return pow(_GRP_G, s, _GRP_P) == (R * pow(Y, c, _GRP_P)) % _GRP_P
 
 
 class EpochDescriptor:
@@ -174,14 +287,22 @@ class EpochDescriptor:
             # never resolve. Reject at construction.
             raise ValueError("threshold must satisfy 1 <= threshold <= n")
         self.threshold = threshold
-        # Byzantine bound f and the honest-intersection condition (thread eW_rR):
-        # `2*t - n > f` guarantees any two size-t reconstructing subsets overlap
-        # in at least one HONEST member even with f Byzantine members anywhere --
-        # so two conflicting same-slot proofs are impossible. This is the
-        # CAP-specified cross-message uniqueness bound, committed into the epoch
-        # identity. Default f is the largest integer < (2t-n).
+        # Byzantine bound f and its TWO validity conditions, both committed into
+        # the epoch identity.
+        #
+        # (1) HONEST-INTERSECTION (cross-message uniqueness, thread eW_rR):
+        #     `2*t - n > f` guarantees any two size-t reconstructing subsets
+        #     overlap in at least one HONEST member even with f Byzantine members
+        #     anywhere -- so two conflicting same-slot proofs are impossible.
+        # (2) AVAILABILITY (Copilot this review): `t <= n - f` guarantees the
+        #     `n - f` honest members can actually gather `t` valid shares. If
+        #     `t > n - f`, then with the f tolerated Byzantine members withholding
+        #     (Layer B has NO fallback key), fewer than t honest shares exist and
+        #     ledger apply stalls indefinitely. E.g. (n=8, t=7) with default
+        #     f=5 passes the intersection bound 2*7-8=6>5 yet is UNPROVABLE
+        #     (7 <= 8-5 = 3 is false); such an epoch is now REJECTED.
         n = len(self.roster)
-        default_f = max(0, 2 * threshold - n - 1)
+        default_f = max(0, min(2 * threshold - n - 1, n - threshold))
         self.byzantine_bound = (default_f if byzantine_bound is None
                                 else byzantine_bound)
         if not (0 <= self.byzantine_bound < threshold <= n):
@@ -192,6 +313,13 @@ class EpochDescriptor:
             raise ValueError(
                 "threshold must satisfy 2*t - n > f for honest-intersection "
                 "(cross-message uniqueness)")
+        if not (self.byzantine_bound <= n - threshold):
+            # Reject any (t, n, f) whose honest members cannot gather t shares:
+            # with f Byzantine members withholding, only n-f honest shares exist,
+            # so we need t <= n-f for availability (no fallback key in Layer B).
+            raise ValueError(
+                "threshold must satisfy t <= n - f for AVAILABILITY "
+                "(the n-f honest members must be able to gather t shares)")
         self.verifier_rule = verifier_rule
         self.root_rule = root_rule
         self.event_mapping = event_mapping
@@ -199,7 +327,7 @@ class EpochDescriptor:
         self.hash = sha256(
             b"Epoch"
             + struct.pack(">B", format_version) + lp(scheme)
-            + lp(authority_key) + lp(self.membership_commitment)
+            + hash32(authority_key) + hash32(self.membership_commitment)
             + struct.pack(">QQ", activation, retirement)
             + struct.pack(">I", threshold)
             + struct.pack(">I", self.byzantine_bound)
@@ -215,11 +343,13 @@ class EpochDescriptor:
 
 
 def roster_bytes(roster) -> bytes:
-    """Canonical sorted roster encoding: each member key length-prefixed, whole
-    list length-prefixed (injective). `membership_commitment = H(roster_bytes)`.
-    This is what `from_epoch` re-derives, so substituted (n, t, roster) mappings
-    are a different commitment and cannot verify under the epoch."""
-    return lp(b"".join(lp(k) for k in sorted(roster)))
+    """Canonical sorted roster encoding: the whole list length-prefixed (injective
+    container), each member key as a Core `opaque Hash[32]` (fixed 32 bytes, no
+    per-element length prefix -- XDR `<opaque Hash[32]^*>`). `membership_commitment
+    = H(roster_bytes)`. This is what `from_epoch` re-derives, so substituted
+    (n, t, roster) mappings are a different commitment and cannot verify under
+    the epoch."""
+    return lp(b"".join(hash32(k) for k in sorted(roster)))
 
 
 class LockedClose:
@@ -269,17 +399,26 @@ class LockedClose:
 
 def canonical_proof(proof: bytes):
     """Strict canonicalization: the proof is rejected unless it is the single
-    canonical byte string the epoch's verifier accepts. Two accepted encodings
-    of the same mathematical proof MUST canonicalize to the SAME bytes before
-    either can influence R_s (Noot: proof malleability is a conformance issue,
-    never a second-future surface)."""
-    if proof is None or len(proof) != 32:
+    canonical byte string the epoch's verifier accepts. The canonical shape of
+    the model's Schnorr/VUF stand-in proof is EXACTLY 64 bytes of the form
+    `R||s` (R is a 32-byte group element, s a 32-byte scalar). Two accepted
+    encodings of the same mathematical proof MUST canonicalize to the SAME bytes
+    before either can influence R_s (Noot: proof malleability is a conformance
+    issue, never a second-future surface).
+
+    NOTE: shape-canonicalization is NOT verification. `verify()` additionally
+    checks the public-key Schnorr equation, so an arbitrary 64-byte value that
+    merely has the right length is REJECTED (Copilot line-519)."""
+    if proof is None or len(proof) != 64:
         return None
     return proof
 
 
 def canonical_root(C_s: bytes, proof: bytes):
-    """R_s derived ONLY after canonicalization+verification (dnFVg)."""
+    """R_s derived from the CANONICAL proof bytes ONLY (dnFVg). This is called
+    only AFTER `UniqueThresholdProof.verify` has accepted the proof against the
+    epoch public key -- it never turns an arbitrary byte string into a root on
+    its own (see `verify`)."""
     p = canonical_proof(proof)
     if p is None:
         return None
@@ -442,27 +581,30 @@ class ThresholdAuthority:
                 valid.add(member_index)
         if len(valid) < self.epoch.threshold:
             return None                             # below t: no proof, stall
-        # SECRET-bound canonical proof (Copilot 3917696336). The proof is the
-        # model's VUF output, a one-way function of the RECOVERED GROUP SECRET
-        # G (from >= t valid SECRET shares) and the message C_s:
+        # SECRET-bound canonical proof (Copilot 3917696336 + this review). The
+        # proof is a Schnorr signature over the recovered GROUP SECRET G (from
+        # >= t valid SECRET shares) and the message C_s:
         #
-        #     P_s = H("VufProof" || G || epoch_hash || C_s)
+        #     G   = _full_member_commit(seed, n)     -- recovered group secret
+        #     d   = H(G) mod q                       -- secret scalar
+        #     P_s = Sign(d, epoch_hash, C_s)         -- genuinely verifiable
         #
-        # where G = _full_member_commit(seed, n) is the algebraic
-        # "interpolated group secret" any valid t-subset recovers to the SAME
-        # value (in a real scheme, Lagrange reconstruction of any t shares
-        # yields the identical secret; here the committed re-derivation is over
-        # the full canonical membership so every valid subset reproduces the
-        # byte-identical canonical proof).
+        # where G is the algebraic "interpolated group secret" any valid
+        # t-subset recovers to the SAME value (in a real scheme, Lagrange
+        # reconstruction of any t shares yields the identical secret; here the
+        # committed re-derivation is over the full canonical membership so every
+        # valid subset reproduces the byte-identical canonical proof).
         #
-        # Because the proof depends on G, it is NOT derivable from public epoch
-        # fields alone: every distinct valid subset recovers the identical
-        # secret-bound P_s, and a public-only actor cannot reproduce it (the
-        # negative-synthesis gate below asserts this). Threshold unforgeability
-        # lives here, in the PRODUCER (requires the secret), not in a public
-        # verify formula.
+        # Because signing needs `d` (a one-way function of G), the proof is NOT
+        # derivable from public epoch fields alone and CANNOT be forged by a
+        # public-only actor: `verify` checks the Schnorr equation under the
+        # epoch's committed PUBLIC key, so an arbitrary 64-byte value is
+        # rejected, not accepted (negative-synthesis gate below asserts this).
+        # Threshold unforgeability lives in the PRODUCER (requires the secret),
+        # while `verify` is a genuinely public, secret-free check.
         G = _full_member_commit(self.seed, self.epoch.n)
-        return sha256(b"VufProof" + G + self.epoch.hash + cl.hash)
+        d = _spf_scalar(G)
+        return _spf_sign(d, self.epoch.hash, cl.hash)
 
     def restart(self) -> "ThresholdAuthority":
         """Deterministic re-derivation from (epoch, seed) that CARRIES the
@@ -497,24 +639,29 @@ class UniqueThresholdProof:
 
         The pure, archived-stable acceptance relation over the canonical proof.
         It takes ONLY (epoch, C_s, P_s) -- no source, no admission memory, no
-        process memory, no quorum-path fact. It canonicalizes the proof and, if
-        canonical, derives the one source root R_s = root(C_s, canonical(P_s)).
+        process memory, no quorum-path fact.
+
+        It is a GENUINELY public verification bound to the epoch's committed
+        PUBLIC key (`epoch.authority_key`): it runs the Schnorr stand-in
+        signature check `G^s == R * Y^c (mod p)` and returns the one source root
+        R_s = root(C_s, canonical(P_s)) ONLY if that check passes. An arbitrary
+        archive byte string (a forged 64-byte value, a wrong-epoch proof, or a
+        replayed proof) is REJECTED -- it does not satisfy the equation under Y
+        (Copilot line-519: no longer does a bare canonical-length value derive a
+        root).
 
         What it does NOT do -- and what a public verifier with no secret MUST
-        not do -- is *produce* the accepted proof. The canonical proof is the
-        SECRET-bound VUF output P_s = H(G, C_s) (see recover_proof): it exists
-        only once >= t authorities recover the group secret G. This verifier
-        cannot and does not regenerate P_s from public inputs (Copilot
-        3917696336): re-deriving the accepted proof from epoch fields alone was
-        the previous flaw (it made the "proof" a public formula any caller
-        could synthesize). In production the primitive's public-key check (BLS
-        pairing / VUF equation) is what lets a public node accept a genuine
-        proof using only the committed group PUBLIC key -- the model cannot
-        implement that math, so it models verification as this abstract pure
-        relation and pins non-derivability as an executable invariant (see the
-        negative-synthesis gate and the I1-I4 checks below)."""
+        not do -- is *produce* the accepted proof. The proof is the secret-bound
+        Schnorr output needing the recovered group secret (`d = H(G)`), so this
+        verifier cannot and does not regenerate or forge it from public inputs
+        (Copilot 3917696336). In production the primitive's public-key check
+        (BLS pairing / RFC 9381 VUF equation) is the real math; the model's
+        Schnorr stand-in below is an honest, self-contained surrogate for that
+        seam (see the group-scheme note)."""
         p = canonical_proof(P_s)
         if p is None:
+            return None
+        if not _spf_verify(epoch.authority_key, epoch.hash, C_s, p):
             return None
         return canonical_root(C_s, p)
 
@@ -526,14 +673,15 @@ def consumer_kdf(root: bytes, label: bytes) -> bytes:
 
 class ConfirmExternalizeBoundary:
     """Modeled CONFIRM -> EXTERNALIZE transition -- the **sole producer** of a
-    release witness (Copilot 3917696297 + suppressed line-506 note).
+    release witness (Copilot 3917696297 + suppressed line-506 note + this
+    review's "caller-asserted boundary" note at the source).
 
-    It carries a boundary SECRET that no external caller holds. Only through this
-    object can a close acquire a release witness, so a caller who merely holds a
-    `ThresholdAuthority` (but not this boundary) cannot synthesize an admission
-    witness for an arbitrary active pre-lock close: `admit` no longer trusts any
-    caller-supplied `evidence` byte string -- the witness is minted here from the
-    boundary secret. In production this boundary is the real Core
+    The boundary is the AUTHORITY over the release edge: only the genuine
+    CONFIRM -> EXTERNALIZE transition makes `externalize()` mark a close as
+    released, and `has_externalized()` is the ONLY predicate `RandomnessSource`
+    consults for admission. A caller cannot assert it: `admit` takes no
+    caller-supplied `release_certificate` or `fully_validated` flag -- the fact
+    lives inside the boundary. In production this boundary is the real Core
     CONFIRM->EXTERNALIZE edge; `boundary_secret` is the model's stand-in for the
     authenticator only the participating validators can emit."""
 
@@ -544,6 +692,34 @@ class ConfirmExternalizeBoundary:
         # accepts, mirroring real per-process/per-validator finality evidence.
         self._secret = (boundary_secret if boundary_secret is not None else
                         sha256(b"cap-0089:boundary:secret:v1" + os.urandom(16)))
+        # C_s.hash -> True iff the CONFIRM->EXTERNALIZE transition actually
+        # ran for that lock. Populated ONLY by `externalize` (the trusted edge).
+        self._externalized = {}
+
+    def externalize(self, cl: LockedClose, fully_validated: bool) -> bool:
+        # The genuine CONFIRM -> EXTERNALIZE edge. The transition type and full
+        # validation are FACTS OF THE EDGE, not caller flags the producer later
+        # re-asserts: this method is the single place a close becomes released.
+        # accepted-commit is never authoritative -- only entering EXTERNALIZE
+        # with the value locally fully validated releases a close.
+        if cl is None or not cl.validate():
+            return False
+        if cl.network_id != NETWORK:
+            return False
+        if cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        if not fully_validated:
+            return False
+        self._externalized[cl.hash] = True
+        return True
+
+    def has_externalized(self, cl: LockedClose) -> bool:
+        # Boundary-ENFORCED admission predicate. The source never accepts a
+        # caller-asserted boolean here; only the boundary knows whether this
+        # close really reached the CONFIRM->EXTERNALIZE edge.
+        return cl is not None and self._externalized.get(cl.hash, False)
 
     def _cap(self) -> bytes:
         # RELEASE capability derived from the boundary secret + epoch. It is the
@@ -570,11 +746,14 @@ class RandomnessSource:
     and refuses a second, different close for the same slot (thread d9aC4).
 
     Release authorization is an UNFORGEABLE capability produced ONLY by the
-    boundary path (Copilot 3917696297): `admit` mints a genuine boundary
-    witness internally via `ConfirmExternalizeBoundary`, and `proof` is the ONLY
-    place a close is recorded as authorized on an authority -- there is no public
-    `authorize_release` entry point an external holder of the authority object
-    can reach."""
+    boundary path (Copilot 3917696297): `admit` is boundary-ENFORCED (it takes
+    NO caller-supplied `release_certificate`/`fully_validated` -- those were the
+    forgeable, caller-asserted inputs; the fact lives in `ConfirmExternalizeBoundary.
+    has_externalized`), `proof` is the ONLY place a close is recorded as
+    authorized on an authority, and `proof` no longer AUTO-BINDS whatever
+    authority a caller hands it -- an unbound (or mismatched) authority is simply
+    refused, so an attacker who pairs their own source+authority (but lacks the
+    genuine source-boundary pairing) can release nothing."""
 
     def __init__(self, epoch: EpochDescriptor, boundary: ConfirmExternalizeBoundary = None):
         self.epoch = epoch
@@ -585,16 +764,15 @@ class RandomnessSource:
         self._genuine = {}       # C_s.hash -> GENUINE recovered proof (cached
                                  # by proof()); resolve() accepts ONLY this one
 
-    def admit(self, cl: LockedClose, release_certificate: bytes,
-              fully_validated: bool) -> bool:
-        # The transition type and full-validation are MODELED facts of the
-        # CONFIRM->EXTERNALIZE edge (accepted-commit is never authoritative); the
-        # release WITNESS is minted here from the boundary secret, never accepted
-        # from a caller (the previous `evidence` parameter -- a forgeable byte
-        # string -- is gone).
-        if release_certificate != RELEASE_CERT_CONFIRM_EXTERNALIZE:
-            return False
-        if not fully_validated:
+    def admit(self, cl: LockedClose) -> bool:
+        # BOUNDARY-ENFORCED admission (Copilot this review). No caller-supplied
+        # transition type or validation flag is accepted: admission is granted
+        # IFF the boundary genuinely performed the CONFIRM->EXTERNALIZE edge for
+        # this exact close. A caller-asserted `release_certificate==...`+
+        # `fully_validated=True` could previously be conjured by anyone holding
+        # RandomnessSource; now `admit(cl)` literally does nothing unless
+        # `boundary.has_externalized(cl)`.
+        if not self._boundary.has_externalized(cl):
             return False
         if not cl.validate():
             return False
@@ -636,9 +814,17 @@ class RandomnessSource:
             return None
         if authority is None:
             return None
-        if authority._cap_check is None:
-            self.bind(authority)
         cap = self._boundary._cap()
+        # (Copilot this review / 3917696297) NO auto-bind: an unpaired authority
+        # is refused rather than silently paired on the caller's say-so. The
+        # source's capability commit must ALREADY be installed on `authority`
+        # (via an explicit `bind()`, which needs the boundary secret). An
+        # attacker who independently constructs their OWN source+authority is
+        # therefore bound to a capability the boundary secret did not mint:
+        # `_authorize_release` compares `sha256(CapCommit+cap)` against the
+        # authority's `_cap_check` and refuses.
+        if authority._cap_check is None:
+            return None
         # (thread eW_rk / Copilot 3917696297) The source authorizes release on
         # the boundary-admitted close -- the ONLY release-authorization path --
         # THEN all n honest holders durably sign it; >= t valid shares
@@ -714,11 +900,39 @@ def main():
     def mk_roster(n):
         return [sha256(b"member-verify:%d" % i) for i in range(1, n + 1)]
 
+    def boundary_release(src, cl, fully_validated=True):
+        # Wraps the REAL transition: the genuine CONFIRM->EXTERNALIZE edge runs
+        # `externalize` BEFORE `admit`. Only then does the source hold a release
+        # witness. `externalize` is the authority over the transition (it takes
+        # no caller bytes; it IS the transition).
+        if src._boundary.externalize(cl, fully_validated):
+            return src.admit(cl)
+        return False
+
+    def eval_unbound(attacker_src, attacker_auth, cl, adversary_pub_proof=None):
+        # O2/non-commitment red test with the boundary ENFORCED: an attacker who
+        # holds ONLY (epoch, a source, an authority) -- but never the genuine
+        # source-boundary pairing -- can admit nothing and obtain NO proof. If an
+        # adversary_pub_proof is supplied it must fail the pure verifier.
+        admitted = attacker_src.admit(cl)            # boundary-enforced: no fact
+        pr = attacker_src.proof(cl, attacker_auth)   # unbound -> refused (None)
+        if adversary_pub_proof is not None:
+            rejected = UniqueThresholdProof.verify(epoch, cl.hash,
+                                                   adversary_pub_proof) is None
+        else:
+            rejected = True
+        return (not admitted) and (pr is None) and rejected
+
     N_MEMBERS = 8
     roster = mk_roster(N_MEMBERS)
+    # The epoch's committed authority/public key is the Schnorr stand-in public
+    # key Y = G^d mod p derived from the recovered GROUP SECRET G. `verify`
+    # binds every accepted proof to this committed key, so the genuine
+    # threshold-recovered proofs verify and arbitrary bytes are rejected.
+    epoch_pub = group_pub_from_seed(_full_member_commit(GROUP_SK, N_MEMBERS))
     epoch = EpochDescriptor(
         format_version=1,
-        authority_key=sha256(b"authority:group-key"),
+        authority_key=epoch_pub,
         roster=roster,
         activation=12300, retirement=13000,
         threshold=5,
@@ -726,6 +940,7 @@ def main():
         event_mapping=b"single-pulse:LockedClose->C_s/v1")
     source = RandomnessSource(epoch)
     auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    source.bind(auth)
     slot = epoch.activation + 1
     prev_hash = sha256(u32(slot - 1) + b"real-predecessor-committed-core")
 
@@ -820,7 +1035,7 @@ def main():
 
     rogue_source = RandomnessSource(epoch)
     rogue_source.bind(rogue_auth)
-    rogue_source.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(rogue_source, cl_a)
     rogue_proof = rogue_source.proof(cl_a, rogue_auth)
     rogue_share = rogue_auth.share(1, cl_a)
 
@@ -859,8 +1074,9 @@ def main():
                                slot) is None
           and epoch_for_transition(sha256(b"prev-canonical-state"), committed,
                                    epoch.retirement + 1) is None)
+    other_win_pub = group_pub_from_seed(_full_member_commit(GROUP_SK, 4))
     other_win = EpochDescriptor(
-        format_version=1, authority_key=sha256(b"authority:group-key-2"),
+        format_version=1, authority_key=other_win_pub,
         roster=mk_roster(4), activation=epoch.activation - 50,
         retirement=epoch.retirement + 50, threshold=3,
         root_rule=epoch.root_rule, event_mapping=epoch.event_mapping)
@@ -872,7 +1088,8 @@ def main():
     # ---------- Single pulse: closed ledger -> one C_s -> one proof -> one root
     auth_b = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
     src_b = RandomnessSource(epoch)
-    src_b.admit(cl_b, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    src_b.bind(auth_b)
+    boundary_release(src_b, cl_b)
     pb_b = src_b.proof(cl_b, auth_b)
     check("single-pulse binding: different externalized bytes -> distinct C_s "
           "as well as distinct proof/root under the same epoch+network+predecessor",
@@ -889,19 +1106,30 @@ def main():
           and NO_CALLER_OUTCOME_CLASS == frozenset())
 
     # ---------- Release boundary: CONFIRM/EXTERNALIZE + fully validated ------
-    src_early = RandomnessSource(epoch)
-    early_ok = src_early.admit(cl_a, RELEASE_CERT_ACCEPTED_COMMIT, True)
-    check("dnFVg release boundary: a proof/share is NOT released at "
-          "accepted-commit (mCommit in PREPARE is not safe-to-act finality)",
-          not early_ok and src_early.proof(cl_a, auth) is None
+    # Copilot (this review): the release fact is NOT caller-asserted. A source
+    # admits a close only when its boundary GENUINELY ran CONFIRM->EXTERNALIZE;
+    # there is no public way to stamp a close released. accepted-commit /
+    # "fully_validated" are no longer caller booleans -- they live inside the
+    # transition.
+    src_early = RandomnessSource(epoch)          # boundary never ran for cl_a
+    early_ok = src_early.admit(cl_a)             # boundary-enforced -> False
+    check("dnFVg release boundary: no CONFIRM/EXTERNALIZE for a close means "
+          "nothing can be admitted -- in particular an accepted-commit/prepared "
+          "close (which is not the externalize edge) cannot authorize a proof or "
+          "share, and the close stays UNKNOWN (stalled apply)",
+          not early_ok
+          and not src_early._boundary.has_externalized(cl_a)
+          and src_early.proof(cl_a, auth) is None
           and resolve(epoch, cl_a, src_early, None)["outcome"] == "UNKNOWN")
     alien_stage = RandomnessSource(epoch)
-    not_validated = alien_stage.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE,
-                                      False)
-    check("dnFVg release boundary: externalize WITHOUT local full validation "
-          "releases no proof", not not_validated
+    not_validated = boundary_release(alien_stage, cl_a, fully_validated=False)
+    check("dnFVg release boundary: the CONFIRM/EXTERNALIZE transition itself "
+          "rejects a value that was NOT locally fully validated (externalize "
+          "returns False; no witness, no proof, no share)",
+          not not_validated
+          and not alien_stage._boundary.has_externalized(cl_a)
           and alien_stage.proof(cl_a, auth) is None)
-    ok_boundary = source.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    ok_boundary = boundary_release(source, cl_a)
     proof_a = source.proof(cl_a, auth)
     root_a = UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a)
     check("dnFVg release boundary + proof/root split: after CONFIRM/EXTERNALIZE "
@@ -979,11 +1207,11 @@ def main():
     # authority's durable `_signed`/`_released` state.
     src_m = RandomnessSource(epoch)
     src_m.bind(auth_m)
-    src_m.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(src_m, cl_a)
     src_m.proof(cl_a, auth_m)
     alt_src_m = RandomnessSource(epoch)
     alt_src_m.bind(auth_m)
-    alt_src_m.admit(cl_a_alt, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(alt_src_m, cl_a_alt)
     alt_src_m.proof(cl_a_alt, auth_m)
     auth_m.share(1, cl_a)
     refused = auth_m.share(1, cl_a_alt)          # same event, different C_s
@@ -1000,11 +1228,11 @@ def main():
     auth_f = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
     src_f1 = RandomnessSource(epoch)
     src_f1.bind(auth_f)
-    src_f1.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(src_f1, cl_a)
     src_f1.proof(cl_a, auth_f)
     src_f2 = RandomnessSource(epoch)
     src_f2.bind(auth_f)
-    src_f2.admit(cl_s2, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(src_f2, cl_s2)
     src_f2.proof(cl_s2, auth_f)
     auth_f.share(1, cl_a)
     s1 = auth_f.share(1, cl_a)
@@ -1024,11 +1252,11 @@ def main():
     auth_r = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
     src_r = RandomnessSource(epoch)
     src_r.bind(auth_r)
-    src_r.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(src_r, cl_a)
     src_r.proof(cl_a, auth_r)
     alt_src_r = RandomnessSource(epoch)
     alt_src_r.bind(auth_r)
-    alt_src_r.admit(cl_a_alt, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(alt_src_r, cl_a_alt)
     alt_src_r.proof(cl_a_alt, auth_r)
     auth_r.share(1, cl_a)                         # sign before crash
     auth_rb = auth_r.restart()                     # crash + deterministic restart
@@ -1050,8 +1278,9 @@ def main():
           len({prng_a, appl_a, nom_a}) == 3
           and consumer_kdf(root_a, LABEL_PRN) == prng_a)
     source_b = RandomnessSource(epoch)
-    source_b.admit(cl_b, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
     b_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    source_b.bind(b_auth)
+    boundary_release(source_b, cl_b)
     check("B2 C_s binds the externalized value: a proof for value A FAILS "
           "against value B, and B resolves only under its own admitted proof",
           resolve(epoch, cl_b, source, proof_a)["outcome"] == "REJECTED"
@@ -1061,11 +1290,12 @@ def main():
     # ---------- Epoch gate: bind to THIS epoch (dnFVu) -------------------------
     other_source = RandomnessSource(other_win)
     o_auth = ThresholdAuthority.from_epoch(other_win, GROUP_SK)
+    other_source.bind(o_auth)
     other_slot = other_win.activation + 50
     cl_o = LockedClose(other_win, other_slot,
                        sha256(u32(other_slot - 1) + b"prev-o"),
                        sha256(b"externalized-value-A"))
-    other_source.admit(cl_o, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(other_source, cl_o)
     check("dnFVu epoch binding: a close derived under a DIFFERENT epoch is "
           "REJECTED under the calling epoch; it resolves only under its own "
           "epoch+source",
@@ -1081,7 +1311,7 @@ def main():
                        sha256(u32(slot + 4) + b"real-predecessor-committed-core"),
                        sha256(b"externalized-value-A"))
     src_slot = RandomnessSource(epoch)
-    src_slot.admit(cl_c, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    boundary_release(src_slot, cl_c)
     sl_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
     check("dnFWo admission by the exact close: admitting one close (value+slot) "
           "does NOT stock a valid proof for a DIFFERENT close sharing only the "
@@ -1138,10 +1368,14 @@ def main():
     # ---------- canonical proof is NOT a function of caller evidence ----------
     src_w1 = RandomnessSource(epoch)
     src_w2 = RandomnessSource(epoch)
-    ok_w1 = src_w1.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
-    ok_w2 = src_w2.admit(cl_a, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
-    p_w1 = src_w1.proof(cl_a, ThresholdAuthority.from_epoch(epoch, GROUP_SK))
-    p_w2 = src_w2.proof(cl_a, ThresholdAuthority.from_epoch(epoch, GROUP_SK))
+    a_w1 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    a_w2 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    src_w1.bind(a_w1)
+    src_w2.bind(a_w2)
+    ok_w1 = boundary_release(src_w1, cl_a)
+    ok_w2 = boundary_release(src_w2, cl_a)
+    p_w1 = src_w1.proof(cl_a, a_w1)
+    p_w2 = src_w2.proof(cl_a, a_w2)
     check("dnFVg canonical proof/root: two DIFFERENT honest release boundaries "
           "for the SAME close admit the IDENTICAL canonical proof and root -- "
           "the boundary witness authorizes release only and never changes the "
@@ -1154,11 +1388,11 @@ def main():
                                       sha256(b"externalized-value-A"),
                                       network_id=sha256(b"SomeOtherNetwork"))
     foreign_src = RandomnessSource(epoch)
-    admitted_foreign = foreign_src.admit(
-        foreign_net, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    admitted_foreign = boundary_release(foreign_src, foreign_net)
     check("dnFVu cross-network binding: a self-consistent close rebuilt under a "
           "NON-local network id is REJECTED by the resolver (never ROOT), and is "
-          "never admitted by this source",
+          "never admitted by this source -- the boundary transition itself "
+          "refuses an out-of-network close",
           not admitted_foreign
           and resolve(epoch, foreign_net, foreign_src, proof_a)
           == {"event_hash": foreign_net.hash.hex(), "outcome": "REJECTED"})
@@ -1171,8 +1405,8 @@ def main():
         prev = sha256(u32(s - 1) + b"real-predecessor-%d" % s)
         c = LockedClose(epoch, s, prev, sha256(b"protect:%d" % i))
         evs.append(c)
-        source.admit(c, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
-        proofs[i] = source.proof(c, ThresholdAuthority.from_epoch(epoch, GROUP_SK))
+        boundary_release(source, c)
+        proofs[i] = source.proof(c, auth)
     schedules = [
         lambda i: True,
         lambda i: i % 2 == 0,
@@ -1276,9 +1510,7 @@ def main():
     # arrives -- a per-event delivery sequence, not proof-permanently-present.
     mid = evs[n_events // 2]
     res_first = resolve(epoch, mid, source, None)
-    res_after = resolve(epoch, mid, source,
-                        source.proof(mid, ThresholdAuthority.from_epoch(
-                            epoch, GROUP_SK)))
+    res_after = resolve(epoch, mid, source, source.proof(mid, auth))
     check("B3 per-event UNKNOWN -> ROOT: an event whose proof arrives LATE "
           "(a `[none, proof]`-style schedule) first resolves UNKNOWN (apply "
           "stalls, never a substitute entropy branch) and then, on the proof "
@@ -1289,8 +1521,8 @@ def main():
           and res_after["source_root"] == bytes.fromhex(all_root_vals[
               [i for i in range(n_events) if evs[i].slot == mid.slot][0]]
           ).hex() and res_after["source_root"]
-          == UniqueThresholdProof.verify(epoch, mid.hash, source.proof(
-              mid, ThresholdAuthority.from_epoch(epoch, GROUP_SK))).hex())
+          == UniqueThresholdProof.verify(epoch, mid.hash,
+                                         source.proof(mid, auth)).hex())
 
     # ---------- B4: authority surface -------------------------------------------
     resolved = resolve(epoch, cl_a, source, proof_a)
@@ -1305,10 +1537,11 @@ def main():
     # ---------- O1: one use -> one pulse (competing same-slot admissions) ------
     comp_src = RandomnessSource(epoch)
     comp_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    comp_src.bind(comp_auth)
     c1 = LockedClose(epoch, slot + 300, prev_hash, sha256(b"value-one"))
     c2 = LockedClose(epoch, slot + 300, prev_hash, sha256(b"value-two"))
-    ok_c1 = comp_src.admit(c1, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
-    ok_c2 = comp_src.admit(c2, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    ok_c1 = boundary_release(comp_src, c1)
+    ok_c2 = boundary_release(comp_src, c2)
     check("O1 competing same-slot admission: the source keeps ONE canonical slot "
           "lock -- the first admitted close for the slot stays, a SECOND "
           "different value for the SAME slot is REFUSED and can never resolve to "
@@ -1319,7 +1552,7 @@ def main():
           ["outcome"] == "ROOT"
           and resolve(epoch, c2, comp_src, comp_src.proof(c2, comp_auth))
           ["outcome"] == "UNKNOWN"
-          and comp_src.admit(c1, RELEASE_CERT_CONFIRM_EXTERNALIZE, True))
+          and boundary_release(comp_src, c1))
     cand_vals = [
         (slot, sha256(b"externalized-value-A"), proof_a),
         (slot, sha256(b"externalized-value-B"), None),
@@ -1353,41 +1586,55 @@ def main():
             [(i, spoof.share(i, _c)) for i in range(1, t)], _c))
         # A spoof-secret (different seed) authority is never boundary-released,
         # so its shares are None and it recovers no proof at all.
-    # Copilot 3917696336 (negative-synthesis): the accepted proof is the
-    # SECRET-bound VUF output P_s = H(b"VufProof", G, epoch.hash, C_s) with the
-    # RECOVERED GROUP SECRET G. An attacker holding EVERY PUBLIC field (scheme,
-    # authority_key, epoch hash, C_s) plus this source file can compute only a
-    # public formula -- it cannot know G (recovered only by >=t holders), so its
-    # best public-only candidate P'_s != P_s. We pin BOTH sides as executable
-    # checks: the public formula is derivable but never equal to the genuine
-    # proof, and no pre-lock candidate resolves to a root.
+    # Copilot 3917696336 + line-519 (this review): the accepted proof is a Schnorr
+    # signature over the RECOVERED GROUP SECRET G (d = H(G)), and the PURE verifier
+    # checks it against the committed PUBLIC key. An attacker holding EVERY PUBLIC
+    # field (scheme, authority_key, epoch hash, C_s) plus this source file CANNOT
+    # know G (recovered only by >=t holders), so:
+    #   * its best public-only candidate (a 64-byte proof minted from the PUBLIC
+    #     key, not from G) verifies to NOTHING -- the Schnorr equation fails; and
+    #   * a random 64-byte value verifies to NOTHING (arbitrary bytes are rejected).
+    # This is a stronger assertion than byte-inequality: the PUBLIC-only proof is
+    # not merely "different bytes" -- it is REJECTED by the public verifier it
+    # would have to pass.
     true_G = _full_member_commit(GROUP_SK, epoch.n)
+    true_d = _spf_scalar(true_G)
 
     def genuine_expression(c):
-        return sha256(b"VufProof" + true_G + epoch.hash + c.hash)
+        # EXACTLY the genuine proof: recover_proof and this agree byte-for-byte.
+        return _spf_sign(true_d, epoch.hash, c.hash)
+
+    dummy_pub_d = _spf_scalar(epoch.authority_key)      # PUBLIC-key-derived guess
+    public_64 = _spf_sign(dummy_pub_d, epoch.hash, sha256(b"public-only-anchor"))
 
     def public_expression(c):
-        # PUBLIC-only reconstruction: substitutes the committed group PUBLIC key
-        # and scheme (the closest a non-holder can get to G). Deliberately NOT
-        # the genuine expression -- this is the proof of non-derivability.
-        return sha256(b"VufProof" + epoch.authority_key + epoch.hash + c.hash)
+        # PUBLIC-only synthesis: forged 64-byte proof bound to a scalar derived
+        # from public epoch bytes (closest a non-holder reaches G). NOT genuine.
+        return _spf_sign(dummy_pub_d, epoch.hash, c.hash + sha256(public_64))
 
+    random_64 = bytes(range(64))                          # arbitrary archive bytes
     public_candidates = [public_expression(_c) for _c in cand_closes]
     check("O2/Copilot negative-synthesis: a public-only candidate proof can never "
-          "equal the genuine recovered proof -- the accepted P_s is bound to the "
-          "RECOVERED GROUP SECRET G, unreachable from any public close/epoch "
-          "field (fix 3917696336: a candidate is not 'the proof' by being "
-          "canonical-looking; it must BE the genuine recovered proof)",
+          "equal the genuine recovered proof AND is REJECTED by the pure verifier "
+          "-- the accepted P_s is bound to the RECOVERED GROUP SECRET G, and "
+          "verify() runs a genuine public-key check so an arbitrary 64-byte "
+          "candidate (forged from public fields, or random) verifies to NOTHING "
+          "(fix 3917696336 + line-519: canonical-look is not acceptance)",
           all(public_candidates[k] != genuine_expression(_c)
               for k, _c in enumerate(cand_closes))
-          and all(public_candidates[k] != proof_a for k in range(len(cand_closes))))
+          and all(UniqueThresholdProof.verify(epoch, _c.hash,
+                                              public_candidates[k]) is None
+                  for k, _c in enumerate(cand_closes))
+          and UniqueThresholdProof.verify(epoch, cand_closes[0].hash,
+                                          random_64) is None)
     check("O2 pre-lock unavailability (brute force): an attacker holding every "
           "public close field -- forged, spoof-secret, crafted, and its best "
           "public-only proof expression for the exact close -- cannot obtain ANY "
           "P_s that RESOLVES to a root: with <t VALID system shares and without "
           "the release-at-externalize boundary the close has no genuine recovered "
-          "proof, and resolve() rejects every crafted/forged candidate (flow + "
-          "primitive-key property, not a source flag)",
+          "proof, the pure verifier rejects every forged/random candidate, and "
+          "resolve() rejects every crafted candidate (flow + public-key property, "
+          "not a source flag)",
           all(attacker_forged[k] is None for k in range(len(cand_closes)))
           and not any(auth.verify_share(i, cand_closes[0], sha256(b"forged"))
                       for i in range(1, t + 1))
@@ -1398,7 +1645,8 @@ def main():
     real = cand_closes[3]
     true_src = RandomnessSource(epoch)
     true_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
-    true_src.admit(real, RELEASE_CERT_CONFIRM_EXTERNALIZE, True)
+    true_src.bind(true_auth)
+    boundary_release(true_src, real)
     real_proof = true_src.proof(real, true_auth)
     check("O2 once EXACTLY ONE close is boundary-admitted, only that close "
           "resolves to a root; every other candidate yields none (no post-hoc "
@@ -1498,12 +1746,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "816dc2d5273f19191844d80b3e135efe13392c5276a1ac5d8ed97f976c7df568",
-        "93c38f98b853bfe4d4ad27a35609165d8143ad80ff1c1694c8cb07339df16bcf",
-        "fb11087426c8818e57882229c298d3d2ede58da7d5f2042428a82e26765f6b53",
-        "0178583c6cd81199e49e7fefb08cb4bf34f54f7d6bb5ad10246a85bef41ff293",
+        "fcd1f8ff9a9c78cda149cc14985522500f7dd3c26b977bc379305238805a27e0",
+        "716effd0ad83dede43ae5dad7c592ab69b560802bb6e9a2d8267f7195ab0a785",
+        "53b580b9eb844e219db29095ba0fc0d013b0d6a8f58cf6e6ce03cf0bf73c31b4",
+        "ca720132506c0a01a767a4bc6049b10618045ac8a7e9519f065a1b71f19e4269",
     )
-    EXP_COMP = "ee296bc50f101faea069b38323521f673dedc3e0fc0fef287a7af54e9bf0a92f"
+    EXP_COMP = "de070b5912849f0016883c8665b101451ee7b6f651ad06a8a45aeee58b387cf1"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),

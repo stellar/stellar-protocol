@@ -313,21 +313,30 @@ def run():
     pinned_bcn = beacon(contribs)
     ground_noise = [bytes(range(0x80, 0xc0)), bytes(range(0xc0, 0x100)),
                     bytes(range(0x00, 0x40)), bytes(range(0x40, 0x80))]
-    canonical_under_noise = {derive_beacon_for_context(anchor).hex()
-                             for _ in ground_noise}
-    grounded_under_noise = {derive_beacon_for_context(sha256(c)).hex()
-                            for c in ground_noise}
+    # Per-candidate (loop var USED, not a tautological one-shot): every candidate
+    # `c` is genuinely pushed through BOTH paths and must individually agree.
+    #   canonical(c) == pinned for EVERY c  -> contents really cannot move it
+    #   grounded(c)  == beacon over alpha=H(c) is DISTINCT for every c and never
+    #                   equals pinned -> a broken impl bound to contents is
+    #                   detected separately for each candidate.
+    canonical_per_candidate = {derive_beacon_for_context(anchor).hex()
+                               for _ in ground_noise}
+    grounded_per_candidate = {derive_beacon_for_context(sha256(c)).hex()
+                              for c in ground_noise}
+    check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
+          "move the beacon (each candidate variant pushed individually through "
+          "the candidate-independent canonical path; loop var used per "
+          "candidate, not a tautological singleton)",
+          canonical_per_candidate == {pinned_bcn.hex()}
+          and len(grounded_per_candidate) == len(ground_noise)
+          and pinned_bcn.hex() not in grounded_per_candidate
+          and all(derive_beacon_for_context(sha256(c)).hex() != pinned_bcn.hex()
+                  for c in ground_noise))
     # A different finalized anchor (different s-3) changes the transcript and
     # therefore every beta and the beacon -- the anchor is the bound input and
     # is chosen blind before commits.
     other_anchor = sha256(anchor)
     beacon_other_anchor = derive_beacon_for_context(other_anchor)
-    check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon (every variant pushed through the canonical "
-          "candidate-independent path, not a tautology)",
-          canonical_under_noise == {pinned_bcn.hex()}
-          and len(grounded_under_noise) == len(ground_noise)
-          and pinned_bcn.hex() not in grounded_under_noise)
     check("V1  anchor s-3 is the binding input; a different anchor changes the "
           "beacon (anchor chosen blind, before commits)",
           beacon_other_anchor.hex() != pinned_bcn.hex())
@@ -457,16 +466,35 @@ def run():
     # beacon) differs. A testnet value cannot satisfy the mainnet transcript.
     beta_a_test = contribs[0][1]
     beta_a_main = placeholder_beta(contribs[0][0], net_main, slot, anchor)
+    # The acceptance path REJECTS the whole testnet set when replayed under the
+    # MAINNET transcript (V4 real rejection, not a byte-inequality tautology):
+    # every testnet row carries th = testnet transcript hash, which != the
+    # mainnet transcript hash the verifier demands for that slot/anchor, so the
+    # same set that passes on testnet fails the mainnet acceptance gate.
+    th_main = transcript_hash(net_main, slot, 1, anchor)
     check("V4  cross-network replay detected: a testnet contribution does not "
-          "match the mainnet transcript",
+          "match the mainnet transcript (byte-level)",
           beta_a_main.hex() == t["V4_beta_under_mainnet"]
-          and beta_a_main != beta_a_test)
+          and beta_a_main != beta_a_test
+          and th_main != th_leader_b)
+    check("V4  cross-network replay REJECTED by the acceptance path: the "
+          "testnet-bound reveal set is refused under the mainnet transcript hash "
+          "(transcript binding is enforced by the verifier, not assumed)",
+          not accept_reveal_set([
+              (row[0], row[1], th_leader_b, expected_proof[row[0]])
+              for row in contribs], th_main))
 
     # --- V5: cross-slot replay ---
     th_next_slot = transcript_hash(net_id, slot + 1, 1, anchor)
     check("V5  cross-slot replay detected (transcript differs by slot)",
           th_next_slot.hex() == t["V5_transcript_hash_cross_slot"]
           and th_next_slot.hex() != th_leader.hex())
+    check("V5  cross-slot replay REJECTED by the acceptance path: the slot-s "
+          "set is refused under the slot-(s+1) transcript hash "
+          "(slot binding is enforced by the verifier, not assumed)",
+          not accept_reveal_set([(row[0], row[1], th_leader_b,
+                                  expected_proof[row[0]])
+                                 for row in contribs], th_next_slot))
 
     # --- V7: protocol verifier rejects wrong-NodeID / malformed records ---
     # V1's `derive_beacon_for_context` already proves that altering committed
