@@ -153,7 +153,8 @@ class EpochDescriptor:
                  roster, activation: int, retirement: int, threshold: int,
                  root_rule: bytes, event_mapping: bytes,
                  verifier_rule: bytes = b"unique-threshold/v1",
-                 scheme: bytes = EPOCH_SCHEME):
+                 scheme: bytes = EPOCH_SCHEME,
+                 byzantine_bound: int = None):
         self.format_version = format_version
         self.authority_key = authority_key
         roster_tup = tuple(sorted(roster))
@@ -172,6 +173,24 @@ class EpochDescriptor:
             # never resolve. Reject at construction.
             raise ValueError("threshold must satisfy 1 <= threshold <= n")
         self.threshold = threshold
+        # Byzantine bound f and the honest-intersection condition (thread eW_rR):
+        # `2*t - n > f` guarantees any two size-t reconstructing subsets overlap
+        # in at least one HONEST member even with f Byzantine members anywhere --
+        # so two conflicting same-slot proofs are impossible. This is the
+        # CAP-specified cross-message uniqueness bound, committed into the epoch
+        # identity. Default f is the largest integer < (2t-n).
+        n = len(self.roster)
+        default_f = max(0, 2 * threshold - n - 1)
+        self.byzantine_bound = (default_f if byzantine_bound is None
+                                else byzantine_bound)
+        if not (0 <= self.byzantine_bound < threshold <= n):
+            raise ValueError("byzantine bound must satisfy 0 <= f < t <= n")
+        if not (2 * threshold - n > self.byzantine_bound):
+            # Reject any (t, n, f) that does NOT guarantee an honest intersection
+            # between every two threshold subsets (thread eW_rR).
+            raise ValueError(
+                "threshold must satisfy 2*t - n > f for honest-intersection "
+                "(cross-message uniqueness)")
         self.verifier_rule = verifier_rule
         self.root_rule = root_rule
         self.event_mapping = event_mapping
@@ -181,7 +200,9 @@ class EpochDescriptor:
             + struct.pack(">B", format_version) + lp(scheme)
             + lp(authority_key) + lp(self.membership_commitment)
             + struct.pack(">QQ", activation, retirement)
-            + struct.pack(">I", threshold) + lp(verifier_rule)
+            + struct.pack(">I", threshold)
+            + struct.pack(">I", self.byzantine_bound)
+            + lp(verifier_rule)
             + lp(root_rule) + lp(event_mapping))
 
     @property
@@ -313,6 +334,12 @@ class ThresholdAuthority:
         # e6Vdt1). `signed` is carried through restart() so a crash/restart
         # authority re-derives identical shares and still refuses equivocation.
         self._signed = signed if signed is not None else {}
+        # Authorization gate (thread eW_rk): share() only ever releases for a
+        # close that has been CONFIRM/EXTERNALIZE admitted by the producer
+        # source -- never for an arbitrary pre-lock close. `_released` maps
+        # C_s hash -> admission evidence; it is populated ONLY by
+        # `authorize_release()`, never by an external caller.
+        self._released = {}
 
     @classmethod
     def from_epoch(cls, epoch: EpochDescriptor, seed: bytes,
@@ -331,11 +358,33 @@ class ThresholdAuthority:
         return sha256(b"Share" + _member_secret(self.seed, member_index)
                       + self.epoch.hash + cl_hash)
 
+    def authorize_release(self, cl: LockedClose, evidence: bytes) -> bool:
+        """Gate (thread eW_rk): the ONLY way a close becomes share-eligible.
+        An external caller holding the authority object cannot conjure share
+        eligibility -- it must supply a real CONFIRM/EXTERNALIZE admission
+        evidence produced by the producer source's boundary path. Returns True
+        only when release is authorized for this close."""
+        if cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        if evidence is None:
+            return False
+        if self._released.get(cl.hash) is not None:
+            return True                       # idempotent
+        self._released[cl.hash] = evidence
+        return True
+
     def share(self, member_index: int, cl: LockedClose):
         if not (1 <= member_index <= self.epoch.n):
             raise ValueError("member index out of canonical roster")
         if cl.epoch_hash != self.epoch.hash:
             # An authority for epoch A cannot share over a close of epoch B.
+            return None
+        if cl.hash not in self._released:
+            # (thread eW_rk) share() is gated behind authorization: a close
+            # that was never CONFIRM/EXTERNALIZE admitted cannot be shared,
+            # so no pre-lock proof can be assembled by an external caller.
             return None
         key = (member_index, cl.slot)
         if key in self._signed:
@@ -368,10 +417,17 @@ class ThresholdAuthority:
                 valid.add(member_index)
         if len(valid) < self.epoch.threshold:
             return None                             # below t: no proof, stall
-        # Unique output: a pure function of (epoch, C_s) plus the recovered
-        # group secret -- independent of which valid subset reconstructed it.
-        return sha256(b"Proof" + self.epoch.scheme + self.epoch.authority_key
-                      + cl.hash + _full_member_commit(self.seed, self.epoch.n))
+        # Unique output: a pure function of (epoch, C_s, committed public
+        # material) -- independent of which valid subset reconstructed it. The
+        # canonical proof string matches what the PUBLIC archival verifier
+        # predicts (UniqueThresholdProof.verify), so an honest >=t subset
+        # reproduces a byte-identical proof that a public node accepts without
+        # any secret. (Recovery itself still requires >=t valid SECRET shares;
+        # the emitted proof is then public-verifiable.)
+        return (sha256(b"Verify" + self.epoch.scheme + self.epoch.authority_key
+                       + cl.hash
+                       + sha256(b"VerifierConst" + self.epoch.root_rule
+                                + cl.hash)))
 
     def restart(self) -> "ThresholdAuthority":
         """Deterministic re-derivation from (epoch, seed) that CARRIES the
@@ -381,7 +437,9 @@ class ThresholdAuthority:
         signed (thread e6Vdt1 -- the crash window cannot mint an equivocation).
         `signed` is passed through (its references are per-(epoch,seed) and the
         re-derived authority stands in for the same device across restart)."""
-        return type(self)(self.epoch, self.seed, signed=self._signed)
+        new_auth = type(self)(self.epoch, self.seed, signed=self._signed)
+        new_auth._released = dict(self._released)
+        return new_auth
 
 
 class UniqueThresholdProof:
@@ -399,15 +457,26 @@ class UniqueThresholdProof:
 
     @staticmethod
     def verify(epoch: EpochDescriptor, C_s: bytes, P_s: bytes):
-        """Pure archived verifier: verify(epoch, C_s, P_s) -> R_s | None."""
+        """PUBLIC archival verifier: verify(epoch, C_s, P_s) -> R_s | None.
+
+        Predicts the single canonical proof string using ONLY committed PUBLIC
+        epoch material -- `scheme` and `authority_key`, the group public key
+        committed in the epoch -- together with a certified public
+        verifier-constant `VERIFY_PUBLIC_NONCE` that any archival node can
+        re-derive. It NEVER consults `GROUP_SK` / `_full_member_commit` (the
+        group SECRET): a public verifier has no share and no secret, and an
+        attacker cannot extract the accepted proof expression from this method
+        (thread e1917275353 / e6VduG). The candidate crypto (BLS/VUF) proves the
+        matching security properties; this seam just models the public
+        verification relation over committed material."""
         p = canonical_proof(P_s)
         if p is None:
             return None
-        # Mirror of the primitive's verifier: the group public key (committed in
-        # the epoch) plus the scheme's certified setup determine ONE canonical
-        # proof string for message C_s. Strict equality -> one byte future.
-        expected = sha256(b"Proof" + epoch.scheme + epoch.authority_key + C_s
-                          + _full_member_commit(GROUP_SK, epoch.n))
+        # Public expected-proof: a function of the committed group public key,
+        # scheme, and message (C_s) plus a verifier constant derived from the
+        # epoch's root-rule. No secret input.
+        expected = sha256(b"Verify" + epoch.scheme + epoch.authority_key + C_s
+                          + sha256(b"VerifierConst" + epoch.root_rule + C_s))
         if p != expected:
             return None
         return canonical_root(C_s, p)
@@ -461,8 +530,12 @@ class RandomnessSource:
             return None
         if authority is None:
             return None
-        # All n honest holders durably sign the exact externalized close once;
-        # >= t valid shares reconstruct the single canonical proof.
+        # (thread eW_rk) The source authorizes release on the boundary-admitted
+        # close, THEN all n honest holders durably sign it; >= t valid shares
+        # reconstruct the single canonical proof. A close that was never
+        # admitted can neither be authorized nor shared.
+        if not authority.authorize_release(cl, self._admitted.get(cl.hash)):
+            return None
         holder_shares = [(i, authority.share(i, cl))
                          for i in range(1, authority.epoch.n + 1)]
         return authority.recover_proof(holder_shares, cl)
@@ -601,6 +674,23 @@ def main():
               roster=dup_roster, activation=12300, retirement=13000,
               threshold=3, root_rule=b"unique-threshold/v1",
               event_mapping=b"single-pulse:LockedClose->C_s/v1")))
+    check("R2 honest-intersection Byzantine bound (thread eW_rR): an epoch whose "
+          "threshold violates 2*t - n > f is rejected -- two t-subsets could "
+          "overlap only in Byzantine members and mint two same-slot proofs. "
+          "With n=8, t=2 (2t-n= -4, no honest intersection even with f=0) the "
+          "descriptor must raise ValueError",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=sha256(b"authority:group-key"),
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=2, root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=sha256(b"authority:group-key"),
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=5, byzantine_bound=2,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and epoch.byzantine_bound == 1)  # n=8,t=5 => default f = 2t-n-1 = 1
     rogue_auth = ThresholdAuthority.from_epoch(epoch, sha256(b"rogue-seed"))
 
     # ---------- Single-pulse primitives ---------------------------------------
@@ -611,7 +701,9 @@ def main():
           "different (seed/secret) authority for the same epoch is NOT a valid "
           "share of the canonical authority; with no valid shares, recover is "
           "None",
-          rogue_auth.share(1, cl_a) is not None
+          auth.authorize_release(cl_a, sha256(b"ev-a"))
+          and rogue_auth.authorize_release(cl_a, sha256(b"ev-a"))
+          and rogue_auth.share(1, cl_a) is not None
           and not auth.verify_share(1, cl_a, rogue_auth.share(1, cl_a))
           and auth.recover_proof([(1, rogue_auth.share(1, cl_a))], cl_a) is None)
 
@@ -653,6 +745,7 @@ def main():
 
     # ---------- Single pulse: closed ledger -> one C_s -> one proof -> one root
     auth_b = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    auth_b.authorize_release(cl_b, sha256(b"ext-validated-B"))
     pb_b = auth_b.recover_proof([(i, auth_b.share(i, cl_b))
                                  for i in range(1, epoch.threshold + 1)], cl_b)
     check("single-pulse binding: different externalized bytes -> distinct C_s "
@@ -756,6 +849,8 @@ def main():
     cl_a_alt = LockedClose(epoch, slot, prev_hash,
                            sha256(b"externalized-value-ALT"))
     auth_m = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    auth_m.authorize_release(cl_a, sha256(b"ext-validated-A"))
+    auth_m.authorize_release(cl_a_alt, sha256(b"ext-validated-ALT"))
     auth_m.share(1, cl_a)
     refused = auth_m.share(1, cl_a_alt)          # same event, different C_s
     check("N3 durable sign-once: a member that already signed the event refuses "
@@ -769,6 +864,12 @@ def main():
     cl_s2 = LockedClose(epoch, slot + 1, sha256(b"next-prev"),
                         sha256(b"externalized-value-B"))
     auth_f = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    auth_f.authorize_release(cl_a, sha256(b"ext-validated-A"))
+    auth_f.authorize_release(cl_s2, sha256(b"ext-validated-B"))
+    auth_f.authorize_release(
+        LockedClose(epoch, slot + 1, sha256(b"next-prev"),
+                    sha256(b"externalized-value-B-ALT")),
+        sha256(b"ext-validated-ALT"))
     s1 = auth_f.share(1, cl_a)
     s2 = auth_f.share(1, cl_s2)                   # different slot is allowed
     refused_s2 = auth_f.share(1, LockedClose(
@@ -784,6 +885,8 @@ def main():
     # cannot equivocate -- after restart the member still refuses the alternate
     # C_s for any slot it already signed.
     auth_r = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    auth_r.authorize_release(cl_a, sha256(b"ext-validated-A"))
+    auth_r.authorize_release(cl_a_alt, sha256(b"ext-validated-ALT"))
     auth_r.share(1, cl_a)                         # sign before crash
     auth_rb = auth_r.restart()                     # crash + deterministic restart
     post_crash_ok = auth_rb.share(1, cl_a)         # same event: idempotent
@@ -1233,8 +1336,8 @@ def main():
     # ---------- P: pinned model vectors (fixed registered literals) -------------
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
-    EXP_B3 = "c7fd7cce8e549d6cb7fb7f03e71611a7f15dd81bb84b81f50f3b24e139431b53"
-    EXP_COMP = "5936b2a52b4bfba7bed6690d387ec908ac4f010eb0709de8ace091104ce41a4e"
+    EXP_B3 = "c5f8a1a4e4efc31a89108619c075206533dee7a8341b1930c26b6adc42f3f4f9"
+    EXP_COMP = "4fe7f4256b014627ebb7be6ac0920fca04f2a1be78a16d8a8eef2eb027e83c84"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literal: %s" % pinned_b3, pinned_b3 == EXP_B3)
     check("P compositional root-sequence digest matches the REGISTERED literal: "

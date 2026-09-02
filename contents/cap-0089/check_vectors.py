@@ -148,10 +148,12 @@ def placeholder_proof(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> b
     # never exercise the mandated 80-byte wire width, so the honest path is now
     # built at the full 80-byte length. Like the real proof it is deterministic
     # in secret key (node_id) and transcript T_b(s), and is a DISTINCT byte
-    # stream from beta. The acceptance verifier (V3/V7) exercises proof
-    # verification here -- rule 5 of CAP-0089 -- and must reject a missing,
-    # garbled, or misattributed proof, so the acceptance path is not merely
-    # assumed against the PR #5409 primitive harness.
+    # stream from beta. The acceptance path (V3/V7) uses this as a FIELD /
+    # TRANSPORT integrity gate -- the reveal's proof must byte-match the pinned
+    # authoritative one and have the mandated width; it deliberately does NOT
+    # claim to be an RFC 9381 point/scalar verifier (that is the PR #5409
+    # harness). A missing, garbled, or misattributed proof is still rejected by
+    # the acceptance-path field gate.
     t_leader = transcript(net, slot, 0x01, anchor)
     h = sha512(PROOF_LABEL + bytes([0x01]) + node_id + t_leader)
     gamma = h[0:32]                                             # 32-byte point
@@ -366,9 +368,13 @@ def run():
         if sha256(beta) != ch:
             return False  # reveal must bind to its committed hash
         if proof != expected_proof[nid]:
-            return False  # rule 5: the reveal's VRF proof must verify under
-                          # (pk=nid, T_b(s)); a missing/garbled/misattributed
-                          # proof is rejected here, not assumed against PR #5409
+            # FIELD-INTEGRITY / transport gate (NOT a cryptographic VRF_verify):
+            # the reveal's proof must byte-match the authoritative pinned proof
+            # for (pk=nid, T_b(s)). This check exercises the acceptance-path
+            # field width/transport gate and rejects a missing/garbled/
+            # misattributed proof. Real RFC 9381 point/scalar verification is
+            # the PR #5409 harness's job; this checker does NOT claim to be one.
+            return False
         if prev_node_bytes is not None and nid <= prev_node_bytes:
             return False  # strict ascending (duplicates / out-of-order)
         return True
