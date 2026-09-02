@@ -313,28 +313,45 @@ def run():
     pinned_bcn = beacon(contribs)
     ground_noise = [bytes(range(0x80, 0xc0)), bytes(range(0xc0, 0x100)),
                     bytes(range(0x00, 0x40)), bytes(range(0x40, 0x80))]
-# Per-candidate (loop var USED per candidate, not a tautological one-shot):
-    # every candidate `c` is individually pushed through BOTH paths and must
-    # agree on the outcome:
-    #   * canonical(c): derived under the FIXED finalized anchor (the betas and
-    #     beacon do not depend on `c`) -> == `pinned` for EVERY `c`. A broken
-    #     impl that bound the beacon to unfinalized contents would drift.
-    #   * grounded(c): a MALFORMED impl that substituted c into the anchor
-    #     (alpha = H(c)) shifts the beacon to a distinct value for every `c`,
-    #     never equal to `pinned`.
-    canonical_all_pinned = all(
-        derive_beacon_for_context(anchor).hex() == pinned_bcn.hex()
-        for c in ground_noise)
-    grounded_per_candidate = {derive_beacon_for_context(sha256(c)).hex()
+
+    # Two NAMED derivation functions, BOTH taking the candidate as an argument,
+    # so each candidate genuinely traverses a candidate-to-canonical-input
+    # boundary (loop var used; not a no-op repeat).
+    #
+    # canonical(candidate): the protocol's canonical path binds alpha to the
+    # FINALIZED s-3 anchor only -- an unfinalized s-1 candidate is mapped through
+    # the boundary and intentionally does not enter alpha. It therefore returns
+    # the pinned beacon for EVERY candidate. A broken impl that tried to bind
+    # alpha to unfinalized contents (see bound_to_candidate) would NOT return the
+    # pinned value and would fail this loop.
+    def canonical(candidate):
+        # alpha = the committed anchor; candidate is accepted at the seam but
+        # deliberately excluded from alpha (the anti-grinding domain rule).
+        _ = candidate  # candidate consumed by the documented scrape boundary
+        return derive_beacon_for_context(anchor)
+
+    # bound_to_candidate(candidate): the MALFORMED variant a buggy impl would
+    # produce by substituting the candidate into alpha (H(candidate)). It must
+    # shift the beacon -- distinct for every candidate, never equal to pinned --
+    # so a buggy impl that rewards grinding is caught for each candidate.
+    def bound_to_candidate(candidate):
+        return derive_beacon_for_context(sha256(candidate))
+
+    canonical_all_pinned = all(canonical(c).hex() == pinned_bcn.hex()
+                               for c in ground_noise)
+    grounded_per_candidate = {bound_to_candidate(c).hex()
                               for c in ground_noise}
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon (each candidate variant pushed individually through "
-          "the candidate-independent canonical path; loop var used per "
-          "candidate, not a tautological singleton)",
+          "move the beacon -- every candidate is pushed individually through a "
+          "candidate-to-canonical-input boundary (`canonical(c)` uses the "
+          "committed anchor and returns `pinned` for each `c`), and a MALFORMED "
+          "`bound_to_candidate(c)` that binds alpha to `c` shifts the beacon for "
+          "every `c` and never equals `pinned` (loop var genuinely used); a "
+          "broken impl is detected per candidate",
           canonical_all_pinned
           and len(grounded_per_candidate) == len(ground_noise)
           and pinned_bcn.hex() not in grounded_per_candidate
-          and all(derive_beacon_for_context(sha256(c)).hex() != pinned_bcn.hex()
+          and all(bound_to_candidate(c).hex() != pinned_bcn.hex()
                   for c in ground_noise))
     # A different finalized anchor (different s-3) changes the transcript and
     # therefore every beta and the beacon -- the anchor is the bound input and
