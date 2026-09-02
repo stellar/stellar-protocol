@@ -99,7 +99,7 @@ RELEASE_CERT_ACCEPTED_COMMIT = b"accepted-commit"   # deliberately NOT authorita
 
 # The model standby for the primitive's SYSTEM/GROUP key material. It is never
 # serialized, never committed in the epoch, and never printed; it mirrors the
-# boundary that the real VUF/DKG group secret lives only inside the primtive
+# boundary that the real VUF/DKG group secret lives only inside the primitive
 # (Rust) and the holder set. `verify` (below) uses it exactly the way a
 # production verifier uses the certified group public key + committed setup.
 GROUP_SK = hashlib.sha256(b"cap-0089:model:group-sk:v1").digest()
@@ -123,12 +123,16 @@ def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
                 previous_ledger_hash: bytes, value_hash: bytes) -> bytes:
     """Single canonical close-input contract `RandomnessCloseInputV1`.
 
-    Core-native widths (Noot): `ledgerSeq` is a uint32 (Core's LedgerSeq XDR
-    type), `format_version` is a single canonical identity byte (u8). Length-
-    prefixed so the encoding is injective. Binds network, epoch, the REAL
-    ledgerSeq, the predecessor ledger (state-transition semantics) and the exact
-    externalized value bytes. Provenance (signatures, proposer, envelopes,
-    transport) is deliberately absent."""
+    Wire shape (documented in B1, matches Core XDR widths): literal contract
+    tag `"RandomnessCloseInputV1"` + a `uint32` arm version (currently `1`),
+    then length-prefixed single elements for the variable-length fields and a
+    `uint32` `ledgerSeq` (Core's `LedgerSeq` XDR type). Length-prefixed so the
+    encoding is injective. Binds network, epoch, the REAL ledgerSeq, the
+    predecessor ledger (state-transition semantics) and the exact externalized
+    value bytes. Provenance (signatures, proposer, envelopes, transport) is
+    deliberately absent. (The epoch's separate `format_version` canonical
+    identity byte is committed in `EpochDescriptor.hash`, NOT in this close
+    input.)"""
     return (b"RandomnessCloseInputV1" + u32(1)
             + lp(network_id) + lp(epoch_hash)
             + u32(ledger_seq) + lp(previous_ledger_hash) + lp(value_hash))
@@ -156,6 +160,11 @@ class EpochDescriptor:
         self.membership_commitment = sha256(roster_bytes(self.roster))
         self.activation = activation
         self.retirement = retirement
+        if not (1 <= threshold <= len(self.roster)):
+            # thread e6VduY: a malformed threshold (0 or > n) can never be a
+            # sound epoch -- 0 would emit a proof with no shares, > n could
+            # never resolve. Reject at construction.
+            raise ValueError("threshold must satisfy 1 <= threshold <= n")
         self.threshold = threshold
         self.verifier_rule = verifier_rule
         self.root_rule = root_rule
@@ -288,10 +297,16 @@ class ThresholdAuthority:
         proof-emission function: an actor with fewer than t valid shares cannot
         obtain any P_s accepted by the pure verifier."""
 
-    def __init__(self, epoch: EpochDescriptor, seed: bytes):
+    def __init__(self, epoch: EpochDescriptor, seed: bytes,
+                 signed: dict = None):
         self.epoch = epoch
         self.seed = seed
-        self._signed = {}     # durable sign-once: member_index -> (slot, C_s)
+        # Durable sign-once per event: (member_index, slot) -> C_s. Each member
+        # signs each ledger slot at most once; a competing C_s for the SAME slot
+        # is refused. Distinct future slots are independent (threads e6Vduq,
+        # e6Vdt1). `signed` is carried through restart() so a crash/restart
+        # authority re-derives identical shares and still refuses equivocation.
+        self._signed = signed if signed is not None else {}
 
     @classmethod
     def from_epoch(cls, epoch: EpochDescriptor, seed: bytes,
@@ -316,12 +331,13 @@ class ThresholdAuthority:
         if cl.epoch_hash != self.epoch.hash:
             # An authority for epoch A cannot share over a close of epoch B.
             return None
-        lock = self._signed.get(member_index)
-        if lock is None:
-            self._signed[member_index] = (cl.slot, cl.hash)
-        elif lock != (cl.slot, cl.hash):
-            # Same event, DIFFERENT C_s: refuse (durable sign-once per event).
-            return None
+        key = (member_index, cl.slot)
+        if key in self._signed:
+            if self._signed[key] != cl.hash:
+                # Same event slot, DIFFERENT C_s: refuse (durable sign-once).
+                return None
+        else:
+            self._signed[key] = cl.hash
         return self._share_for(member_index, cl.hash)
 
     def verify_share(self, member_index: int, cl: LockedClose, share: bytes) -> bool:
@@ -352,10 +368,14 @@ class ThresholdAuthority:
                       + cl.hash + _full_member_commit(self.seed, self.epoch.n))
 
     def restart(self) -> "ThresholdAuthority":
-        """Deterministic re-derivation from (epoch, seed): a crash/restart
-        authority reproduces every share and the same P_s/R_s with no new
-        authority choice and no process memory."""
-        return type(self)(self.epoch, self.seed)
+        """Deterministic re-derivation from (epoch, seed) that CARRIES the
+        durable sign-once decisions: a crash/restart authority reproduces every
+        share and the same P_s/R_s with no new authority choice and no process
+        memory, while still refusing a competing C_s for any slot it already
+        signed (thread e6Vdt1 -- the crash window cannot mint an equivocation).
+        `signed` is passed through (its references are per-(epoch,seed) and the
+        re-derived authority stands in for the same device across restart)."""
+        return type(self)(self.epoch, self.seed, signed=self._signed)
 
 
 class UniqueThresholdProof:
@@ -551,6 +571,20 @@ def main():
                                                            threshold=1))
           and raises(lambda: ThresholdAuthority.from_epoch(epoch, GROUP_SK,
                                                            roster=mk_roster(5))))
+    check("R2 malformed thresholds are rejected at epoch construction (thread "
+          "e6VduY): threshold=0 would emit a proof with zero shares and "
+          "threshold>n could never resolve -- both are unsound epochs and raise",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=sha256(b"authority:group-key"),
+              roster=roster, activation=12300, retirement=13000, threshold=0,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=sha256(b"authority:group-key"),
+              roster=roster, activation=12300, retirement=13000,
+              threshold=len(roster) + 1,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1")))
     rogue_auth = ThresholdAuthority.from_epoch(epoch, sha256(b"rogue-seed"))
 
     # ---------- Single-pulse primitives ---------------------------------------
@@ -713,6 +747,36 @@ def main():
           "impossible; an SCP safety failure stalls randomness, it cannot mint "
           "two roots", refused is None
           and auth_m.share(1, cl_a) == auth.share(1, cl_a))
+    # e6Vduq: sign-once is keyed by (member, slot) -> C_s, so ONE durable
+    # authority can sign DISTINCT future slots (a normal ledger sequence) and
+    # refuses only competing C_s for the SAME slot.
+    cl_s2 = LockedClose(epoch, slot + 1, sha256(b"next-prev"),
+                        sha256(b"externalized-value-B"))
+    auth_f = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    s1 = auth_f.share(1, cl_a)
+    s2 = auth_f.share(1, cl_s2)                   # different slot is allowed
+    refused_s2 = auth_f.share(1, LockedClose(
+        epoch, slot + 1, sha256(b"next-prev"),
+        sha256(b"externalized-value-B-ALT")))
+    check("N3 durable sign-once keyed by (member, slot): one authority signs "
+          "DISTINCT future slots (a real ledger sequence) and refuses only a "
+          "competing C_s for the SAME slot -- consecutive closed ledgers are "
+          "not accidentally serialized into one event (thread e6Vduq)",
+          s1 == auth.share(1, cl_a) and s2 is not None and s2 != s1
+          and refused_s2 is None)
+    # e6Vdt1: restart CARRIES the durable sign-once locks, so a crash window
+    # cannot equivocate -- after restart the member still refuses the alternate
+    # C_s for any slot it already signed.
+    auth_r = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    auth_r.share(1, cl_a)                         # sign before crash
+    auth_rb = auth_r.restart()                     # crash + deterministic restart
+    post_crash_ok = auth_rb.share(1, cl_a)         # same event: idempotent
+    post_crash_refused = auth_rb.share(1, cl_a_alt)  # opposite event: refused
+    check("N3 crash-window sign-once: restart() carries the durable locks -- "
+          "the SAME event re-signs idempotently after a crash and a DIFFERENT "
+          "C_s for an already-signed slot is still refused, so an authority "
+          "cannot restart to mint an equivocation (thread e6Vdt1)",
+          post_crash_ok == s1 and post_crash_refused is None)
 
     # ---------- B2: C_s binds the EXACT value bytes --------------------------
     prng_a, appl_a, nom_a = (consumer_kdf(root_a, LABEL_PRN),
@@ -937,6 +1001,28 @@ def main():
           "the first gap, so nodes differ only in prefix length, never an applied "
           "ROOT,UNKNOWN,ROOT hole", prefix_ok)
 
+    # e6Vdu_: explicit UNKNOWN -> ROOT transition for the SAME close. Delaying
+    # the proof (a `[none, proof]`-style schedule for THAT event) must first
+    # yield UNKNOWN (apply stalls) and later the identical ROOT once the proof
+    # arrives -- a per-event delivery sequence, not proof-permanently-present.
+    mid = evs[n_events // 2]
+    res_first = resolve(epoch, mid, source, None)
+    res_after = resolve(epoch, mid, source,
+                        source.proof(mid, ThresholdAuthority.from_epoch(
+                            epoch, GROUP_SK)))
+    check("B3 per-event UNKNOWN -> ROOT: an event whose proof arrives LATE "
+          "(a `[none, proof]`-style schedule) first resolves UNKNOWN (apply "
+          "stalls, never a substitute entropy branch) and then, on the proof "
+          "delivery, resolves the IDENTICAL canonical path root -- the same "
+          "close, one proven root, availability-only difference (thread e6Vdu_)",
+          res_first == {"event_hash": mid.hash.hex(), "outcome": "UNKNOWN"}
+          and res_after["outcome"] == "ROOT"
+          and res_after["source_root"] == bytes.fromhex(all_root_vals[
+              [i for i in range(n_events) if evs[i].slot == mid.slot][0]]
+          ).hex() and res_after["source_root"]
+          == UniqueThresholdProof.verify(epoch, mid.hash, source.proof(
+              mid, ThresholdAuthority.from_epoch(epoch, GROUP_SK))).hex())
+
     # ---------- B4: authority surface -------------------------------------------
     resolved = resolve(epoch, cl_a, source, proof_a)
     permitted = {"event_hash", "outcome", "source_root"}
@@ -1002,17 +1088,38 @@ def main():
         # guess not only non-canonical but also spoof-secret proofs: all must
         # fail the PURE verifier, which canonicalizes against the GROUP key.
     crafted = [sha256(b"noise:%d" % k) for k in range(8)]
+    # e6VduG: give the attacker the model's OWN proof-expression (the exact raw
+    # "expected" bytes are a deterministic function of the module secret) AND a
+    # recovered t-subset from a spoof authority, AND the module's public formula
+    # for the canonical proof. Even the strongest known-plaintext reconstruction
+    # must not mint a ROOT pre-lock: protocol acceptance also requires the source
+    # boundary admission for the EXACT close (release-at-externalize), so
+    # "proof computability from public bytes" never equals "boundary-authorized
+    # proof". The real cryptographic unforgeability is the #5409 primitive
+    # harness (I1-I4); this gate proves the pre-lock FLOW property.
+    raw_formula_forge = [
+        sha256(b"Proof" + epoch.scheme + epoch.authority_key + _c.hash
+               + _full_member_commit(GROUP_SK, epoch.n))
+        for _c in cand_closes]
     check("O2 pre-lock unavailability (brute force): an attacker holding every "
-          "public close field can forge, spoof (alien secret material) or "
-          "craft proofs, but with <t VALID system shares they cannot obtain ANY "
-          "P_s that the pure archived verifier verify(epoch, C_s, P_s) accepts "
-          "-- a flow + primitive-key property, not a source flag",
+          "public close field -- including forged, spoof-secret, crafted, and "
+          "the model's own raw proof-expression for the exact close -- can "
+          "compute 32-byte candidates, but with <t VALID system shares and "
+          "without the release-at-externalize boundary they cannot obtain ANY "
+          "P_s that RESOLVES to a root: verify() rejects the non-canonical "
+          "candidates and the source gate rejects even the canonical-looking "
+          "raw formula pre-lock -- a flow + primitive-key property, not a "
+          "source flag",
           all(UniqueThresholdProof.verify(epoch, _c.hash, g) is None
               for _c in cand_closes
               for g in (attacker_forged + crafted + [None]))
           and all(attacker_forged[k] is None for k in range(len(cand_closes)))
           and not any(auth.verify_share(i, cand_closes[0], sha256(b"forged"))
-                      for i in range(1, t + 1)))
+                      for i in range(1, t + 1))
+          and all(resolve(epoch, _c, source, raw_formula_forge[k])
+                  ["outcome"] != "ROOT"
+                  for k, _c in enumerate(cand_closes))
+          and all(not source.has_valid_proof(_c) for _c in cand_closes))
     real = cand_closes[3]
     true_src = RandomnessSource(epoch)
     true_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
