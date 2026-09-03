@@ -7,7 +7,7 @@ Working Group:
     Owner: <Person accountable for the CAP - name/email address/github alias>
     Authors: <List of comma separated name/email address/github alias>
     Consulted: <List of comma separated name/email address/github alias>
-Status: Pre-Draft
+Status: Draft
 Created: <date created on, in ISO 8601 (yyyy-mm-dd) format>
 Discussion: <link to where discussion for this CAP is taking place, typically the mailing list>
 Protocol version: TBD

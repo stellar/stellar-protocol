@@ -3,8 +3,6 @@
 ## CAP Status Terms
 
 ### Primary Workflow
-- **Pre-Draft** — A CAP whose idea is being discussed and whose PR has not yet been merged. A
-  maintainer moves it to **Draft** when assigning its CAP number and merging.
 - **Draft** — A CAP that is currently open for consideration and actively being discussed.
 - **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
   Core Team. After a maximum of three meetings, a vote will take place that will set the CAP's
@@ -234,7 +232,6 @@ repository. You should make sure to adhere to the following:
 - Your CAP should be named `cap-TBD.md`
 - Do not self-assign, reference, or request a CAP number. Leave the CAP number in the preamble as
   `To Be Assigned`. A CAP number will be assigned by a maintainer just before merge.
-- Set the status in the preamble to `Pre-Draft`. A maintainer moves it to `Draft` on merge.
 - Do not add the proposal to the `core/README.md` as it increases the chance of conflicts at merge
   time. The proposal will be added to the readme by a maintainer.
 - If your CAP requires images or other supporting files, they should be included in a sub-directory
