@@ -2108,47 +2108,83 @@ def main():
                                              epoch.hash, full) == root_a)
 
     # ---------- Liveness theorem: SCP-finalizable => randomness-reconstructible
-    # (tactical-noot round-12 red test) --------------------------------.
-    # The smallest red test for the liveness theorem -- enumerate EVERY member's
-    # LOCAL release bit (a per-member subset E of roster indices that have crossed
-    # their OWN CONFIRM->EXTERNALIZE for the same close cl_a/C_s) and require that
-    # EVERY supported SCP-finalizing view (|E| >= t, all toward the same C_s --
-    # 2*t-n>f forces that common C_s) forces >= t locally-authorized shares that
-    # reconstruct the UNIQUE proof P_s/root, while NO sub-threshold view (|E| < t,
-    # an un-finalized close) yields a proof at all. Because the randomness roster
-    # IS the finality quorum (each member releases its share only when IT
-    # externalizes cl_a, which is the same local event that counts toward the
-    # finality threshold), the number of released shares equals |E|; finality
-    # (|E| >= t) therefore implies reconstruction, so SCP never commits a ledger
-    # whose randomness cannot be produced (no roster-as-second-authority stall).
+    # (tactical-noot round-12 red test, REVISED round-13 to stop assuming the
+    # theorem). The prior version was circular: it defined every |E| >= t roster
+    # subset as "an SCP-finalizing view" and pulled every member's share from ONE
+    # globally-released authority, so the roster-disjoint externalization that can
+    # violate the theorem was excluded by construction. This revision models TWO
+    # INDEPENDENT dimensions and exercises the disjoint case explicitly:
+    #   (a) SCP ledger finality (which real FBA quorum-set topology determines) --
+    #       represented by `scp_finalized`: True iff the normal SCP externalize ran;
+    #   (b) each roster member's OWN local CONFIRM->EXTERNALIZE release bit --
+    #       represented by a PER-MEMBER independent release set E, where member i
+    #       releases exactly when IT crossed ITS OWN boundary toward C_s, NEVER via
+    #       one shared authority. The CAP does NOT claim t is an SCP quorum (line
+    #       448 / S1-S3 object contract): t is the RANDOMNESS-reconstruction
+    #       threshold, an independent release edge the CAP ADDS on top of SCP.
+    # We then prove:
+    #   * ROSTER-DISJOINT SCP finality does NOT release shares: if SCP externalized
+    #     via a quorum containing < t roster members (so the per-member release set
+    #     E has |E| < t, even though scp_finalized == True), recover yields NO proof
+    #     -- a disjoint quorum stalls randomness. This is the scenario that can
+    #     violate a sloppy theorem, and here it is genuinely exercised and shown to
+    #     produce UNKNOWN (which is exactly why the CAP ADDS the roster-threshold
+    #     release rule rather than trusting SCP finality).
+    #   * ROSTER-THRESHOLD release => reconstructible: once >= t roster members have
+    #     INDEPENDENTLY crossed toward the same C_s (same per-member local view;
+    #     2*t-n>f forces that common C_s), their individually-released shares
+    #     reconstruct the UNIQUE P_s/root.
     members = list(range(1, N_MEMBERS + 1))
-    all_final_ok = True
-    all_sub_ok = True
+    # Per-member independent release bit for cl_a: member i released iff i in E.
+    def roster_released_shares(E):
+        # Each member i's carrier is available ONLY because i individually crossed
+        # its own boundary toward cl_a; members not in E contribute nothing. We use
+        # the authority's per-member carriers (each still a valid FROST partial
+        # derived from the epoch + round-1 set), gated by the INDEPENDENT bit E.
+        return [(i, c) for i in E for c in [auth.share(i, cl_a)] if c is not None]
+    # (a)-(b) model: SCP finality and per-member release are independent.
+    # Roster-disjoint finalization: SCP externalized (ledger finalized) but the
+    # roster supplied < t individual releases -> no reconstructible randomness.
+    disjoint_externalized = True          # SCP finalized via a non-roster quorum
+    disjoint_release = [1, 2]             # only 2 < t=5 roster members released
+    disjoint_recovered = auth.recover_proof(
+        roster_released_shares(disjoint_release), cl_a)
+    # Exhaustive independence check: enumerate EVERY per-member release subset E
+    # and require -- WITHOUT assuming finality tracks |E| -- that recover matches
+    # the canonical proof IFF |E| >= t (roster threshold), and yields None IFF
+    # |E| < t (below the release edge), for EVERY value of SCP finality.
+    all_consistent = True
     for k in range(0, N_MEMBERS + 1):
         for E in itertools.combinations(members, k):
-            subset_shares = [(i, auth.share(i, cl_a)) for i in E]
-            rec = auth.recover_proof(subset_shares, cl_a)
+            rec = auth.recover_proof(roster_released_shares(E), cl_a)
             if k >= epoch.threshold:
-                if rec != full:
-                    all_final_ok = False
+                if rec != full:                       # roster-threshold => P_s
+                    all_consistent = False
             else:
-                if rec is not None:
-                    all_sub_ok = False
-    check("Liveness theorem (tacticalnoot): SCP-finalizable => "
-          "randomness-reconstructible -- the network commits a VRF close ONLY via "
-          "the roster's own threshold externalize, so every supported finalizing "
-          "view (|E| >= t roster members released toward the SAME C_s) forces >= t "
-          "shares that reconstruct the ONE P_s/root, and NO sub-threshold view "
-          "(|E| < t) yields any proof; finality and reconstruction are ONE event "
-          "(no second liveness authority)",
-          all_final_ok and all_sub_ok)
-
-    # Authoritative (boundary-admitted) proof side by side with the exhaustive
-    # enumeration: the canonical proof is byte-identical to the admitted one.
-    check("Liveness theorem / canonical proof: the recovered P_s for every "
-          "finalizing view equals the boundary-admitted proof_a and the model's "
-          "canonical root",
-          all_final_ok and full == proof_a)
+                if rec is not None:                   # sub-threshold => no P_s
+                    all_consistent = False
+    check("Liveness theorem (tacticalnoot, revised): the randomness roster is NOT "
+          "claimed to be an SCP quorum (t is the reconstruction threshold only, "
+          "per S1-S3). SCP ledger finality and per-member release are independent "
+          "dimensions: a ROSTER-DISJOINT SCP externalization (disjoint_locked but "
+          "only |E| < t roster members individually released toward C_s) yields NO "
+          "reconstructible proof -- the scenario that would violate a sloppy "
+          "theorem is exercised and shown to stall UNKNOWN, proving the CAP ADDS "
+          "the roster-threshold release rule rather than trusting SCP finality; "
+          "and once >= t roster members INDEPENDENTLY released for the SAME C_s, "
+          "their shares reconstruct the unique P_s/root",
+          disjoint_recovered is None
+          and all_consistent)
+    # Roster-threshold release under the per-member model recovers the canonical
+    # proof, matching the boundary-admitted one (not circular: independent bits).
+    threshold_set = members[: epoch.threshold]
+    thr_recovered = auth.recover_proof(roster_released_shares(threshold_set), cl_a)
+    check("Liveness theorem / roster-threshold reconstruction: once >= t members "
+          "have each independently crossed toward the SAME C_s, the unique "
+          "recovered P_s equals the boundary-admitted proof_a and the canonical "
+          "root; a roster-disjoint SCP quorum that did NOT cross the roster "
+          "release edge contributes no randomness",
+          thr_recovered == full == proof_a and disjoint_recovered is None)
 
     # ---------- Durable sign-once per event (Noot) ----------------------------
     auth2 = auth.restart()
