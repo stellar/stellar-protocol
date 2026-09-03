@@ -347,32 +347,34 @@ class AttackerView:
                 "membership_commitment, %d candidate closes)" % len(self.candidates))
 
 
-def _member_confirm(epoch: "EpochDescriptor", member_index: int) -> int:
-    """Per-member CONFIRM (SCP/externalization) sub-key `k_i` (separate from the
-    randomness threshold share -- key separation, RFC 9381 ss2 spirit + this
-    review). Used ONLY to authenticate a member's CONFIRM->EXTERNALIZE vote to
-    the boundary; never to sign/verify the randomness proof.
-
-    Copilot this review #4 (High): the sub-key is derived from the EPOCH's OWN
-    membership commitment (which commits the sorted roster), NOT from the
-    module-global `GROUP_SK`. Two epochs with unrelated rosters therefore use
-    DIFFERENT CONFIRM keys, so a CONFIRM certificate from one epoch's roster
-    cannot pass verification under another epoch -- the certificate genuinely
-    proves the claimed quorum-to-ROSTER membership."""
-    return _spf_scalar(sha256(b"ConfirmSubKey" + epoch.membership_commitment
+def _validator_confirm_sk(secret: bytes, member_index: int) -> int:
+    """Per-member CONFIRM (SCP/externalization) signing key `k_i`, a genuinely
+    MEMBER-HELD SECRET: it is derived from the authority's PRIVATE `secret`, NOT
+    from any public data (Copilot this review: the old `_member_confirm` derived
+    `k_i = H("ConfirmSubKey" || membership_commitment || i)` from PUBLILY-visible
+    bytes, so any observer could mint a valid CONFIRM vote for every roster
+    member -- it authenticated nothing). `k_i` is used ONLY to authenticate a
+    member's CONFIRM->EXTERNALIZE vote to the boundary; never to sign/verify the
+    randomness proof. An observer with only the epoch (public) cannot compute
+    `k_i`: it requires the private group/DKG secret. The epoch commits ONLY the
+    corresponding PUBLIC verification key (see `_validator_confirm_pub`)."""
+    return _spf_scalar(sha256(b"NodeConfirmKey/v2" + hash32(secret)
                               + u32(member_index) + b"v1"))
 
 
-def _member_confirm_pub(epoch: "EpochDescriptor", member_index: int) -> bytes:
-    """Public verification key K_i = G^{k_i} for a member's CONFIRM vote, bound
-    to the epoch's membership commitment (Copilot this review #4, High)."""
-    return _spf_pub(_member_confirm(epoch, member_index))
+def _validator_confirm_pub(secret: bytes, member_index: int) -> bytes:
+    """Public verification key K_i = G^{k_i} for a member's CONFIRM vote. This is
+    the ONLY per-member CONFIRM material an epoch commits/registers: the private
+    key stays with the member (rev-w#7). Bound to the epoch's roster commitment
+    through the `confirm_pub` the epoch registers."""
+    return _spf_pub(_validator_confirm_sk(secret, member_index))
 
 
 def _confirm_vote(k_i: int, epoch_hash: bytes, C_s: bytes) -> bytes:
     # Member CONFIRM vote = deterministic Schnorr signature over
-    # ("CONFIRM", epoch_hash, C_s) under the member subkey k_i. Sealed and
-    # verifiable via K_i; a caller cannot mint one without k_i.
+    # ("CONFIRM", epoch_hash, C_s) under the member's PRIVATE subkey k_i. Sealed
+    # and verifiable via the committed public K_i; an observer (lacking k_i,
+    # which is not a public function) cannot mint one.
     r = _spf_scalar(sha256(b"ConfirmNonce" + k_i.to_bytes(32, "big")
                            + epoch_hash + C_s))
     R = pow(_GRP_G, r, _GRP_P)
@@ -460,7 +462,8 @@ class EpochDescriptor:
                  root_rule: bytes, event_mapping: bytes,
                  verifier_rule: bytes = b"unique-threshold/v1",
                  scheme: bytes = EPOCH_SCHEME,
-                 byzantine_bound: int = None):
+                 byzantine_bound: int = None,
+                 confirm_pub=None):
         self.format_version = format_version
         # Commit the authority/group public key AFTER authenticating it as a
         # non-identity element of the order-q subgroup (Copilot this review #1,
@@ -484,6 +487,17 @@ class EpochDescriptor:
             raise ValueError("roster must contain distinct member keys")
         self.roster = roster_tup
         self.membership_commitment = sha256(roster_bytes(self.roster))
+        # Commit ONLY the per-member PUBLIC CONFIRM verification keys K_i
+        # (Copilot this review: CONFIRM votes authenticate member-held SECRET
+        # keys; the epoch registers/commits only the public verification keys).
+        # `confirm_pub` is a tuple of n public keys K_i = G^{k_i}; the private
+        # k_i is held only by the member/authority (never public, never here).
+        self.confirm_pub = (
+            tuple(confirm_pub) if confirm_pub is not None
+            else tuple(_validator_confirm_pub(GROUP_SK, i)
+                       for i in range(1, len(self.roster) + 1)))
+        if len(self.confirm_pub) != len(self.roster):
+            raise ValueError("confirm_pub must have one key per roster member")
         self.activation = activation
         self.retirement = retirement
         if not (1 <= threshold <= len(self.roster)):
@@ -539,6 +553,7 @@ class EpochDescriptor:
             b"Epoch"
             + struct.pack(">B", format_version) + lp(scheme)
             + hash32(authority_key) + hash32(self.membership_commitment)
+            + hash32(sha256(roster_bytes(self.confirm_pub)))  # committed CONFIRM pubkeys
             + struct.pack(">QQ", activation, retirement)
             + struct.pack(">I", threshold)
             + struct.pack(">I", self.byzantine_bound)
@@ -1003,16 +1018,15 @@ class ConfirmExternalizeBoundary:
         # accepts, mirroring real per-process/per-validator finality evidence.
         self._secret = (boundary_secret if boundary_secret is not None else
                         sha256(b"cap-0089:boundary:secret:v1" + os.urandom(16)))
-        # PUBLIC per-member CONFIRM verification keys K_i = G^{k_i} for the
-        # roster, COMMITTED to the epoch's membership (key-separation subkeys,
-        # Copilot this review #4). These are AUTHENTICATION keys for the
-        # CONFIRM->EXTERNALIZE edge only; they are never secrets and are
-        # registered here (like Core validators exchanging verification keys),
+        # PUBLIC per-member CONFIRM verification keys K_i (the epoch REGISTERS
+        # only these; the private k_i stays member-held). These are AUTHENTICATION
+        # keys for the CONFIRM->EXTERNALIZE edge only; they are never secrets and
+        # are registered here (like Core validators exchanging verification keys),
         # so the boundary verifies a CONFIRM cert WITHOUT holding any member
-        # sub-secret and WITHOUT assuming an SCP quorum topology.
+        # sub-secret and WITHOUT assuming an SCP quorum topology. An observer
+        # cannot mint a vote: it cannot compute any private k_i from K_i.
         self._confirm_pub = {
-            i: _member_confirm_pub(self.epoch, i)
-            for i in range(1, epoch.n + 1)}
+            i: self.epoch.confirm_pub[i - 1] for i in range(1, self.epoch.n + 1)}
         # C_s.hash -> True iff the CONFIRM->EXTERNALIZE transition actually
         # ran for that lock. Populated ONLY by `externalize` (the trusted Core
         # edge; it never answers "which value is an SCP quorum", only "Core
@@ -1265,7 +1279,7 @@ def main():
         # close that did not actually reach the externalize quorum).
         src_epoch = src.epoch
         n_votes = src_epoch.threshold if n_votes is None else n_votes
-        cert = {i: _confirm_vote(_member_confirm(src_epoch, i),
+        cert = {i: _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
                                  cl.epoch_hash, cl.hash)
                 for i in range(1, n_votes + 1)}
         if src._boundary.externalize(cl, cert):
@@ -1552,7 +1566,7 @@ def main():
     # is no caller boolean, only a quorum-cert that must authenticate and reach
     # the threshold (Copilot this review #2).
     stage_boundary = alien_stage._boundary
-    weak_cert = {i: _confirm_vote(_member_confirm(epoch, i),
+    weak_cert = {i: _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
                                   cl_a.epoch_hash, cl_a.hash)
                  for i in range(1, epoch.threshold)}        # t-1 votes only
     bogus_cert = {1: b"\x00" * 64}                          # unauthenticated
@@ -2240,12 +2254,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "c0a8b3e68e888d4e740d085f9d5f966d2c6f98f0ca95921be4ff7b8f6a2828f6",
-        "df4861849e945cbf52bfb4395c075b479a082e9d4137e7a86f9941355ee6046f",
-        "10e1659fc0da439b0c441566449e6f9da9fd8796bbf189d02be2de0a602fc3b3",
-        "8c461464a69328fdc40432296b897d018c23a9ef76774ab91388175a70797304",
+        "f3455fda5722e0f3b423d55c604501327edfa5ff8ba6e6a2f07f98e123606754",
+        "9acde5f08f598275c570fc282b3703201beba5678a44b8bdc6ecefada26fc465",
+        "8f8bc77b1a7046d0eeb0183eaaebbc27b8331270c2fb4f49b2dd252c3f25648c",
+        "2a254ad58cb70edd980a07e38e21f85cdb34ce956518e47f122b52cec7dbc6ed",
     )
-    EXP_COMP = "6864336843805ab663a19267db14958ec9ee47cf22a708565c09753492f21ae1"
+    EXP_COMP = "f824647ddf48b1dde919ba0c0d5f82b95ab3f28b6c24329dba48173a68e4544d"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),

@@ -21,9 +21,12 @@ beacon, sub-seeds) so V1/V2/V4/V5/V6/V8 are executable without the crypto.
 `VRFCommit.sig` is a REAL Ed25519 signature (not a stand-in): each node's
 `node_id` IS its Ed25519 verification key, and the signature is computed with
 `cryptography` over the canonical, spec-defined message
-`"stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash`
-(no `node_id` in the message; the key provides the binding). A real fixture
-means the generator cannot silently share a stand-in bug with the checker.
+`"stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash
+ || vrfPublicKey`
+(no `node_id` in the message; the key provides the binding, and the committed
+`vrfPublicKey` makes the NodeID->VRF-key mapping authenticated -- this review).
+A real fixture means the generator cannot silently share a stand-in bug with
+the checker.
 """
 import hashlib
 import itertools
@@ -123,43 +126,65 @@ def commit_hash_of(beta: bytes) -> bytes:
     return sha256(beta)
 
 
-def commit_message(net: bytes, slot: int, commit_hash: bytes) -> bytes:
+def commit_message(net: bytes, slot: int, commit_hash: bytes,
+                   vrf_pub: bytes = None) -> bytes:
     """Canonical signing preimage, exactly as the CAP/XDR specifies:
-    `"stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash`.
-    NOTE: `node_id` is deliberately NOT part of M_commit — the key provides the
-    node binding (nodeID is the Ed25519 verification key). One function decides
-    the bytes everywhere (V11 spec parity)."""
+    `"stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash ||
+    vrfPublicKey`. The `vrfPublicKey` is now part of the signed message so the
+    NodeID->VRF-public-key mapping is authenticated by the consensus-recognized
+    NodeID (this review); a value author cannot substitute a different VRF key
+    for a contributor. `node_id` itself is deliberately NOT part of M_commit —
+    the key provides the node binding (nodeID is the Ed25519 verification key).
+    One function decides the bytes everywhere (V11 spec parity)."""
     return (COMMIT_SIG_LABEL + bytes([VER]) + net
-            + slot.to_bytes(4, "big") + commit_hash)
+            + slot.to_bytes(4, "big") + commit_hash
+            + (vrf_pub or b""))
 
 
-def commit_signature(sk: Ed25519PrivateKey, net: bytes, slot: int, commit_hash: bytes) -> bytes:
-    """Real Ed25519 signature over `commit_message(net, slot, commitHash)` using
-    the node's secret key (whose public key is its NodeID). Genuine
-    cryptography, so the fixture cannot share a stand-in bug with the checker:
-    the signature verifies under the NodeID's public key exactly as the CAP
-    requires (`VRFCommit.sig` is an Ed25519 signature by `nodeID`'s key)."""
-    return sk.sign(commit_message(net, slot, commit_hash))
+def vrf_public_key(node_id: bytes) -> bytes:
+    """The contributor's ECVRF public key (VKF), a DISTINCT 32-byte value from
+    the NodeID (the CAP's `vrfPublicKey` field). Deriving it from a private seed
+    means it is NOT publicly inferable from the NodeID, so the CAP commits it in
+    `VRFCommit` and has the NodeID signature bind it (this review: without the
+    committed+authenticated mapping, `ECVRF_Verify(VKF, ...)` could not bind the
+    reveal's beta to the node that committed it). Here it is a deterministic
+    domain-separated value per node; the checker asserts the *binding* (the
+    NodeID signature covers exactly this key), not that the point is an ECVRF
+    key (Layer A is research evidence)."""
+    return sha256(NODE_KEY_LABEL + b"/vrf-public-key" + node_id)
+
+
+def commit_signature(sk: Ed25519PrivateKey, net: bytes, slot: int,
+                     commit_hash: bytes, vrf_pub: bytes) -> bytes:
+    """Real Ed25519 signature over `commit_message(net, slot, commitHash,
+    vrfPublicKey)` using the node's secret key (whose public key is its NodeID).
+    Genuine cryptography, so the fixture cannot share a stand-in bug with the
+    checker: the signature verifies under the NodeID's public key exactly as the
+    CAP requires, and it binds BOTH the commit (to beta) AND the node's
+    NodeID->VRF-public-key mapping (this review)."""
+    return sk.sign(commit_message(net, slot, commit_hash, vrf_pub))
 
 
 def contributors(net, slot, anchor):
-    # Sorted by NodeID ascending; each entry is (node_id, beta, commit_hash, sig).
-    # node_id IS the Ed25519 public key; sig is the REAL Ed25519 signature over
-    # the canonical commit message, made by that node's secret key.
+    # Sorted by NodeID ascending; each entry is (node_id, vrf_public_key, beta,
+    # commit_hash, sig).  node_id IS the Ed25519 public key; sig is the REAL
+    # Ed25519 signature over the canonical commit message (which includes the
+    # node's vrfPublicKey), made by that node's secret key.
     rows = sorted((pub for _, pub, _ in NODES))
     key_of = {pub: sk for sk, pub, _ in NODES}
     out = []
     for nid in rows:
         beta = placeholder_beta(nid, net, slot, anchor)
         ch = commit_hash_of(beta)
-        sg = commit_signature(key_of[nid], net, slot, ch)
-        out.append((nid, beta, ch, sg))
+        vp = vrf_public_key(nid)
+        sg = commit_signature(key_of[nid], net, slot, ch, vp)
+        out.append((nid, vp, beta, ch, sg))
     return out
 
 
 def beacon(contrib_rows) -> bytes:
     """B(s) = SHA-256( concat of verified betas ordered by NodeID, ascending )."""
-    return sha256(b"".join(row[1] for row in contrib_rows))
+    return sha256(b"".join(row[2] for row in contrib_rows))
 
 
 def subseed(net: bytes, slot: int, purpose: int, bcn: bytes) -> bytes:
@@ -246,9 +271,9 @@ fixture = {
         "slot": SLOT,
         "anchor_ledger_header_hash": ANCHOR.hex(),
         "contributors": [
-            {"node_id": nid.hex(), "beta": beta.hex(),
-             "commit_hash": ch.hex(), "sig": sg.hex()}
-            for nid, beta, ch, sg in contribs
+            {"node_id": nid.hex(), "vrf_public_key": vp.hex(),
+             "beta": beta.hex(), "commit_hash": ch.hex(), "sig": sg.hex()}
+            for nid, vp, beta, ch, sg in contribs
         ],
         "beacon": bcn.hex(),
         "Q": Q,

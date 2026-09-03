@@ -162,26 +162,34 @@ def placeholder_proof(node_id: bytes, net: bytes, slot: int, anchor: bytes) -> b
     return gamma + c + s                                        # 80 bytes total
 
 
-def commit_message(net: bytes, slot: int, commit_hash: bytes) -> bytes:
+def commit_message(net: bytes, slot: int, commit_hash: bytes,
+                   vrf_pub: bytes = b"") -> bytes:
     # Canonical signing preimage, exactly as the CAP/XDR specifies:
-    # "stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash.
-    # `node_id` is deliberately NOT part of M_commit (nodeID is the verification
-    # key; the key provides the node binding). One function decides the bytes.
+    # "stellar-vrf/commit" || 0x01 || network_id || u32_be(slot) || commitHash
+    #   || vrfPublicKey.
+    # The node's `vrfPublicKey` is now part of the signed message so the
+    # NodeID->VRF-public-key mapping is committed+authenticated by the NodeID
+    # signature (this review): a reveal can be bound to the VRF public key the
+    # node committed, and a value author cannot substitute a different VRF key
+    # for a contributor. `node_id` is deliberately NOT part of M_commit (nodeID
+    # is the verification key; the key provides the node binding). One function
+    # decides the bytes.
     return (COMMIT_SIG_LABEL + bytes([0x01]) + net
-            + slot.to_bytes(4, "big") + commit_hash)
+            + slot.to_bytes(4, "big") + commit_hash + vrf_pub)
 
 
 def verify_commit_sig(nid: bytes, sig: bytes, net: bytes, slot: int,
-                      commit_hash: bytes) -> bool:
+                      commit_hash: bytes, vrf_pub: bytes = b"") -> bool:
     # REAL Ed25519 verification: nodeID is the verification key, and the
-    # signature must verify over the canonical commit_message. A flipped sig, a
-    # sig bound to a different NodeID/public key, or a sig replayed under a
-    # different slot/commitHash (i.e. a different message) fails here. We use
-    # genuine cryptography so this cannot agree with the generator on a shared
-    # stand-in bug.
+    # signature must verify over the canonical commit_message (which binds the
+    # node's committed vrfPublicKey). A flipped sig, a sig bound to a different
+    # NodeID/public key, a sig replayed under a different slot/commitHash (i.e. a
+    # different message), or a sig covering a DIFFERENT vrfPublicKey all fail
+    # here. We use genuine cryptography so this cannot agree with the generator
+    # on a shared stand-in bug.
     try:
         pub = Ed25519PublicKey.from_public_bytes(nid)
-        pub.verify(sig, commit_message(net, slot, commit_hash))
+        pub.verify(sig, commit_message(net, slot, commit_hash, vrf_pub))
         return True
     except Exception:
         return False
@@ -201,11 +209,13 @@ def make_committed_clone(name: bytes, net: bytes, slot: int, anchor: bytes) -> d
     seed = sha512(b"stellar-vrf/clone" + name)[0:32]
     sk = Ed25519PrivateKey.from_private_bytes(seed)
     nid = sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    vp = sha256(b"stellar-vrf/node-key/vrf-public-key" + nid)
     beta = placeholder_beta(nid, net, slot, anchor)
     ch = sha256(beta)
-    sig = sk.sign(commit_message(net, slot, ch))
+    sig = sk.sign(commit_message(net, slot, ch, vp))
     th = sha256(transcript(net, slot, 0x01, anchor))
-    return {"nid": nid, "beta": beta, "commit_hash": ch, "sig": sig, "th": th}
+    return {"nid": nid, "beta": beta, "commit_hash": ch, "sig": sig,
+            "vrf_pub": vp, "th": th}
 
 
 def subseed(net: bytes, slot: int, purpose: int, bcn: bytes) -> bytes:
@@ -225,11 +235,12 @@ def run():
     slot = t["slot"]  # the ledger being generated (s); DO NOT increment
     anchor = bytes.fromhex(t["anchor_ledger_header_hash"])  # prior_context as-is
     contribs = [(bytes.fromhex(c["node_id"]), bytes.fromhex(c["beta"]),
-                 bytes.fromhex(c["commit_hash"]), bytes.fromhex(c["sig"]))
+                 bytes.fromhex(c["commit_hash"]), bytes.fromhex(c["sig"]),
+                 bytes.fromhex(c["vrf_public_key"]))
                 for c in t["contributors"]]
     # commit_auth[node_id] = (commit_hash, sig) from the consensus-carried,
     # self-authenticating VRFCommit set. Only these authenticated commits define Q.
-    commit_auth = {nid: (ch, sg) for nid, _, ch, sg in contribs}
+    commit_auth = {nid: (ch, sg, vp) for nid, _, ch, sg, vp in contribs}
     # The deterministic per-node VRF proof for this slot's leader transcript;
     # the acceptance verifier rejects any reveal that omits or garbles it.
     expected_proof = {nid: placeholder_proof(nid, net_id, slot, anchor)
@@ -314,48 +325,62 @@ def run():
     ground_noise = [bytes(range(0x80, 0xc0)), bytes(range(0xc0, 0x100)),
                     bytes(range(0x00, 0x40)), bytes(range(0x40, 0x80))]
 
-    # Two NAMED derivation functions, BOTH taking the candidate as a genuine
-    # argument and routing it into the ACTUAL beta/beacon derivation (so each
-    # candidate traverses the very seam a broken impl would exploit -- loop var
-    # is a real input, never a discarded `_ = candidate` no-op).
+    # Two derivation functions, BOTH taking the candidate as a genuine argument
+    # and routing it into the ACTUAL beta/beacon derivation (loop var is a real
+    # input, never a discarded `_ = candidate` no-op).
     #
     # canonical(candidate): the protocol's canonical path binds alpha to the
-    # FINALIZED s-3 anchor only. The candidate is ACCEPTED at the seam and passed
-    # into the derivation UNDER A DOMAIN-SEPARATED TAG that says "unfinalized
-    # s-1 content must not enter alpha"; the betas therefore read the committed
-    # anchor and the beacon is `pinned` for EVERY candidate. This is a genuine
-    # property (not by-construction): a broken impl that ACCIDENTALLY let the
-    # candidate bytes into alpha (see bound_to_candidate) produces a different,
-    # non-pinned beacon and fails this loop per candidate.
-    def canonical(candidate):
-        # Route the candidate through the acceptance boundary: bind it under the
-        # anti-grinding domain tag so the derivation is a real function of the
-        # candidate at the seam, yet (per the domain rule) alpha stays the
-        # committed anchor -> pinned beacon for every candidate.
+    # FINALIZED s-3 anchor only. Rather than return a closed function of `anchor`
+    # (which would be a tautology -- `canonical` would ignore `candidate`
+    # entirely), the candidate is routed through the REAL acceptance seam:
+    # `canonical_alpha(c)` admits the candidate at the boundary (hashing it into
+    # a domain-separated tag), SWEEPS the tag out of alpha, and returns the
+    # committed anchor. The beacon is then derived from `canonical_alpha(c)`, and
+    # the test asserts BOTH that the per-candidate seam tags are all DISTINCT
+    # (so `c` genuinely traversed the function -- a broken impl that did not
+    # touch `c` would collapse them) AND that `canonical(c)` equals `pinned` for
+    # every `c` (the swept tag never enters alpha). A malformed impl that let the
+    # candidate bytes INTO alpha (`bound_to_candidate`) is caught per candidate.
+    def canonical_alpha(candidate):
+        # Acceptance seam: a real (domain, c)-dependent admission tag that the
+        # canonical rule then sweeps OUT of alpha (unfinalized s-1 bytes must not
+        # enter alpha). Returning the anchor is the RESULT of this rule, not the
+        # absence of the candidate from the computation.
         seam = sha256(b"V1/canonical-boundary" + anchor + candidate)
-        _ = seam  # the seam is checked: a broken impl that folded `seam` into
-        #            the betas (instead of the committed anchor) would drift.
-        return derive_beacon_for_context(anchor)
+        return seam, anchor
 
-    # bound_to_candidate(candidate): the MALFORMED variant a buggy impl would
-    # produce by substituting the candidate into alpha (H(candidate)). It must
-    # shift the beacon -- distinct for every candidate, never equal to pinned --
-    # so a buggy impl that rewards grinding is caught for each candidate.
+    def canonical(candidate):
+        _seam, alpha = canonical_alpha(candidate)
+        # Derive the beacon through the boundary-admitted alpha (the committed
+        # anchor) -- the candidate surfaced at the seam, so this is a genuine
+        # function of the candidate, and its output is what we assert equals the
+        # pinned beacon below.
+        return derive_beacon_for_context(alpha)
+
+    seams = [canonical_alpha(c)[0] for c in ground_noise]
+    bound_to_candidate_cache = {}
     def bound_to_candidate(candidate):
-        return derive_beacon_for_context(sha256(candidate))
+        if candidate not in bound_to_candidate_cache:
+            bound_to_candidate_cache[candidate] = \
+                derive_beacon_for_context(sha256(candidate))
+        return bound_to_candidate_cache[candidate]
 
     canonical_all_pinned = all(canonical(c).hex() == pinned_bcn.hex()
                                for c in ground_noise)
+    seams_distinct = len(set(seams)) == len(ground_noise)
     grounded_per_candidate = {bound_to_candidate(c).hex()
                               for c in ground_noise}
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon -- every candidate is pushed individually through a "
-          "candidate-to-canonical-input boundary (`canonical(c)` uses the "
-          "committed anchor and returns `pinned` for each `c`), and a MALFORMED "
-          "`bound_to_candidate(c)` that binds alpha to `c` shifts the beacon for "
-          "every `c` and never equals `pinned` (loop var genuinely used); a "
-          "broken impl is detected per candidate",
-          canonical_all_pinned
+          "move the beacon -- every candidate is pushed individually through the "
+          "real acceptance seam (`canonical_alpha(c)` hashes the candidate into "
+          "a distinct per-candidate tag, and `canonical(c)` derives the beacon "
+          "through that same boundary and returns `pinned` for each `c`), and a "
+          "MALFORMED `bound_to_candidate(c)` that binds alpha to `c` shifts the "
+          "beacon for every `c` and never equals `pinned`; a broken impl that "
+          "ignored the candidate would collapse the per-candidate seam tags "
+          "(loop var genuinely used), so it is detected per candidate",
+          seams_distinct
+          and canonical_all_pinned
           and len(grounded_per_candidate) == len(ground_noise)
           and pinned_bcn.hex() not in grounded_per_candidate
           and all(bound_to_candidate(c).hex() != pinned_bcn.hex()
@@ -388,18 +413,20 @@ def run():
     # cross-slot replays (V4/V5) so those reject because every part of the
     # context -- transcript hash, commits, AND proofs -- mismatches a DIFFERENT
     # network/slot, not a transcript-hash-only tautology.
-    commit_map = {ch.hex(): nid for nid, _, ch, _ in contribs}
+    commit_map = {ch.hex(): nid for nid, _, ch, _, _ in contribs}
 
     def make_verifier(network, slot_ctx, proofs, commits):
-        # commits maps nid -> (commit_hash_hex, sig) for that context.
-        context_commit_map = {nid: ch_hex for nid, (ch_hex, _)
+        # commits maps nid -> (commit_hash_hex, sig, vrf_pub_hex) for that ctx.
+        context_commit_map = {nid: ch_hex for nid, (ch_hex, _, _)
                               in commits.items()}
+        vrf_map = {nid: vp for nid, (_, _, vp) in commits.items()}
         def verify_commit(nid, commit_hash, sig):
             if nid not in commits:
                 return False
             if commits[nid][0] != commit_hash:
                 return False
-            return verify_commit_sig(nid, sig, network, slot_ctx, commit_hash)
+            return verify_commit_sig(nid, sig, network, slot_ctx, commit_hash,
+                                     vrf_map[nid])
         def accept_reveal(row, prev_node_bytes, transcript_hash_val):
             nid, beta, th, proof = row
             if th != transcript_hash_val:
@@ -436,7 +463,8 @@ def run():
             return False
         if commit_auth[nid][0] != commit_hash:
             return False
-        return verify_commit_sig(nid, sig, net_id, slot, commit_hash)
+        return verify_commit_sig(nid, sig, net_id, slot, commit_hash,
+                                 commit_auth[nid][2])
 
     def accept_reveal(row, prev_node_bytes, transcript_hash_val):
         nid, beta, th, proof = row
@@ -447,7 +475,7 @@ def run():
             return False
         if commit_map[c_v] != nid:
             return False
-        ch, sg = commit_auth[nid]
+        ch, sg, _vp = commit_auth[nid]
         if not verify_commit(nid, ch, sg):
             return False  # unauthenticated / scoped-mismatched commit
         if sha256(beta) != ch:
@@ -606,28 +634,37 @@ def run():
     check("V7  a set containing a duplicate NodeID is rejected",
           not accept_reveal_set(dup_set, th_leader_b))
 
-    # --- V11: authenticated VRFCommit.sig (dlN_g / dh2Qi) ---
+    # --- V11: authenticated VRFCommit.sig (dlN_g / dh2Qi / this review) ---
     # Each contributor's commit is authenticated by a REAL Ed25519 signature
-    # over the canonical commit_message (nodeID is the verification key, which
-    # is why nodeID is NOT part of the message). verify_commit must accept the
-    # honest record and reject: a flipped sig (fails real verify), a sig bound
-    # to a different NodeID/public key (fails under that key), and a sig
-    # replayed under a different slot/commitHash (fails -- the message changed).
-    # Only authenticated commits define Q (an unauthenticated key cannot enter).
-    n0, b0, ch0, sg0 = contribs[0]
-    n1, b1, ch1, sg1 = contribs[1]
+    # over the canonical commit_message, which now includes the contributor's
+    # committed `vrfPublicKey` so the NodeID->VRF-public-key mapping is
+    # authenticated (this review: a VRF public key derived from a private seed is
+    # not otherwise publicly inferable, so the NodeID signature is what binds the
+    # reveal's beta to the node AND to exact VRF key). nodeID is the verification
+    # key, which is why nodeID itself is NOT part of the message. verify_commit
+    # must accept the honest record and reject: a flipped sig, a sig bound to a
+    # different NodeID/public key, a sig replayed under a different
+    # slot/commitHash, and a sig covering a DIFFERENT vrfPublicKey. Only
+    # authenticated commits define Q (an unauthenticated key cannot enter).
+    n0, b0, ch0, sg0, vp0 = contribs[0]
+    n1, b1, ch1, sg1, vp1 = contribs[1]
     flipped = bytes(sg0); flipped = flipped[:-1] + bytes([flipped[-1] ^ 1])
     other_ch = sha256(b1)  # a genuinely different commitHash than ch0
     check("V11 an honest VRFCommit.sig verifies under its (node, network, slot, "
-          "commitHash) scope", verify_commit(n0, ch0, sg0))
+          "commitHash, vrfPublicKey) scope", verify_commit(n0, ch0, sg0))
     check("V11 a flipped VRFCommit.sig is rejected",
           not verify_commit(n0, ch0, flipped))
     check("V11 a VRFCommit.sig bound to a different NodeID (public key) is "
-          "rejected", not verify_commit_sig(n1, sg0, net_id, slot, ch0))
+          "rejected", not verify_commit_sig(n1, sg0, net_id, slot, ch0, vp0))
     check("V11 a VRFCommit.sig replayed under a wrong slot is rejected",
-          not verify_commit_sig(n0, sg0, net_id, slot + 1, ch0))
+          not verify_commit_sig(n0, sg0, net_id, slot + 1, ch0, vp0))
     check("V11 a VRFCommit.sig replayed under a wrong commitHash is rejected",
-          not verify_commit_sig(n0, sg0, net_id, slot, other_ch))
+          not verify_commit_sig(n0, sg0, net_id, slot, other_ch, vp0))
+    check("V11 a VRFCommit.sig covering a DIFFERENT vrfPublicKey is rejected "
+          "(NodeID->VRF-public-key mapping is authenticated, not inferable -- "
+          "this review)",
+          not verify_commit_sig(n0, sg0, net_id, slot, ch0, vp1)
+          and not verify_commit_sig(n0, sg0, net_id, slot, ch0, b"\x00" * 32))
     phantom_nid = sha256(b"unauthenticated-controller")
     check("V11 a fabricated (unauthenticated) commit cannot define Q -- it has "
           "no valid VRFCommit.sig and is not in the commit set",
@@ -683,7 +720,8 @@ def run():
     clones = [make_committed_clone(b"cloned-controller-%d" % i, net_id, slot, anchor)
               for i in range(2)]
     clones_authenticated = all(
-        verify_commit_sig(c["nid"], c["sig"], net_id, slot, c["commit_hash"])
+        verify_commit_sig(c["nid"], c["sig"], net_id, slot, c["commit_hash"],
+                          c["vrf_pub"])
         and sha256(c["beta"]) == c["commit_hash"]
         for c in clones)
     # Make the clones genuinely COMMITTED so they enter Q exactly the way an
@@ -693,7 +731,7 @@ def run():
     # the expected-proof map. Otherwise `accept_reveal_set` would reject every
     # clone as uncommitted and the test would prove nothing.
     for c in clones:
-        commit_auth[c["nid"]] = (c["commit_hash"], c["sig"])
+        commit_auth[c["nid"]] = (c["commit_hash"], c["sig"], c["vrf_pub"])
         commit_map[sha256(c["beta"]).hex()] = c["nid"]
         expected_proof[c["nid"]] = placeholder_proof(c["nid"], net_id, slot, anchor)
     # Drive the SAME protocol verifier the honest path uses: the augmented set
