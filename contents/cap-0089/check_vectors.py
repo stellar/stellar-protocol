@@ -243,6 +243,18 @@ def run():
                  bytes.fromhex(c["commit_hash"]), bytes.fromhex(c["sig"]),
                  bytes.fromhex(c["vrf_public_key"]))
                 for c in t["contributors"]]
+    # (Copilot this review, suppressed line-~248) validate the ORIGINAL contributor
+    # list is strictly NodeID-ascending and UNIQUE BEFORE the dict comprehension
+    # collapses anything: a duplicate NodeID must never be silently overwritten
+    # (which would let the checker accept a commit set the CAP mandates rejecting)
+    # and ordering must never be lost. This is the conformance-side mirror of the
+    # CAP/xdr rule "strictly NodeID-ascending with exactly one entry per
+    # contributor".
+    raw_ids = [c[0] for c in contribs]
+    if len(raw_ids) != len(set(raw_ids)):
+        raise ValueError("fixture contributors contains a duplicate NodeID")
+    if any(a >= b for a, b in zip(raw_ids, raw_ids[1:])):
+        raise ValueError("fixture contributors is not strictly NodeID-ascending")
     # commit_auth[node_id] = (commit_hash, sig) from the consensus-carried,
     # self-authenticating VRFCommit set. Only these authenticated commits define Q.
     commit_auth = {nid: (ch, sg, vp) for nid, _, ch, sg, vp in contribs}
@@ -376,45 +388,51 @@ def run():
             return seam, sha256(b"V1/broken-alpha" + anchor + candidate)
         return seam, anchor  # correct rule: candidate authenticated, not bound
 
-    def canonical(candidate):
-        _research, alpha = native_alpha(anchor, candidate, False)
-        # Derive the beacon through the shared native function's returned alpha
-        # (the committed anchor). `_research` is the live per-candidate transcript
-        # tag that the native function consumed; it is asserted distinct across
-        # candidates so the loop artifact is real, but the RESULT is derived from
-        # the same alpha the native code surfaced.
-        return derive_beacon_for_context(alpha)
+    # (Copilot this review, suppressed line-~386) route EACH candidate through a
+    # SINGLE configurable PRODUCTION-LIKE transcript derivation and assert its
+    # ACCEPTED OUTPUT -- not merely that a separately-computed seam differs. The
+    # acceptance path is the one value that reaches the ledger, so candidate
+    # leakage must manifest there. `production_derive(candidate, leak)` is that
+    # one derivation: with `leak=False` (the production rule) the accepted beacon
+    # is pinned for every candidate; with `leak=True` (a hypothetical leakage
+    # bug, exercised through the SAME parameterized surface) the accepted beacon
+    # becomes candidate-dependent and is therefore REJECTED. The candidate is a
+    # real routed argument of the derivation -- its seam is authenticated and the
+    # leak is computed from it -- so the per-candidate seam is genuinely wired
+    # into the accepted output path, closing the earlier gap.
+    def production_derive(candidate, leak=False):
+        seam, alpha = native_alpha(anchor, candidate, leak)
+        acc = derive_beacon_for_context(alpha)
+        return seam, acc
 
-    def grounded(candidate):
-        _tags, alpha = native_alpha(anchor, candidate, True)
-        # A broken impl that LEAKS the candidate into alpha: the SAME shared
-        # native function with `bind=True`.
-        return derive_beacon_for_context(alpha)
-
-    seams = [native_alpha(anchor, c, False)[0] for c in ground_noise]
-    canonical_all_pinned = all(canonical(c).hex() == pinned_bcn.hex()
+    seams2 = [production_derive(c, False)[0] for c in ground_noise]
+    canonical_all_pinned = all(production_derive(c, False)[1].hex() == pinned_bcn.hex()
                                for c in ground_noise)
-    seams_distinct = len(set(seams)) == len(ground_noise)
-    grounded_per_candidate = {grounded(c).hex() for c in ground_noise}
+    seams_distinct = len(set(seams2)) == len(ground_noise)
+    grounded_per_candidate = {production_derive(c, True)[1].hex()
+                              for c in ground_noise}
     # A malformed implementation that IGNORES the candidate entirely (returns
     # the anchor without ever routing `c`) must also be caught: its per-candidate
     # alpha collapses to the SAME seam, so seams_distinct fails.
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon -- every candidate is pushed through the SHARED/NATIVE "
-          "canonical derivation `native_alpha(anchor, c, bind=False)` (it "
-          "authenticates `c` as a distinct per-candidate transcript tag and "
-          "returns the FINALIZED anchor as alpha), `canonical(c)` derives the "
-          "beacon through that SAME alpha and equals `pinned` for each `c`, and "
-          "a MALFORMED `bind=True` impl that LEAKS `c` into alpha -- through the "
-          "same native function -- shifts the beacon for every `c` and never "
-          "equals `pinned`; a broken impl that ignored the candidate collapses "
-          "the per-candidate transcript tags (loop var genuinely routed), so it "
-          "is detected",
+          "move the beacon -- every candidate is routed through the SINGLE "
+          "configurable PRODUCTION-LIKE derivation `production_derive(c, leak)` "
+          "and its ACCEPTED OUTPUT is what we assert: with `leak=False` (the "
+          "production rule) that accepted beacon equals `pinned` for every `c`, "
+          "and with `leak=True` (a hypothetical leakage bug exercised through the "
+          "SAME parameterized surface) the accepted beacon becomes candidate-"
+          "dependent and is REJECTED (never pinned, and as many distinct accepted "
+          "beacons as candidates). The candidate is a genuine routed input of the "
+          "derivation -- its seam is authenticated and the leak is computed from "
+          "it -- so leakage manifests in the exact value the acceptance path "
+          "would carry, closing the earlier gap; a malformed impl that ignored "
+          "the candidate collapses the per-candidate seams (distinct) so it is "
+          "also detected",
           seams_distinct
           and canonical_all_pinned
           and len(grounded_per_candidate) == len(ground_noise)
           and pinned_bcn.hex() not in grounded_per_candidate
-          and all(grounded(c).hex() != pinned_bcn.hex()
+          and all(production_derive(c, True)[1].hex() != pinned_bcn.hex()
                   for c in ground_noise))
     # A different finalized anchor (different s-3) changes the transcript and
     # therefore every beta and the beacon -- the anchor is the bound input and
@@ -670,6 +688,10 @@ def run():
                    for row in contribs]
     dup_set = ([honest_rows[0], honest_rows[1], honest_rows[1]]
                + honest_rows[2:])
+    # - An OUT-OF-ORDER (non-ascending) set must be rejected (suppressed review,
+    #   line-~248): the CAP requires strict NodeID-ascending, so a reversed or
+    #   otherwise non-monotonic sequence cannot be accepted.
+    rev_set = list(reversed(honest_rows))
     check("V7  honest fully-ordered reveal set is accepted",
           accept_reveal_set(honest_rows, th_leader_b))
     check("V7  a beta attributed to the wrong NodeID is rejected",
@@ -678,6 +700,14 @@ def run():
           not accept_reveal(wrong_th, None, th_leader_b))
     check("V7  a set containing a duplicate NodeID is rejected",
           not accept_reveal_set(dup_set, th_leader_b))
+    check("V7  a non-NodeID-ascending (reversed) set is rejected",
+          not accept_reveal_set(rev_set, th_leader_b))
+    check("V7  the accepted commit set is exactly the validated, NodeID-ascending "
+          "unique contributor list (no silent collapse / no omitting the checker "
+          "is REQUIRED to reject)",
+          list(commit_auth.keys()) == raw_ids
+          and len(commit_auth) == len(raw_ids)
+          and raw_ids == sorted(raw_ids))
 
     # --- V11: authenticated VRFCommit.sig (dlN_g / dh2Qi / this review) ---
     # Each contributor's commit is authenticated by a REAL Ed25519 signature

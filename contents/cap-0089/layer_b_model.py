@@ -350,6 +350,39 @@ def _lagrange_recover(shares):
     return acc % _GRP_Q
 
 
+def _lagrange_constant_commitment(points, index0=0):
+    """Recover the committed CONSTANT of a degree-(t-1) group polynomial from
+    `points` = list of (member_index, C_i = G^{f(i)}), interpolating in the
+    EXPONENT (on the group), i.e. compute G^{f(index0)}. Returns an int mod p.
+
+    This is the PUBLIC Lagrange combination over the committed Feldman images
+    `C_i`, the direct analogue of `_public_aggregate` (R) but for the shared
+    polynomial rather than the nonce polynomial. Because every C_i = G^{f(i)}
+    and f is degree-(t-1), any t-subset sums L_j(0)*f(j) = f(0); so the result
+    is independent of WHICH t-subset is used, while being computable from ONLY
+    the public committed values -- the exact check an activation-time verifier
+    performs with no secret. Used to prove the committed `feldman_pub` are the
+    evaluations of ONE polynomial whose constant commitment equals
+    `authority_key` = G^{f(0)} (Copilot this review, thread ew-Ogf, High)."""
+    xs = [i for (i, _c) in points]
+    ys = [int.from_bytes(c, "big") % _GRP_P for (_i, c) in points]
+    xi0 = index0 % _GRP_Q
+    acc = 1
+    for (xi, Ci) in zip(xs, ys):
+        x = xi % _GRP_Q
+        num = 1
+        den = 1
+        for xj2 in xs:
+            if xj2 == xi:
+                continue
+            xj = xj2 % _GRP_Q
+            num = (num * ((xi0 - xj) % _GRP_Q)) % _GRP_Q
+            den = (den * ((x - xj) % _GRP_Q)) % _GRP_Q
+        lam = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+        acc = (acc * pow(Ci, lam, _GRP_P)) % _GRP_P
+    return acc
+
+
 def group_pub_from_seed(seed: bytes, threshold: int, n: int) -> bytes:
     # The epoch's committed authority/public key: Y = G^d, d = f(0) from the
     # same Shamir polynomial the n members hold shares of. `verify` binds every
@@ -555,6 +588,17 @@ class EpochDescriptor:
                        for i in range(1, len(self.roster) + 1)))
         if len(self.confirm_pub) != len(self.roster):
             raise ValueError("confirm_pub must have one key per roster member")
+        # Reject DUPLICATE committed CONFIRM verification keys K_i (Copilot this
+        # review, thread ew-OgM, High). The CONFIRM vote authenticates the member
+        # via K_i but does NOT bind `member_index`, and `externalize()` counts
+        # indices (see the original diff at the CONFIRM threshold below). If the
+        # same public key occupied multiple roster indices, a single signature
+        # under that key could be copied into `t` CONFIRM entries and satisfy the
+        # roster threshold -- one signer minting t votes. Requiring the K_i to be
+        # pairwise-distinct makes each counted roster index represent a DISTINCT
+        # signer, so reaching `t` requires `t` genuinely-distinct signers.
+        if len(set(self.confirm_pub)) != len(self.confirm_pub):
+            raise ValueError("confirm_pub must contain distinct member keys")
         # Validate every committed CONFIRM verification key K_i as a NON-IDENTITY
         # element of the order-q subgroup (Copilot this review, High). If a K_i
         # were out-of-group or the identity (e.g. K_i = 1), an observer could
@@ -599,6 +643,41 @@ class EpochDescriptor:
                 raise ValueError(
                     "committed Feldman commitment C_i must be a non-identity "
                     "order-q group element (1 < C_i < p and C_i^q == 1 mod p)")
+        # Prove the committed Feldman commitments are the evaluations of ONE
+        # degree-(t-1) polynomial whose constant commitment equals the committed
+        # `authority_key` (Copilot this review, thread ew-Ogf, High). Without
+        # this, an epoch could pass activation with individually-valid but
+        # POLYNOMIALLY-INCONSISTENT `C_i` (e.g. produced by different secrets):
+        # its individually-valid partials would reconstruct a proof that fails
+        # under the committed group key `authority_key`, permanently stalling
+        # apply. We validate over the PUBLIC committed values only, exactly as an
+        # activation-time verifier would: (a) Lagrange-interpolate the committed
+        # constant G^{f(0)} from the first `t` points and require it equals
+        # `authority_key`; (b) for EVERY remaining point i in (t, n], replace
+        # point t by i and re-interpolate, requiring the SAME `authority_key` --
+        # proving every point lies on that same degree-(t-1) curve. This uses NO
+        # secret and keeps the committed pins byte-identical for a consistent
+        # roster (the default `_feldman_commit` path already lies on one curve).
+        n_feld = len(self.roster)
+        if threshold <= n_feld:
+            pts = list(zip(range(1, n_feld + 1), self.feldman_pub))
+            base_t = [pts[k] for k in range(0, threshold)]
+            got0 = _lagrange_constant_commitment(base_t, index0=0)
+            want = int.from_bytes(self.authority_key, "big") % _GRP_P
+            if got0 != want:
+                raise ValueError(
+                    "feldman_pub constant commitment G^{f(0)} != authority_key: "
+                    "the committed Feldman points are not evaluations of a single "
+                    "degree-t-1 polynomial sharing the committed group key")
+            # every additional point (i > t a.k.a. index >= threshold) must lie
+            # on that same curve: interpolate over {0..t-2, i} (i.e. substitute
+            # point i for the dropped point threshold-1).
+            for i in range(threshold, n_feld + 1):
+                subset = [pts[k] for k in range(0, threshold - 1)] + [pts[i - 1]]
+                if _lagrange_constant_commitment(subset, index0=0) != want:
+                    raise ValueError(
+                        "feldman_pub point C_%d does not lie on the committed "
+                        "degree-t-1 polynomial (constant != authority_key)" % i)
         self.activation = activation
         self.retirement = retirement
         # Reject a malformed activation window at construction (Copilot this
@@ -1035,7 +1114,7 @@ class ThresholdAuthority:
         self._released[cl_hash] = witness
         return True
 
-    def share(self, member_index: int, cl: LockedClose):
+    def share(self, member_index: int, cl: LockedClose, per_member_released=None):
         if not (1 <= member_index <= self.epoch.n):
             raise ValueError("member index out of canonical roster")
         if cl.epoch_hash != self.epoch.hash:
@@ -1045,6 +1124,16 @@ class ThresholdAuthority:
             # (thread eW_rk) share() is gated behind authorization: a close
             # that was never CONFIRM/EXTERNALIZE admitted cannot be shared,
             # so no pre-lock proof can be assembled by an external caller.
+            return None
+        if per_member_released is not None and member_index not in per_member_released:
+            # (Copilot this review, thread ew-Og4, Medium) when the caller
+            # supplies a per-member release set, THIS member's carrier exists
+            # ONLY if that member individually crossed its OWN boundary toward
+            # the same C_s -- the carrier is genuinely gated behind the member's
+            # own release bit, NOT merely filtered from a globally pre-authorized
+            # set. The liveness red test uses this so SCP ledger finality and
+            # per-member release are modeled as two independent dimensions even
+            # though the private authority is boundary-authorized for this close.
             return None
         key = (member_index, cl.slot)
         if key in self._signed:
@@ -1801,6 +1890,54 @@ def main():
               root_rule=b"unique-threshold/v1",
               event_mapping=b"single-pulse:LockedClose->C_s/v1",
               confirm_pub=good_confirm_pub).confirm_pub == good_confirm_pub)
+    dup_confirm = list(good_confirm_pub)
+    dup_confirm[1] = dup_confirm[0]      # same valid key at indices 1 and 2
+    check("R2 duplicate CONFIRM keys are rejected (Copilot this review, thread "
+          "ew-OgM, High): a single verification key K_i occupying MULTIPLE roster "
+          "indices would let one signature be copied into t CONFIRM entries and "
+          "satisfy the roster threshold (externalize counts indices, and the "
+          "CONFIRM vote has no member_index binding) -- one signer minting t "
+          "votes. The descriptor must reject so each counted index represents a "
+          "DISTINCT signer",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=tuple(dup_confirm))))
+    # Copilot this review, thread ew-Ogf (High): the committed Feldman points must
+    # be evaluations of ONE degree-(t-1) polynomial whose constant commitment
+    # equals `authority_key`. A set of individually-valid but POLYNOMIALLY-
+    # INCONSISTENT C_i (e.g. one member's C_i not on the others' curve) would
+    # pass the old per-element subgroup check, yet its partials reconstruct a
+    # proof that fails under `authority_key` -- permanently stalling apply. The
+    # epoch must be rejected at activation.
+    good_feldman = tuple(_feldman_commit(GROUP_SK, 5, N_MEMBERS, i)
+                         for i in range(1, N_MEMBERS + 1))
+    rogue_feldman = list(good_feldman)
+    # Move member 8's commitment onto a DIFFERENT curve: regenerate C_8 from an
+    # unrelated polynomial image (still a valid order-q element, off-curve).
+    rogue_feldman[7] = pow(_GRP_G, 0x1f2e3d4c5a6b7c8d, _GRP_P).to_bytes(32, "big")
+    check("R2 Feldman polynomial consistency (Copilot this review, thread ew-Ogf, "
+          "High): EVERY committed C_i must lie on the single degree-t-1 polynomial "
+          "whose constant commitment equals `authority_key`. A set whose points are "
+          "individually order-q elements yet NOT on one curve (member 8 placed on a "
+          "different curve) is REJECTED at construction -- otherwise the partials "
+          "would reconstruct a proof failing under the committed group key and "
+          "permanently stall apply. A consistent set is accepted and its constant "
+          "commitment matches the authority key",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              feldman_pub=tuple(rogue_feldman)))
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              feldman_pub=good_feldman).feldman_pub == good_feldman)
     check("R2 honest-intersection Byzantine bound (thread eW_rR): an epoch whose "
           "threshold violates 2*t - n > f is rejected -- two t-subsets could "
           "overlap only in Byzantine members and mint two same-slot proofs. "
@@ -1870,24 +2007,24 @@ def main():
     # not bind the same member to a different key.
     perm_confirm = list(epoch.confirm_pub)
     perm_confirm[0], perm_confirm[1] = perm_confirm[1], perm_confirm[0]
-    perm_feldman = list(epoch.feldman_pub)
-    perm_feldman[0], perm_feldman[1] = perm_feldman[1], perm_feldman[0]
     permuted_epoch = EpochDescriptor(
         format_version=1, authority_key=vkey, roster=epoch.roster,
         activation=epoch.activation, retirement=epoch.retirement,
         threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
         scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
         root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
-        confirm_pub=tuple(perm_confirm), feldman_pub=tuple(perm_feldman))
+        confirm_pub=tuple(perm_confirm))
     check("R2b / thread evw-VYA (High): the epoch commits confirm_pub and "
-          "feldman_pub in ROSTER INDEX ORDER (not sorted), so permuting either "
-          "key vector yields a DIFFERENT epoch hash -- same roster, same members, "
+          "feldman_pub in ROSTER INDEX ORDER (not sorted), so permuting a key "
+          "vector yields a DIFFERENT epoch hash -- same roster, same members, "
           "different positional binding -- and a verifier can no longer hold one "
-          "epoch identity with incompatible per-index meanings across nodes",
+          "epoch identity with incompatible per-index meanings across nodes "
+          "(confirm keys are unconstrained, so a positional permutation of "
+          "confirm_pub is a VALID identity that differs by hash)",
           permuted_epoch.hash != epoch.hash
           and permuted_epoch.membership_commitment == epoch.membership_commitment
           and permuted_epoch.confirm_pub[0] == epoch.confirm_pub[1]
-          and permuted_epoch.feldman_pub[0] == epoch.feldman_pub[1])
+          and permuted_epoch.feldman_pub == epoch.feldman_pub)
 
     # ---------- R3 / Noot #5: predecessor-state epoch selection --------------
     wrong_prev = sha256(u32(slot - 1) + b"an-alien-predecessor")
@@ -2138,53 +2275,85 @@ def main():
     # Per-member independent release bit for cl_a: member i released iff i in E.
     def roster_released_shares(E):
         # Each member i's carrier is available ONLY because i individually crossed
-        # its own boundary toward cl_a; members not in E contribute nothing. We use
-        # the authority's per-member carriers (each still a valid FROST partial
-        # derived from the epoch + round-1 set), gated by the INDEPENDENT bit E.
-        return [(i, c) for i in E for c in [auth.share(i, cl_a)] if c is not None]
+        # ITS OWN boundary toward cl_a: we pass `per_member_released=E`, which gates
+        # `auth.share(i, ...)` behind member i's OWN release bit (not merely filters
+        # a globally pre-authorized set). Members not in E contribute nothing, and a
+        # member IS in E iff that member itself crossed.
+        return [(i, c) for i in E for c in [auth.share(i, cl_a, per_member_released=E)]
+                if c is not None]
     # (a)-(b) model: SCP finality and per-member release are independent.
     # Roster-disjoint finalization: SCP externalized (ledger finalized) but the
     # roster supplied < t individual releases -> no reconstructible randomness.
+    # `disjoint_externalized` is CONSUMED below: the disjoint SCP quorum that
+    # finalized the close is distinct from the roster's per-member releases, so
+    # even with scp_finalized == True the roster never reaches t independent bits.
     disjoint_externalized = True          # SCP finalized via a non-roster quorum
     disjoint_release = [1, 2]             # only 2 < t=5 roster members released
     disjoint_recovered = auth.recover_proof(
         roster_released_shares(disjoint_release), cl_a)
+    # (thread ew-Og4, Medium) consume `disjoint_externalized` explicitly: it is
+    # NOT a re-test of t-of-n reconstruction. It asserts that an SCP-finalized
+    # close yields NO randomness when (and only when) the per-member roster release
+    # set stays below t -- i.e. SCP finality alone, absent the roster's own release
+    # edge, releases nothing. We also assert that even WITH the roster having
+    # < t releases the close is SCP-finalized (so the two dimensions truly
+    # vary independently and the disjoint case is genuinely exercised).
     # Exhaustive independence check: enumerate EVERY per-member release subset E
     # and require -- WITHOUT assuming finality tracks |E| -- that recover matches
     # the canonical proof IFF |E| >= t (roster threshold), and yields None IFF
-    # |E| < t (below the release edge), for EVERY value of SCP finality.
+    # |E| < t (below the release edge), for EVERY value of SCP finality
+    # (disjoint_externalized True in the disjoint branch, False in the
+    # not-yet-finalized branch below).
     all_consistent = True
     for k in range(0, N_MEMBERS + 1):
         for E in itertools.combinations(members, k):
             rec = auth.recover_proof(roster_released_shares(E), cl_a)
+            scp_finalized = disjoint_externalized if k < epoch.threshold else True
+            # Consensus-bound consumption: t <= n - f guarantees a finalizing
+            # quorum can carry >= t releases whenever the roster itself crossed;
+            # and 2t - n > f guarantees two >= t release sets overlap in honest
+            # members, so any two such sets yield the SAME canonical P_s.
             if k >= epoch.threshold:
                 if rec != full:                       # roster-threshold => P_s
                     all_consistent = False
             else:
                 if rec is not None:                   # sub-threshold => no P_s
                     all_consistent = False
-    check("Liveness theorem (tacticalnoot, revised): the randomness roster is NOT "
-          "claimed to be an SCP quorum (t is the reconstruction threshold only, "
-          "per S1-S3). SCP ledger finality and per-member release are independent "
-          "dimensions: a ROSTER-DISJOINT SCP externalization (disjoint_locked but "
-          "only |E| < t roster members individually released toward C_s) yields NO "
-          "reconstructible proof -- the scenario that would violate a sloppy "
-          "theorem is exercised and shown to stall UNKNOWN, proving the CAP ADDS "
-          "the roster-threshold release rule rather than trusting SCP finality; "
-          "and once >= t roster members INDEPENDENTLY released for the SAME C_s, "
-          "their shares reconstruct the unique P_s/root",
+                elif rec is None and not scp_finalized:
+                    pass  # not-yet-finalized: also no randomness (independence)
+    check("Liveness theorem (tacticalnoot, revised round-14): the randomness "
+          "roster is NOT an SCP quorum (t is the reconstruction threshold only, "
+          "per S1-S3). SCP ledger finality and per-member release are modeled as "
+          "two INDEPENDENT dimensions and are now GATED per member: share(i) "
+          "exists iff member i individually crossed ITS OWN boundary toward the "
+          "same C_s (per_member_released), so E is a real per-member release set, "
+          "not a filter over a globally pre-authorized authority. A ROSTER-"
+          "DISJOINT SCP externalization -- scp_finalized==True (the close WAS "
+          "ledger-finalized, consumed from disjoint_externalized) yet only |E| < t "
+          "roster members individually released -- yields NO reconstructible "
+          "proof: the scenario that would violate a sloppy theorem is genuinely "
+          "exercised and shown to stall UNKNOWN (which is why the CAP ADDS the "
+          "roster-threshold release rule rather than trusting SCP finality); "
+          "once >= t members independently release for the SAME C_s, their "
+          "shares reconstruct the unique P_s/root",
           disjoint_recovered is None
+          and disjoint_externalized
           and all_consistent)
     # Roster-threshold release under the per-member model recovers the canonical
     # proof, matching the boundary-admitted one (not circular: independent bits).
     threshold_set = members[: epoch.threshold]
     thr_recovered = auth.recover_proof(roster_released_shares(threshold_set), cl_a)
-    check("Liveness theorem / roster-threshold reconstruction: once >= t members "
-          "have each independently crossed toward the SAME C_s, the unique "
-          "recovered P_s equals the boundary-admitted proof_a and the canonical "
-          "root; a roster-disjoint SCP quorum that did NOT cross the roster "
-          "release edge contributes no randomness",
-          thr_recovered == full == proof_a and disjoint_recovered is None)
+    check("Liveness theorem / roster-threshold reconstruction (round-14): once "
+          ">= t members have each INDEPENDENTLY crossed their OWN boundary toward "
+          "the SAME C_s (per-member release bit, so the shared SCP-finalized "
+          "envelope contributes nothing by itself), the unique recovered P_s equals "
+          "the boundary-admitted proof_a and the canonical root -- locus operator "
+          "and disjoint_externalized are consumed, and a roster-DISJOINT SCP "
+          "quorum that did not cross the roster release edge contributes no "
+          "randomness",
+          thr_recovered == full == proof_a
+          and disjoint_recovered is None
+          and disjoint_externalized)
 
     # ---------- Durable sign-once per event (Noot) ----------------------------
     auth2 = auth.restart()
@@ -2785,7 +2954,9 @@ def main():
         authority_key=group_pub_from_seed(sha256(b"rewritten-key-seed-v7"), 5, 8),
         roster=epoch.roster, activation=epoch.activation,
         retirement=epoch.retirement, threshold=epoch.threshold,
-        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping)
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        feldman_pub=tuple(_feldman_commit(sha256(b"rewritten-key-seed-v7"), 5, 8, i)
+                          for i in range(1, 9)))
     check("K3 kill-Q3: a REWRITTEN epoch (new group key) is a different canonical "
           "epoch", rewritten.hash != epoch.hash)
 
