@@ -162,6 +162,34 @@ def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
             + u32(ledger_seq) + hash32(previous_ledger_hash) + hash32(value_hash))
 
 
+def canonical_value_hash(value_bytes: bytes) -> bytes:
+    """`H(provenance_excluded(value))` -- the CANONICAL hash of a committed
+    externalized value for the close-lock, excluding the signer provenance
+    (Copilot this review, thread evw_K). A serialized Core `StellarValue` ends
+    with its signed extension (`StellarValueExtV0.lcValueSignature`) carrying
+    the SIGNER NodeID -- pure provenance, not an event semantic. Hashing the
+    full serialization would make byte-identical-value-but-differently-SIGNED
+    closes hash differently, contradicting the one-use/one-event `C_s` contract.
+
+    Contract: `value_bytes` is one of
+      * a 32-byte bare payload hash (a close supplied directly as a payload
+        hash, e.g. `sha256(payload)` -- no signer -- used throughout this
+        harness), which is hashed as-is; or
+      * a serialized value `payload || signer`, where the trailing 32-byte
+        `signer` is the value-signature NodeID/provenance to be EXCLUDED.
+    In the serialized case only the proven payload is hashed, so every close
+    with the SAME value payload and close semantics binds to the SAME `C_s`
+    regardless of WHO signed or the envelope/transport path (which never enters
+    the lock)."""
+    if len(value_bytes) == 32:
+        payload = value_bytes
+    elif len(value_bytes) > 32:
+        payload = value_bytes[:-32]      # drop trailing lcValueSignature NodeID
+    else:
+        payload = value_bytes            # degenerate/short: hash as-is (defensive)
+    return sha256(b"ProvenanceExcludedValue/v1" + payload)
+
+
 # --- Verifiable stand-in bound to the epoch public key (Copilot 3917696376 /
 # this review's line-519 note) ------------------------------------------------
 # A pure-hash "canonical 32-byte value" is NOT a proof: any attacker can conjure
@@ -467,7 +495,8 @@ class EpochDescriptor:
                  verifier_rule: bytes = b"unique-threshold/v1",
                  scheme: bytes = EPOCH_SCHEME,
                  byzantine_bound: int = None,
-                 confirm_pub=None):
+                 confirm_pub=None,
+                 feldman_pub=None):
         self.format_version = format_version
         # Commit the authority/group public key AFTER authenticating it as a
         # non-identity element of the order-q subgroup (Copilot this review #1,
@@ -518,8 +547,45 @@ class EpochDescriptor:
                 raise ValueError(
                     "confirmed CONFIRM key K_i must be a non-identity order-q "
                     "group element (1 < K_i < p and K_i^q == 1 mod p)")
+        # COMMIT each member's PUBLIC Feldman commitment C_i = G^{f(i)} -- the
+        # order-q public image of the member's long-lived polynomial share f(i)
+        # (Copilot this review, thread evw9Z, High). These are PUBLIC (never
+        # secret), but they MUST be committed into the epoch identity so that a
+        # peer verifying a partial signature can MATCH the carrier-supplied C_i
+        # against the epoch-committed value. Without committing them, a Byzan-
+        # tine rostered sender could supply ANY subgroup element as C_i --
+        # including the identity `C_i = 1`, which turns the partial check
+        # `G^{s_i} == N_i * C_i^c` into `G^{s_i} == N_i` (no secret contribution,
+        # satisfied by `(s_i=1, N_i=G)`) and poisons reconstruction. The epoch
+        # commits exactly one C_i per roster member and the boundary rejects a
+        # carrier whose C_i is not the epoch-committed one for that member.
+        n_feld = len(self.roster)
+        self.feldman_pub = (
+            tuple(feldman_pub) if feldman_pub is not None
+            else tuple(_feldman_commit(GROUP_SK, threshold, n_feld, i)
+                       for i in range(1, n_feld + 1)))
+        if len(self.feldman_pub) != len(self.roster):
+            raise ValueError("feldman_pub must have one commitment per member")
+        for _ci in self.feldman_pub:
+            if len(_ci) != 32:
+                raise ValueError("feldman_pub element must be 32 bytes")
+            _c_int = int.from_bytes(_ci, "big")
+            if not (1 < _c_int < _GRP_P
+                    and pow(_c_int, _GRP_Q, _GRP_P) == 1):
+                raise ValueError(
+                    "committed Feldman commitment C_i must be a non-identity "
+                    "order-q group element (1 < C_i < p and C_i^q == 1 mod p)")
         self.activation = activation
         self.retirement = retirement
+        # Reject a malformed activation window at construction (Copilot this
+        # review, thread evw-k): an empty (`activation == retirement`) or
+        # reversed (`activation >= retirement`) window can never be active and
+        # would fail closed indefinitely at transition. Fail fast here rather
+        # than emitting a permanently-inactive committed epoch.
+        if not (activation < retirement):
+            raise ValueError(
+                "activation window must satisfy activation < retirement "
+                "(a non-empty, non-reversed active range)")
         if not (1 <= threshold <= len(self.roster)):
             # thread e6VduY: a malformed threshold (0 or > n) can never be a
             # sound epoch -- 0 would emit a proof with no shares, > n could
@@ -574,6 +640,7 @@ class EpochDescriptor:
             + struct.pack(">B", format_version) + lp(scheme)
             + hash32(authority_key) + hash32(self.membership_commitment)
             + hash32(sha256(roster_bytes(self.confirm_pub)))  # committed CONFIRM pubkeys
+            + hash32(sha256(roster_bytes(self.feldman_pub)))  # committed Feldman C_i
             + struct.pack(">QQ", activation, retirement)
             + struct.pack(">I", threshold)
             + struct.pack(">I", self.byzantine_bound)
@@ -626,7 +693,8 @@ class LockedClose:
 
     def _commit(self) -> bytes:
         in_v1 = close_input(self.epoch_hash, self.network_id, self.slot,
-                            self.previous_ledger_hash, sha256(self.value_bytes))
+                            self.previous_ledger_hash,
+                            canonical_value_hash(self.value_bytes))
         return sha256(b"CloseLock" + in_v1)
 
     def validate(self) -> bool:
@@ -853,7 +921,12 @@ class ThresholdAuthority:
         n_i = _frost_share(coeffs, member_index) % _GRP_Q
         s_i = (n_i + c * f_i) % _GRP_Q
         N_i = pow(_GRP_G, n_i, _GRP_P).to_bytes(32, "big")
-        C_i = pow(_GRP_G, f_i, _GRP_P).to_bytes(32, "big")
+        # The public Feldman commitment C_i = G^{f(i)} emitted in the carrier
+        # MUST be the epoch-COMMITTED one for this member (Copilot this review,
+        # thread evw9Z): `verify_share` matches the carrier's C_i against
+        # `self.epoch.feldman_pub[i-1]`, so an honest carrier transports exactly
+        # the committed value and a forged identity/subgroup C_i is rejected.
+        C_i = self.epoch.feldman_pub[member_index - 1]
         return (s_i.to_bytes(32, "big"), N_i, C_i)
 
     def _set_boundary_cap(self, cap: bytes) -> None:
@@ -945,6 +1018,16 @@ class ThresholdAuthority:
             return False                                  # bad nonce commitment
         if not (1 <= C_i < _GRP_P) or pow(C_i, _GRP_Q, _GRP_P) != 1:
             return False                                # bad Feldman commitment
+        # COMMITTED-C_i BINDING (Copilot this review, thread evw9Z, High): the
+        # carrier-supplied C_i must byte-match the epoch-COMMITTED Feldman
+        # commitment for THIS member (`epoch.feldman_pub[member_index-1]`).
+        # A subgroup-valid but forged value -- in particular the identity
+        # `C_i = 1`, which would reduce the partial equation to `G^{s_i} == N_i`
+        # and count `(s_i=1, N_i=G)` as valid for ANY challenge -- is therefore
+        # rejected. A Byzantine rostered sender can no longer poison reconstruc-
+        # tion by transporting a C_i the epoch never committed for its index.
+        if C_i_b != self.epoch.feldman_pub[member_index - 1]:
+            return False                    # C_i not the epoch-committed one
         if not (1 <= s_i < _GRP_Q):
             return False
         # Public aggregate R from the published nonce commitments for this close
@@ -1317,15 +1400,23 @@ class RandomnessSource:
 
 def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
             proof) -> dict:
-    """Full state machine. Returns only the B4 authority surface: {event_hash,
+    """Full state machine (LIVE release admission + provenance-independent
+    archival resolution). Returns only the B4 authority surface: {event_hash,
     outcome, source_root?}.
 
     Gate 0 (integrity):         LockedClose hash must re-derive.
     Gate 1 (epoch+network):     close bound to THIS epoch/network and active.
     Gate 2 (boundary + proof):  source must have boundary-admitted the EXACT
-        close and the proof must pass the PURE archived verifier. No proof ->
+        close AND the proof must pass the PURE archived verifier. No proof ->
         UNKNOWN (stalled apply); invalid proof -> REJECTED.
-    """
+
+    The `source` argument is the LIVE producer: it supplies the boundary-
+    admitted release fact (whether this close really reached the CONFIRM->
+    EXTERNALIZE edge through the genuine boundary path). A catchup / archival
+    replayer that only holds {epoch, C_s, P_s} MUST NOT be forced to re-execute
+    that live boundary -- it uses `resolve_archival` (provenance-independent),
+    which applies the SAME pure verifier without consulting any source state
+    (Copilot this review, thread evw-0)."""
     if not cl.validate():
         return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
     if (cl.epoch_hash != epoch.hash or cl.network_id != NETWORK
@@ -1335,14 +1426,39 @@ def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
         return {"event_hash": cl.hash.hex(), "outcome": "UNKNOWN"}
     if not source.has_valid_proof(cl):
         return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
-    # Gate 2 (Copilot this review #7): authentication is PROVENANCE-INDEPENDENT.
-    # The pure archival verifier needs only (epoch, C_s, P_s): it authenticates
-    # P_s against the committed `authority_key` (public Schnorr equation) and
-    # returns the unique root H("Root", authority_key, epoch_hash, C_s). A proof
-    # produced by ANOTHER authority, or loaded during catchup (never cached by
-    # THIS node as `genuine_proof`), is accepted -- a non-producing consumer can
-    # derive the root -- while a forged/public-only/random proof still fails the
-    # equation and is REJECTED (negative-synthesis gate).
+    return resolve_archival(epoch, cl, proof)
+
+
+def resolve_archival(epoch: EpochDescriptor, cl: LockedClose, proof) -> dict:
+    """PROVENANCE-INDEPENDENT archival resolution (Copilot this review, thread
+    evw-0): a catchup / historical node holding ONLY {epoch, C_s, P_s} from the
+    ledger -- and never having executed the live CONFIRM->EXTERNALIZE boundary,
+    so it has NO transient `_admitted` release record -- resolves the close
+    exactly like the live `resolve`. It applies ONLY the pure, archived-stable
+    public verifier (`UniqueThresholdProof.verify`: authenticate P_s against the
+    committed `epoch.authority_key`, return the unique root), which never reads
+    any source/admission/process memory. Live release ADMISSION (whether this
+    particular close was boundary-released) is a SEPARATE fact that lives only
+    on the live producer path; it is not part of resolving an already-recorded
+    proof, so an archival replayer is never wrongly rejected just because the
+    transient `_admitted` entry does not exist in its fresh process. Same gates
+    (integrity / epoch+network / pure proof verification) as `resolve`."""
+    if not cl.validate():
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    if (cl.epoch_hash != epoch.hash or cl.network_id != NETWORK
+            or not epoch.active_at(cl.slot)):
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    if proof is None or not isinstance(proof, (bytes, bytearray)):
+        return {"event_hash": cl.hash.hex(), "outcome": "UNKNOWN"}
+    # Gate 2: PROVENANCE-INDEPENDENT authentication. The pure archival verifier
+    # needs only (epoch, C_s, P_s): it authenticates P_s against the committed
+    # `authority_key` (public Schnorr equation) and returns the unique root
+    # H("Root", authority_key, epoch_hash, C_s). A proof produced by ANOTHER
+    # authority, or loaded during catchup (never cached by THIS node as
+    # `genuine_proof`), is accepted -- a non-producing consumer can derive the
+    # root -- while a forged/public-only/random proof still fails the equation
+    # and is REJECTED (negative-synthesis gate). As with the live path, a
+    # missing proof is UNKNOWN (stalled apply).
     root = UniqueThresholdProof.verify(epoch, cl.hash, proof)
     if root is None:
         return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
@@ -1625,15 +1741,22 @@ def main():
     rogue_source = RandomnessSource(epoch)
     rogue_source.bind(rogue_auth)
     boundary_release(rogue_source, cl_a)
+    # `proof()` is called on the rogue path so `_released` is populated and
+    # `share` becomes reachable for that rogue authority; the check below then
+    # shows the rogue-produced carrier (different polynomial) is NOT a valid
+    # share under the canonical authority, and the committed-C_i binding
+    # (thread evw9Z) means the rogue authority can no longer emit ANY proof for
+    # this epoch.
     rogue_proof = rogue_source.proof(cl_a, rogue_auth)
     rogue_share = rogue_auth.share(1, cl_a)
 
     check("R2 same epoch hash, substituted member mapping: a share produced by a "
           "different (seed/secret) authority for the same epoch is NOT a valid "
           "share of the canonical authority; with no valid shares, recover is "
-          "None",
-          rogue_proof is not None
-          and rogue_share is not None
+          "None; and (thread evw9Z) the committed-C_i binding means the "
+          "rogue-seed authority cannot produce ANY proof for this epoch",
+          rogue_share is not None
+          and rogue_proof is None
           and not auth.verify_share(1, cl_a, rogue_share)
           and auth.recover_proof([(1, rogue_share)], cl_a) is None)
 
@@ -1802,12 +1925,18 @@ def main():
           "authentically distributed (public commitments only, no secret)",
           peer_accepted and peer_proof == proof_a)
     check("N3/threshold distributed-FROST forged carriers (Copilot this review, "
-          "High): a replayed/wrong-owner carrier (honest N_i but a bad C_i, or a "
-          "good C_i with a bad N_i, or a forged s_i) is REJECTED by the "
-          "secret-free verifier without corrupting the accepted set",
+          "High): a replayed/wrong-owner carrier is REJECTED by the secret-free "
+          "verifier -- including the identity-Feldman attack `C_i = 1` (which "
+          "would reduce the partial equation to `G^{s_i} == N_i` and count "
+          "`(s_i=1, N_i=G)` as valid for any challenge) and any C_i that is NOT "
+          "the epoch-committed one -- so a Byzantine rostered sender cannot "
+          "poison reconstruction, and the accepted set stays clean",
           not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
                                                    full_shares[0][1][1],
-                                                   sha256(b"wrong-feldman")))
+                                                     (1).to_bytes(32, "big")))
+          and not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
+                                                       full_shares[0][1][1],
+                                                       sha256(b"wrong-feldman")))
           and not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
                                                        sha256(b"wrong-nonce"),
                                                        full_shares[0][1][2]))
@@ -2379,6 +2508,7 @@ def main():
 
     # ---------- K: the three kill questions (adversarial) ----------------------
     forged_val = sha256(sha256(b"externalized-value-A") + b"ATTACKER-NONCE")
+    payload_v = sha256(b"externalized-value-A")   # a >0 s.sub event payload
     check("K1 kill-Q1: no caller nonce/alias can mint a second equivalent event "
           "for the same protected close (forged value -> distinct close)",
           LockedClose(epoch, slot, prev_hash, forged_val).hash != cl_a.hash)
@@ -2397,7 +2527,8 @@ def main():
         root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
         scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
         byzantine_bound=epoch.byzantine_bound,
-        confirm_pub=epoch.confirm_pub)
+        confirm_pub=epoch.confirm_pub,
+        feldman_pub=epoch.feldman_pub)
     archival_root = UniqueThresholdProof.verify(archival_epoch, cl_a.hash,
                                                 proof_a)
     check("K3 kill-Q3: archival replay preserving only the canonical epoch "
@@ -2407,6 +2538,17 @@ def main():
           archival_epoch.hash == epoch.hash
           and archival_root == root_a
           and pulse_a == consumer_kdf(archival_root, LABEL_NOM))
+    check("K3 kill-Q3 / thread evw-0: PROVENANCE-INDEPENDENT archival resolution "
+          "-- a fresh catchup node holding ONLY {epoch, C_s, P_s} (and NO "
+          "transient `_admitted` release record, because it never ran the live "
+          "boundary) resolves the same close to the same ROOT via "
+          "`resolve_archival`, and it is NOT wrongly rejected just because its "
+          "process lacks the live admission entry",
+          resolve_archival(archival_epoch, cl_a, proof_a)["outcome"] == "ROOT"
+          and resolve_archival(archival_epoch, cl_a, proof_a)["source_root"]
+          == root_a.hex()
+          and resolve_archival(archival_epoch, cl_a, sha256(b"forged-archive"))
+          ["outcome"] == "REJECTED")
     rewritten = EpochDescriptor(
         format_version=epoch.format_version,
         authority_key=group_pub_from_seed(sha256(b"rewritten-key-seed-v7"), 5, 8),
@@ -2420,6 +2562,22 @@ def main():
     check("S1 single binding: one protected close -> one root (forged/alias/"
           "retry value differs, so a use cannot bind several roots)",
           LockedClose(epoch, slot, prev_hash, forged_val).hash != cl_a.hash)
+    check("S1 / thread evw_K: C_s is a one-use/one-event mapping INDEPENDENT of "
+          "the signer provenance. Two serialized values with the SAME payload "
+          "but DIFFERENT trailing lcValueSignature NodeIDs hash -- via "
+          "`canonical_value_hash`, which strips the signer -- to the SAME "
+          "canonical value hash and therefore the SAME C_s, so differently-"
+          "SIGNED but semantically-identical closes do NOT diverge, while a "
+          "GENUINELY different value payload yields a different C_s",
+          canonical_value_hash(payload_v + sha256(b"signer-A")) ==
+          canonical_value_hash(payload_v + sha256(b"signer-B"))
+          and LockedClose(epoch, slot, prev_hash,
+                          payload_v + sha256(b"signer-A")).hash ==
+          LockedClose(epoch, slot, prev_hash,
+                      payload_v + sha256(b"signer-B")).hash
+          and LockedClose(epoch, slot, prev_hash, payload_v).hash !=
+          LockedClose(epoch, slot, prev_hash,
+                      sha256(b"different-payload")).hash)
     check("S2 pre-lock unavailability: before the CONFIRM/EXTERNALIZE boundary "
           "admits the lock, a proposer holds NO valid proof -- no genuine "
           "recovered proof exists and no candidate resolves to a root (source "
@@ -2443,12 +2601,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "f3455fda5722e0f3b423d55c604501327edfa5ff8ba6e6a2f07f98e123606754",
-        "9acde5f08f598275c570fc282b3703201beba5678a44b8bdc6ecefada26fc465",
-        "8f8bc77b1a7046d0eeb0183eaaebbc27b8331270c2fb4f49b2dd252c3f25648c",
-        "2a254ad58cb70edd980a07e38e21f85cdb34ce956518e47f122b52cec7dbc6ed",
+        "21426ca05e8e5d1b3685cbd3555a07d647aaf62b49cddbd4313fa82f83f251b9",
+        "96b916781f8444fee60dce11d2efb6032156ed7f6a5ffc66ecd9b752d2e28fb2",
+        "13b31a3952926dc3cdb083df8d10992935e076be80c533192d23f0825c4b8987",
+        "1a6f142fabd9080f7ab2ea625e12b4c16e9cfac083951301ce35a2facbb6f3cd",
     )
-    EXP_COMP = "f824647ddf48b1dde919ba0c0d5f82b95ab3f28b6c24329dba48173a68e4544d"
+    EXP_COMP = "2c2c1c51668848e6cb025e4c51e5dc0cd067a10a3ee9f556ba06f759f6dcd084"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),

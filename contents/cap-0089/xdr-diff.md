@@ -30,10 +30,10 @@ arm of the `ext` union, so it coexists with CAP-0088's `MS_CLOSE_TIME` arms
 ## `Stellar-ledger.x` — add `VRFCommit`/`VRFReveal` and the three `StellarValue` fields
 
 ```diff
-@@ -28,6 +28,39 @@ struct LedgerCloseValueSignature
+@@ -28,6 +28,40 @@ struct LedgerCloseValueSignature
      Signature signature; // nodeID's signature
  };
- 
+
 +#ifdef VRF_RANDOMNESS
 +/* CAP-0089 VRF randomness. Commit/reveal records are consensus-visible and
 + * replayable so every node derives the identical per-slot beacon.
@@ -43,18 +43,19 @@ arm of the `ext` union, so it coexists with CAP-0088's `MS_CLOSE_TIME` arms
 +
 +struct VRFCommit
 +{
-+    NodeID nodeID;     // contributor public key (NodeID)
-+    // The contributor's ECVRF public key (VKF). What a verifier validates the
-+    // reveal's proof against: ECVRF_Verify(VKF, T_b(s), beta, pi). It is NOT the
-+    // NodeID key (it is derived from a domain-separated seed, so it is a distinct
-+    // point) and is carried here because a key derived from a private seed is not
-+    // otherwise publicly inferable from the NodeID.
++    NodeID nodeID;     // contributor public key (NodeID, consensus-recognized)
++    // The contributor's ECVRF public key (VKF). This is what a verifier
++    // validates the reveal's proof against: ECVRF_Verify(VKF, T_b(s), beta, pi).
++    // It is NOT the NodeID key (it is derived from a domain-separated seed, so
++    // it is a distinct point), and it is carried here because a key derived
++    // from a private seed is not otherwise publicly inferable from the NodeID.
 +    opaque vrfPublicKey[32];
 +    Hash commitHash;   // C_v = SHA-256(beta_v), hiding commit
 +    // Ed25519 signature by nodeID's existing NodeID key over
 +    //   "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash | vrfPublicKey
-+    // so an entry attributed to nodeID cannot be forged by the value author, and
-+    // the NodeID->VRF-public-key mapping is authenticated by the NodeID key.
++    // so BOTH the commit (to beta) AND the NodeID->VRF-public-key mapping are
++    // authenticated by the consensus-recognized NodeID -- a value author cannot
++    // forge an entry attributed to a node, nor substitute a different VRF key.
 +    Signature sig;
 +};
 +

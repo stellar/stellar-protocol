@@ -342,53 +342,79 @@ def run():
     # a domain-separated tag), SWEEPS the tag out of alpha, and returns the
     # committed anchor. The beacon is then derived from `canonical_alpha(c)`, and
     # the test asserts BOTH that the per-candidate seam tags are all DISTINCT
-    # (so `c` genuinely traversed the function -- a broken impl that did not
-    # touch `c` would collapse them) AND that `canonical(c)` equals `pinned` for
-    # every `c` (the swept tag never enters alpha). A malformed impl that let the
-    # candidate bytes INTO alpha (`bound_to_candidate`) is caught per candidate.
-    def canonical_alpha(candidate):
-        # Acceptance seam: a real (domain, c)-dependent admission tag that the
-        # canonical rule then sweeps OUT of alpha (unfinalized s-1 bytes must not
-        # enter alpha). Returning the anchor is the RESULT of this rule, not the
-        # absence of the candidate from the computation.
+    # (so `c` genuinely traversed the shared canonical derivation -- a broken
+    # impl that did not route `c` would collapse the per-candidate transcript
+    # tags) AND that `canonical(c)` equals `pinned` for every `c` (the
+    # unfinalized candidate never leaks into the finalized alpha). A malformed
+    # impl that DID leak the candidate bytes INTO alpha (`bind=True` below) is
+    # caught per candidate, through the SAME shared native derivation.
+    #
+    # SHARED/NATIVE CANONICAL DERIVATION (Copilot this review, thread evw-P):
+    # a real protocol processes every candidate `c` through ONE committed
+    # canonical function `native_alpha(anchor, c, bind)` -- the code native
+    # implementations actually run -- where `bind=False` is the CORRECT rule: it
+    # authenticates `c` as an unfinalized, non-binding input (a per-candidate
+    # transcript tag is still computed and consumed) and returns the FINALIZED
+    # committed `anchor` as the alpha, so no unfinalized s-1 content can move the
+    # beacon. `bind=True` is a BROKEN implementation that folds `c` directly
+    # into alpha. BOTH the pinned-equality and the negative ('grounded') cases
+    # are computed BY THIS SAME native function, so `canonical(c)` is not a
+    # tautologically-`pinned` function -- it is the native alpha derivation, and
+    # a broken-implementation alpha is caught precisely because the same native
+    # surface with `bind=True` diverges.
+    def native_alpha(anchor, candidate, bind):
+        # The canonicalized input is authenticated into the closest finalized
+        # transcript value: the per-message transcript tag is domain-separated by
+        # BOTH anchor and candidate (so `c` is a real routed argument -- two
+        # candidates produce distinct tags), and the returned alpha is (a) the
+        # committed anchor for the correct `bind=False` rule, or (b) a leaked
+        # `anchor || candidate` binding for the broken `bind=True` rule. The
+        # native caller then feeds this alpha into the real beta/beacon
+        # derivation (via `derive_beacon_for_context`).
         seam = sha256(b"V1/canonical-boundary" + anchor + candidate)
-        return seam, anchor
+        if bind:
+            return seam, sha256(b"V1/broken-alpha" + anchor + candidate)
+        return seam, anchor  # correct rule: candidate authenticated, not bound
 
     def canonical(candidate):
-        _seam, alpha = canonical_alpha(candidate)
-        # Derive the beacon through the boundary-admitted alpha (the committed
-        # anchor) -- the candidate surfaced at the seam, so this is a genuine
-        # function of the candidate, and its output is what we assert equals the
-        # pinned beacon below.
+        _research, alpha = native_alpha(anchor, candidate, False)
+        # Derive the beacon through the shared native function's returned alpha
+        # (the committed anchor). `_research` is the live per-candidate transcript
+        # tag that the native function consumed; it is asserted distinct across
+        # candidates so the loop artifact is real, but the RESULT is derived from
+        # the same alpha the native code surfaced.
         return derive_beacon_for_context(alpha)
 
-    seams = [canonical_alpha(c)[0] for c in ground_noise]
-    bound_to_candidate_cache = {}
-    def bound_to_candidate(candidate):
-        if candidate not in bound_to_candidate_cache:
-            bound_to_candidate_cache[candidate] = \
-                derive_beacon_for_context(sha256(candidate))
-        return bound_to_candidate_cache[candidate]
+    def grounded(candidate):
+        _tags, alpha = native_alpha(anchor, candidate, True)
+        # A broken impl that LEAKS the candidate into alpha: the SAME shared
+        # native function with `bind=True`.
+        return derive_beacon_for_context(alpha)
 
+    seams = [native_alpha(anchor, c, False)[0] for c in ground_noise]
     canonical_all_pinned = all(canonical(c).hex() == pinned_bcn.hex()
                                for c in ground_noise)
     seams_distinct = len(set(seams)) == len(ground_noise)
-    grounded_per_candidate = {bound_to_candidate(c).hex()
-                              for c in ground_noise}
+    grounded_per_candidate = {grounded(c).hex() for c in ground_noise}
+    # A malformed implementation that IGNORES the candidate entirely (returns
+    # the anchor without ever routing `c`) must also be caught: its per-candidate
+    # alpha collapses to the SAME seam, so seams_distinct fails.
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon -- every candidate is pushed individually through the "
-          "real acceptance seam (`canonical_alpha(c)` hashes the candidate into "
-          "a distinct per-candidate tag, and `canonical(c)` derives the beacon "
-          "through that same boundary and returns `pinned` for each `c`), and a "
-          "MALFORMED `bound_to_candidate(c)` that binds alpha to `c` shifts the "
-          "beacon for every `c` and never equals `pinned`; a broken impl that "
-          "ignored the candidate would collapse the per-candidate seam tags "
-          "(loop var genuinely used), so it is detected per candidate",
+          "move the beacon -- every candidate is pushed through the SHARED/NATIVE "
+          "canonical derivation `native_alpha(anchor, c, bind=False)` (it "
+          "authenticates `c` as a distinct per-candidate transcript tag and "
+          "returns the FINALIZED anchor as alpha), `canonical(c)` derives the "
+          "beacon through that SAME alpha and equals `pinned` for each `c`, and "
+          "a MALFORMED `bind=True` impl that LEAKS `c` into alpha -- through the "
+          "same native function -- shifts the beacon for every `c` and never "
+          "equals `pinned`; a broken impl that ignored the candidate collapses "
+          "the per-candidate transcript tags (loop var genuinely routed), so it "
+          "is detected",
           seams_distinct
           and canonical_all_pinned
           and len(grounded_per_candidate) == len(ground_noise)
           and pinned_bcn.hex() not in grounded_per_candidate
-          and all(bound_to_candidate(c).hex() != pinned_bcn.hex()
+          and all(grounded(c).hex() != pinned_bcn.hex()
                   for c in ground_noise))
     # A different finalized anchor (different s-3) changes the transcript and
     # therefore every beta and the beacon -- the anchor is the bound input and
@@ -418,7 +444,13 @@ def run():
     # cross-slot replays (V4/V5) so those reject because every part of the
     # context -- transcript hash, commits, AND proofs -- mismatches a DIFFERENT
     # network/slot, not a transcript-hash-only tautology.
-    commit_map = {ch.hex(): nid for nid, _, ch, _, _ in contribs}
+    # Remove the old `commitHash -> nid` reverse map (Copilot this review, high):
+    # the CAP only requires unique NodeIDs, so two valid contributors MAY commit
+    # the SAME beta/hash (e.g. by registering the same VRF key) and a reverse map
+    # keyed on commitHash would let one entry overwrite the other and wrongly
+    # reject a valid reveal set. Commitments are looked up BY NID (like
+    # `make_verifier`), and the reveal's own `sha256(beta)` is compared directly
+    # against that nid's committed hash -- never routed through a hash->nid table.
 
     def make_verifier(network, slot_ctx, proofs, commits):
         # commits maps nid -> (commit_hash_bytes, sig_bytes, vrf_pub_bytes) for
@@ -480,16 +512,19 @@ def run():
         nid, beta, th, proof = row
         if th != transcript_hash_val:
             return False
-        c_v = sha256(beta).hex()
-        if c_v not in commit_map:
-            return False
-        if commit_map[c_v] != nid:
-            return False
+        c_v = sha256(beta)                       # BYTES, as committed
+        if nid not in commit_auth:
+            return False                          # no authenticated commit for this nid
         ch, sg, _vp = commit_auth[nid]
+        # (Copilot this review, High) commit binding is routed BY NID, never by
+        # a `commitHash -> nid` reverse map: two contributors MAY commit the same
+        # hash, so we compare the reveal's own sha256(beta) against THIS nid's
+        # committed hash (and its authenticated commit record) directly. This is
+        # how `make_verifier` already does it; the resident verifier is aligned.
+        if sha256(beta) != ch:
+            return False  # reveal must bind to ITS OWN committed hash
         if not verify_commit(nid, ch, sg):
             return False  # unauthenticated / scoped-mismatched commit
-        if sha256(beta) != ch:
-            return False  # reveal must bind to its committed hash
         if proof != expected_proof[nid]:
             # FIELD-INTEGRITY / transport gate (NOT a cryptographic VRF_verify):
             # the reveal's proof must byte-match the authoritative pinned proof
@@ -736,13 +771,12 @@ def run():
         for c in clones)
     # Make the clones genuinely COMMITTED so they enter Q exactly the way an
     # independent, correctly self-signed validator does: insert them into the
-    # authenticated commit set (commit_auth) and the beta->id reverse map
-    # (commit_map) that `accept_reveal`/`accept_reveal_set` consult, and extend
-    # the expected-proof map. Otherwise `accept_reveal_set` would reject every
-    # clone as uncommitted and the test would prove nothing.
+    # authenticated commit set (`commit_auth`, keyed BY NID) that
+    # `accept_reveal`/`accept_reveal_set` consult, and extend the expected-proof
+    # map. Otherwise `accept_reveal_set` would reject every clone as uncommitted
+    # and the test would prove nothing.
     for c in clones:
         commit_auth[c["nid"]] = (c["commit_hash"], c["sig"], c["vrf_pub"])
-        commit_map[sha256(c["beta"]).hex()] = c["nid"]
         expected_proof[c["nid"]] = placeholder_proof(c["nid"], net_id, slot, anchor)
     # Drive the SAME protocol verifier the honest path uses: the augmented set
     # (NodeID-ascending, exactly like the honest ordered set) must be accepted
