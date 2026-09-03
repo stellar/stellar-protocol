@@ -103,7 +103,7 @@ jobs:
               '',
               `> ⚠️ **Never pre-allocate a CAP number in your PR.** Name your file \`cap-TBD.md\` and use \`TBD\` for the protocol version — a maintainer will assign the number on merge, as described in [Creating a CAP Draft](${readmeUrl}#creating-a-cap-draft).`,
               '',
-              `For details on what each CAP status (Draft, FCP, Accepted, Final, …) means, see [CAP Status Terms](${readmeUrl}#cap-status-terms).`,
+              `For details on what each CAP status (Pre-Draft, Draft, FCP, Accepted, Final, …) means, see [CAP Status Terms](${readmeUrl}#cap-status-terms).`,
               '',
               'Thanks for helping improve the Stellar protocol! 🚀',
             ].join('\n');
