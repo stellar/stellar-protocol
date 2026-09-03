@@ -1,0 +1,151 @@
+name: 'New CAP Proposal'
+
+# When a PR adds a new file to the core/ directory it is likely proposing a
+# new CAP. New ideas are meant to start as a GitHub Discussion rather than a PR,
+# so this workflow locks the PR, converts it to a draft, and explains the
+# process to the author.
+#
+# Uses pull_request_target so the GITHUB_TOKEN has write access even for PRs
+# opened from forks. No untrusted PR code is checked out or executed; the job
+# only inspects the list of changed files via the API.
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+    paths:
+      - 'core/**'
+
+permissions:
+  issues: write
+  # write is required to convert the PR to a draft (the GraphQL
+  # convertPullRequestToDraft mutation); listing changed files only needs read.
+  pull-requests: write
+
+jobs:
+  new-cap-proposal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lock PR and explain CAP proposal process
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            // Find files added (not just modified) under core/.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const newCapFiles = files.filter(
+              (f) =>
+                f.status === 'added' &&
+                f.filename.startsWith('core/') &&
+                f.filename.endsWith('.md') &&
+                f.filename !== 'core/README.md'
+            );
+
+            if (newCapFiles.length === 0) {
+              core.info('No new files added under core/; nothing to do.');
+              return;
+            }
+
+            // Idempotency guard: if guidance has already been posted on this PR,
+            // do nothing. This avoids duplicate comments and re-lock errors when
+            // the workflow fires again (e.g. on reopened), and avoids re-locking
+            // a PR that a maintainer has deliberately unlocked. Only markers
+            // authored by the workflow itself count, so a PR participant cannot
+            // suppress the guidance by posting the marker.
+            const marker = '<!-- new-cap-proposal-guidance -->';
+            const existingComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: pull_number, per_page: 100 }
+            );
+            if (
+              existingComments.some(
+                (c) =>
+                  c.user?.login === 'github-actions[bot]' &&
+                  c.body &&
+                  c.body.includes(marker)
+              )
+            ) {
+              core.info('CAP proposal guidance already posted; nothing to do.');
+              return;
+            }
+
+            // Link to the CAP process docs in core/README.md, anchored to the
+            // specific sections that explain the flow and statuses.
+            const defaultBranch = context.payload.repository.default_branch;
+            const readmeUrl = `https://github.com/${owner}/${repo}/blob/${defaultBranch}/core/README.md`;
+            const discussionsUrl =
+              'https://github.com/stellar/stellar-protocol/discussions';
+            const mailingListUrl =
+              'https://groups.google.com/forum/#!forum/stellar-dev';
+
+            const body = [
+              marker,
+              '👋 Thanks for your contribution!',
+              '',
+              'It looks like this PR is proposing a **new CAP** — it adds the following new file(s) to the `core/` directory:',
+              '',
+              ...newCapFiles.map((f) => `- \`${f.filename}\``),
+              '',
+              `New CAP ideas start as a **discussion**, not a pull request, so I have **locked this PR and marked it as a draft** for now. The full process, including how CAP statuses work, is documented in the [CAP Contribution Process](${readmeUrl}#contribution-process).`,
+              '',
+              '### How the CAP process works',
+              '',
+              `1. 💬 **Start a discussion.** Per [Pre-CAP (Initial Discussion)](${readmeUrl}#pre-cap-initial-discussion), discussion for new ideas happens on the [stellar-dev mailing list](${mailingListUrl}) or [GitHub Discussions](${discussionsUrl}). Please introduce your idea there so people in the Stellar ecosystem can collaborate on it.`,
+              '2. 🤝 **Collaborate.** Iterate on the proposal with the community in that discussion until it is ready to become a draft. See [Creating a CAP Draft](' + readmeUrl + '#creating-a-cap-draft).',
+              '3. ✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, mark this PR ready for review and then post in your discussion asking for it to be merged. A maintainer will then unlock this PR, review it for formatting, **assign a CAP number**, and merge it.',
+              '',
+              `> ⚠️ **Never pre-allocate a CAP number in your PR.** Name your file \`cap-TBD.md\` and use \`TBD\` for the protocol version — a maintainer will assign the number on merge, as described in [Creating a CAP Draft](${readmeUrl}#creating-a-cap-draft).`,
+              '',
+              `For details on what each CAP status (Draft, FCP, Accepted, Final, …) means, see [CAP Status Terms](${readmeUrl}#cap-status-terms).`,
+              '',
+              'Thanks for helping improve the Stellar protocol! 🚀',
+            ].join('\n');
+
+            // Perform the side effects (lock, convert to draft) BEFORE posting the
+            // guidance comment. The comment carries the idempotency marker that the
+            // guard above checks, so it must be the last step: if locking or the
+            // draft conversion fails, no marker is left behind and a rerun or
+            // reopened event will retry the whole sequence instead of short-circuiting
+            // on the marker with the PR left unlocked or not a draft.
+            await github.rest.issues.lock({
+              owner,
+              repo,
+              issue_number: pull_number,
+              lock_reason: 'resolved',
+            });
+
+            // Convert the PR to a draft so it is clearly not ready to merge while
+            // the idea is discussed. There is no REST endpoint for this, so use the
+            // GraphQL convertPullRequestToDraft mutation. Already-draft PRs are left
+            // as-is. node_id is the PR's GraphQL global ID from the event payload.
+            if (context.payload.pull_request.draft) {
+              core.info('PR is already a draft; skipping draft conversion.');
+            } else {
+              await github.graphql(
+                `mutation($pullRequestId: ID!) {
+                  convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+                    pullRequest { isDraft }
+                  }
+                }`,
+                { pullRequestId: context.payload.pull_request.node_id }
+              );
+              core.info(`Converted PR #${pull_number} to a draft.`);
+            }
+
+            // Post the guidance comment last; its marker records that the sequence
+            // completed so the guard above can skip subsequent runs.
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body,
+            });
+
+            core.info(`Locked PR #${pull_number} and posted the CAP proposal guidance.`);
