@@ -231,7 +231,7 @@ repository. You should make sure to adhere to the following:
 - Make sure to place the draft in the `core/` folder.
 - Your CAP should be named `cap-TBD.md`
 - Do not self-assign, reference, or request a CAP number. Leave the CAP number in the preamble as
-  `TBD`. A CAP number will be assigned by a maintainer.
+  `TBD`. A CAP number will be assigned by a maintainer just before merge.
 - Do not add the proposal to the `core/README.md` as it increases the chance of conflicts at merge
   time. The proposal will be added to the readme by a maintainer.
 - If your CAP requires images or other supporting files, they should be included in a sub-directory
