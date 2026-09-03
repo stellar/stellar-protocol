@@ -218,8 +218,7 @@ Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/
 
 [GitHub Discussions]: https://github.com/stellar/stellar-protocol/discussions
 
-- New ideas start as a discussion, not a pull request. A PR that adds a new CAP before the idea has
-  been discussed will be locked and marked as a draft, with a pointer back to this process.
+- New ideas start as a discussion, not a pull request.
 - Make sure to gather feedback and alternative ideas — it's useful before putting together a
   formal draft!
 - Consider contacting experts in a particular area for feedback while you're hashing out the
