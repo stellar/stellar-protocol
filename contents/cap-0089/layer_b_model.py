@@ -145,14 +145,16 @@ def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
 
     Wire shape (documented in B1, matches Core XDR widths EXACTLY): literal
     contract tag `"RandomnessCloseInputV1"` + a `uint32` arm version (currently
-    `1`), then the four fixed-width hashes `epoch_hash`, `network_id`,
-    `previous_ledger_hash`, `value_hash` each as a Core `opaque Hash[32]`
-    (a FIXED 32 bytes, NO length prefix -- the `lp()` length prefix is a
-    variable-length string encoding and is NOT the XDR encoding for a fixed
-    Hash[32]; using it here would make a native implementation derive a
-    different C_s), and a `uint32` `ledgerSeq` (Core's `LedgerSeq` XDR type).
-    A native implementation following the declared XDR widths therefore derives
-    the SAME C_s. Binds network, epoch, the REAL ledgerSeq, the predecessor
+    `1`), then `network_id`, `epoch_hash`, `previous_ledger_hash`, `value_hash`
+    as Core `opaque Hash[32]` values (a FIXED 32 bytes each, NO length prefix --
+    the `lp()` length prefix is a variable-length string encoding and is NOT the
+    XDR encoding for a fixed Hash[32]; using it here would make a native
+    implementation derive a different C_s), with the `uint32` `ledgerSeq` placed
+    between `epoch_hash` and `previous_ledger_hash` in the EXACT byte order the
+    code below emits: `network_id, epoch_hash, ledgerSeq, previousLedgerHash,
+    V_s` (Copilot this review, thread evw-VZM / evwVZM, High). A native
+    implementation following the declared XDR widths therefore derives the SAME
+    C_s as the model. Binds network, epoch, the REAL ledgerSeq, the predecessor
     ledger (state-transition semantics) and the exact externalized value bytes.
     Provenance (signatures, proposer, envelopes, transport) is deliberately
     absent. (The epoch's separate `format_version` canonical identity byte is
@@ -162,32 +164,54 @@ def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
             + u32(ledger_seq) + hash32(previous_ledger_hash) + hash32(value_hash))
 
 
-def canonical_value_hash(value_bytes: bytes) -> bytes:
-    """`H(provenance_excluded(value))` -- the CANONICAL hash of a committed
-    externalized value for the close-lock, excluding the signer provenance
-    (Copilot this review, thread evw_K). A serialized Core `StellarValue` ends
-    with its signed extension (`StellarValueExtV0.lcValueSignature`) carrying
-    the SIGNER NodeID -- pure provenance, not an event semantic. Hashing the
-    full serialization would make byte-identical-value-but-differently-SIGNED
-    closes hash differently, contradicting the one-use/one-event `C_s` contract.
+def provenance_free_value(value_bytes: bytes) -> bytes:
+    """The canonical PROVENANCE-FREE value payload (Copilot this review, threads
+    evw_K / evw-VY7 / evw-VZa, High+Medium).
 
-    Contract: `value_bytes` is one of
-      * a 32-byte bare payload hash (a close supplied directly as a payload
-        hash, e.g. `sha256(payload)` -- no signer -- used throughout this
-        harness), which is hashed as-is; or
-      * a serialized value `payload || signer`, where the trailing 32-byte
-        `signer` is the value-signature NodeID/provenance to be EXCLUDED.
-    In the serialized case only the proven payload is hashed, so every close
-    with the SAME value payload and close semantics binds to the SAME `C_s`
-    regardless of WHO signed or the envelope/transport path (which never enters
-    the lock)."""
+    For a real serialized Core `StellarValue`, provenance is NOT a cleanly
+    strippable trailing 32 bytes -- the signed `ext` V0 arm ends with a
+    `LedgerCloseValueSignature { NodeID nodeID; Signature signature; }` member,
+    and a BASIC arm has none -- so byte-truncation would retain most provenance
+    for signed values and chop semantic bytes from unsigned ones. Core therefore
+    PARSES the emitted value's `ext` arm and RE-ENCODES a precisely defined
+    provenance-free value: the value with the `lcValueSignature` member dropped
+    (present only in the signed V0 arm) before re-serialization. This harness
+    models that canonical re-encode as `payload || signer` where the trailing
+    `signer` is a FIXED trailing 32-byte field that is dropped; the payload that
+    remains is the canonical provenance-free encoding. (NodeIDs are 32 bytes in
+    the model's XDR widths; real `NodeID` is a 32-byte PublicKey and the re-encode
+    carries it inside the dropped member, so no provenance survives either way.)
+    Model closes supplied already as a 32-byte payload hash are simply that hash.
+
+    `value_bytes` is therefore one of:
+      * a 32-byte bare payload hash (the harness norm, e.g. `sha256(payload)`),
+        which is the canonical provenance-free digest already; or
+      * the harness's canonical serialized form `payload || signer` where the
+        fixed trailing 32-byte `signer` is the provenance to EXCLUDE."""
     if len(value_bytes) == 32:
-        payload = value_bytes
-    elif len(value_bytes) > 32:
-        payload = value_bytes[:-32]      # drop trailing lcValueSignature NodeID
-    else:
-        payload = value_bytes            # degenerate/short: hash as-is (defensive)
-    return sha256(b"ProvenanceExcludedValue/v1" + payload)
+        return value_bytes                     # already the canonical digest
+    if len(value_bytes) > 32:
+        return value_bytes[:-32]               # drop the fixed 32-byte signer
+    return value_bytes                         # degenerate/short (defensive)
+
+
+def canonical_value_hash(value_bytes: bytes) -> bytes:
+    """The CANONICAL close-lock value commitment V_s (Copilot this review,
+    threads evw_K / evw-VY7 / evw-VZa).
+
+    ONE XDR-aware rule, identical in the CAP and here: if `value_bytes` is
+    already a 32-byte canonical payload hash it is hashed AS-IS (bare SHA-256);
+    otherwise the canonical PROVENANCE-FREE value (`provenance_free_value`, an
+    explicit XDR re-encode that drops the `lcValueSignature` signer member --
+    NOT a naive slice) is hashed with the domain-separation prefix. This keeps a
+    byte-identical-value-but-differently-SIGNED close mapping to the SAME V_s and
+    the SAME `C_s` (one-use/one-event), while a GENUINELY different payload
+    yields a different V_s. The 32-byte branch contributes no prefix so the
+    harness's close-lock bytes match the normative formula exactly."""
+    if len(value_bytes) == 32:
+        return sha256(value_bytes)                       # H(v), no prefix
+    return sha256(b"ProvenanceExcludedValue/v1"
+                  + provenance_free_value(value_bytes))
 
 
 # --- Verifiable stand-in bound to the epoch public key (Copilot 3917696376 /
@@ -639,8 +663,19 @@ class EpochDescriptor:
             b"Epoch"
             + struct.pack(">B", format_version) + lp(scheme)
             + hash32(authority_key) + hash32(self.membership_commitment)
-            + hash32(sha256(roster_bytes(self.confirm_pub)))  # committed CONFIRM pubkeys
-            + hash32(sha256(roster_bytes(self.feldman_pub)))  # committed Feldman C_i
+            # Commit the per-member verification-key vectors IN ROSTER INDEX
+            # ORDER (Copilot this review, thread evw-VYA / evwVYA, High):
+            # encoding them as SORTED sets would discard the positional mapping
+            # from roster index to confirm_pub / feldman_pub, so two permuted
+            # key vectors would hash identically even though verification for
+            # each member_index differs -- letting the same epoch identity mean
+            # different things on different nodes. Here each vector is committed
+            # as `u32(n) || concat(Hash[32])` in EXACT member order (index-1),
+            # so a permutation of the key vector is a DIFFERENT epoch hash.
+            + hash32(sha256(u32(len(self.confirm_pub))
+                            + b"".join(hash32(k) for k in self.confirm_pub)))
+            + hash32(sha256(u32(len(self.feldman_pub))
+                            + b"".join(hash32(k) for k in self.feldman_pub)))
             + struct.pack(">QQ", activation, retirement)
             + struct.pack(">I", threshold)
             + struct.pack(">I", self.byzantine_bound)
@@ -817,14 +852,21 @@ class ThresholdAuthority:
         # refuses every `_authorize_release` call, so an unpaired (attacker-held)
         # authority can authorize nothing.
         self._cap_check = None
-        # PUBLISHED per-member per-close NONCE commitments N_i = G^{n_i}, maps
-        # cl_hash -> {member_index: N_i_bytes}. These are PUBLIC (transported in
-        # every share carrier) and are the ONLY nonce material `verify_share` /
-        # `recover_proof` ever read: a peer-verifier needs NO master secret and
-        # NO member nonce n_i, exactly as a distributed FROST protocol requires
-        # (Copilot this review, High). The nonce SECRETS n_i live only in the
-        # issuance path (`_share_for`); they are never stored here.
-        self._published_nonces = {}
+        # AUTHENTICATED per-close ROUND-1 nonce-commitment registry: maps
+        # cl_hash -> {member_index: N_i_bytes}, N_i = G^{n_i}. This is the FROST
+        # round-1 transcript -- every CONTRIBUTOR's public nonce commitment is
+        # broadcast (via `publish_nonce`) BEFORE any round-2 partial is produced,
+        # so the close's aggregate nonce commitment R and challenge c are fixed
+        # once the commitments are public. `verify_share` / `recover_proof` read
+        # ONLY this committed set (or an explicitly-passed identical one) to build
+        # R and c -- a peer-verifier needs NO master secret and NO member nonce
+        # n_i, and it does NOT need any private live state that a fresh process
+        # never ran (Copilot this review, thread evw_VYO / evw-VYO, High). The
+        # nonce SECRETS n_i live only in the issuance path (`_share_for`) and are
+        # never stored here. The registry is authoritative and keyed by canonical
+        # roster index, so permuting the roster cannot silently change which N_i
+        # binds to which member.
+        self._r1 = {}
 
     @classmethod
     def from_epoch(cls, epoch: EpochDescriptor, seed: bytes,
@@ -897,6 +939,37 @@ class ThresholdAuthority:
         c = int.from_bytes(sha256(b"SpfChal" + self.epoch.hash + cl_hash
                                   + R + Y_bytes + b"cap-0089-v1"), "big")
         return c % _GRP_Q
+
+    def publish_nonce(self, member_index: int, cl: LockedClose) -> bytes:
+        """FROST ROUND-1: broadcast this member's public nonce commitment
+        `N_i = G^{n_i}` for `cl`, recorded in the authenticated per-close
+        registry `_r1[cl.hash][member_index]` and returned so any peer can
+        collect the round-1 transcript directly through the API (Copilot this
+        review, thread evw_VYO / evw-VYO, High). In a real two-round FROST every
+        contributor publishes round-1 commitments BEFORE any round-2 partial, so
+        the close's aggregate R and challenge c are fixed once the commitments
+        are public, and a peer verifying a partial never has to guess R from a
+        single carrier or an empty private state. The member's nonce SECRET n_i
+        never leaves `_share_for`; only the public `N_i = G^{n_i}` is committed
+        here."""
+        if not (1 <= member_index <= self.epoch.n):
+            raise ValueError("member index out of canonical roster")
+        if cl.epoch_hash != self.epoch.hash:
+            return None
+        coeffs, _R = self._nonce_material(cl.hash)
+        n_i = _frost_share(coeffs, member_index) % _GRP_Q
+        N_i = pow(_GRP_G, n_i, _GRP_P).to_bytes(32, "big")
+        self._r1.setdefault(cl.hash, {})[member_index] = N_i
+        return N_i
+
+    def round1_nonces(self, cl: LockedClose) -> dict:
+        """The AUTHENTICATED round-1 nonce-commitment set for `cl` (the FROST
+        round-1 transcript). A peer that has participated in (or observed) the
+        broadcast reconstructs this from the public `N_i` values it received for
+        that close; it is the input that fixes R and c for verification. This is
+        the ONLY nonce material verification reads -- never private authority
+        state (Copilot this review, thread evw-VYO, High)."""
+        return dict(self._r1.get(cl.hash, {}))
 
     def _share_for(self, member_index: int, cl_hash: bytes):
         # The member's MESSAGE-DEPENDENT threshold partial signature
@@ -981,14 +1054,20 @@ class ThresholdAuthority:
         else:
             self._signed[key] = cl.hash
         carrier = self._share_for(member_index, cl.hash)
-        # Publish the member's public nonce commitment N_i = G^{n_i} for this
-        # close. Peers (and `verify_share`/`recover_proof`) read ONLY this public
-        # commitment set to build R and c -- never the master seed.
-        self._published_nonces.setdefault(cl.hash, {})[member_index] = carrier[1]
+        # FROST ROUND-1 publication, folded in for convenience: ensure this
+        # member's public nonce commitment N_i = G^{n_i} is in the AUTHENTICATED
+        # round-1 registry for this close BEFORE the round-2 partial is handed
+        # out, so a peer verifying the partial has the fixed aggregate R/c basis.
+        # The carrier's N_i MUST equal the committed round-1 value -- a
+        # contributor cannot return one N_i in round 1 and a different one in the
+        # partial (that would let it grind c per challenge).
+        self.publish_nonce(member_index, cl)
+        if self._r1[cl.hash].get(member_index) != carrier[1]:
+            return None                 # round-1/round-2 N_i mismatch: fail peer-bound
         return carrier
 
     def verify_share(self, member_index: int, cl: LockedClose,
-                     share_carrier) -> bool:
+                     share_carrier, round1: dict = None) -> bool:
         """Verify a member's MESSAGE-DEPENDENT partial without revealing f(i)
         and WITHOUT the master seed (Copilot this review, High):
         check `G^{s_i} == N_i * C_i^c (mod p)` using ONLY publicly transported
@@ -996,10 +1075,17 @@ class ThresholdAuthority:
           * the member's public nonce commitment N_i = G^{n_i} (carrier[1]), and
           * the member's public Feldman commitment C_i = G^{f(i)} (carrier[2]),
         with the aggregate nonce commitment R and challenge c PUBLICLY derived
-        from those commitments (`_public_aggregate`/`_public_challenge`). An
-        ordinary peer who has NEVER seen the master secret can run this exactly;
-        no secret, share, or nonce participates. `share_carrier` is a
-        `(s_i, N_i, C_i)` triple, NOT a reusable long-lived Shamir share."""
+        from the close's AUTHENTICATED ROUND-1 nonce-commitment set
+        (`_public_aggregate`/`_public_challenge`), which `round1` provides (or
+        `self.round1_nonces(cl)` supplies when not explicitly passed). An
+        ordinary peer whose live process has NEVER seen the master secret -- and
+        has NEVER run the rounds that produced the shares -- verifies exactly
+        this, using only the round-1 transcript + the carriers; no secret, share,
+        or nonce participates, and no private injected state is needed (Copilot
+        this review, thread evw-VYO, High). `share_carrier` is a
+        `(s_i, N_i, C_i)` triple, NOT a reusable long-lived Shamir share.
+        `round1` is the authenticated nonce-commitment set for `cl` ({index:
+        N_i}); the carrier's N_i must match `round1[member_index]`."""
         if not (1 <= member_index <= self.epoch.n):
             return False
         if cl.epoch_hash != self.epoch.hash:
@@ -1030,12 +1116,21 @@ class ThresholdAuthority:
             return False                    # C_i not the epoch-committed one
         if not (1 <= s_i < _GRP_Q):
             return False
-        # Public aggregate R from the published nonce commitments for this close
-        # (fall back to this member's own commitment when none are published yet,
-        # so a single-carrier smoke check still has a deterministic reference).
-        comms = dict(self._published_nonces.get(cl.hash, {}))
-        if member_index not in comms:
-            comms[member_index] = N_i_b
+        # PUBLIC AGGREGATE R from the close's AUTHENTICATED ROUND-1 nonce-
+        # commitment set -- NOT transient per-call state. `round1` (the supplied
+        # transcript) is authoritative when given; otherwise fall back to this
+        # authority's own committed round-1 registry. A verifier that computes R
+        # from a single carrier's N_i would get the WRONG aggregate; here we
+        # require at least `t` committed nonce commitments so the Lagrange
+        # interpolation recovers the true R = G^{g(0)} (Copilot this review,
+        # thread evw-VYO, High). The carrier's N_i is also bound to the committed
+        # round-1 value, so a contributor cannot swap nonces to grind c.
+        comms = dict(round1) if round1 is not None \
+            else self.round1_nonces(cl)
+        if comms.get(member_index) != N_i_b:
+            return False                     # N_i not the committed round-1 one
+        if len(comms) < self.epoch.threshold:
+            return False                     # not enough committed nonces yet
         R_b = self._public_aggregate(cl.hash, comms)
         if R_b is None:
             return False
@@ -1043,7 +1138,7 @@ class ThresholdAuthority:
         # G^{s_i} == N_i * C_i^c (mod p)
         return pow(_GRP_G, s_i, _GRP_P) == (N_i * pow(C_i, c, _GRP_P)) % _GRP_P
 
-    def recover_proof(self, subset, cl: LockedClose):
+    def recover_proof(self, subset, cl: LockedClose, round1: dict = None):
         """subset: iterable of (member_index, share_carrier). Returns the
         canonical P_s iff >= t VALID, distinct, in-roster message-dependent
         partials for THIS exact close are present; invalid/duplicate/out-of-
@@ -1056,26 +1151,32 @@ class ThresholdAuthority:
         over GF(q) -- `s = sum_i L_i(0)*s_i = r + c*d` -- WITHOUT ever recovering
         the long-lived group secret `d`, any member share `f(i)`, ANY nonce
         secret `n(i)`, or the master seed. The aggregate nonce commitment R and
-        challenge c are derived PUBLICLY from the transported N_i commitments
-        (`_public_aggregate`/`_public_challenge`), so an ordinary peer holding no
-        secret reproduces the byte-identical P_s from any >= t valid partials.
-        The partials are bound to cl_hash, so t partials collected from one close
-        are REUSELESS for any other close and cannot be used to sign a pre-lock
-        commitment. The final proof is `(R || s)` (64 bytes), byte-identical for
-        every >= t subset (R = G^{g(0)} is invariant under the subset choice)."""
+        challenge c are derived PUBLICLY from the close's AUTHENTICATED ROUND-1
+        nonce-commitment set (`round1`, or `self.round1_nonces(cl)` when not
+        explicit; `_public_aggregate`/`_public_challenge`), so an ordinary peer
+        holding no secret -- and no private injected round-1 state -- reproduces
+        the byte-identical P_s from any >= t valid partials (Copilot this review,
+        thread evw-VYO, High). The partials are bound to cl_hash, so t partials
+        collected from one close are REUSELESS for any other close and cannot be
+        used to sign a pre-lock commitment. The final proof is `(R || s)` (64
+        bytes), byte-identical for every >= t subset (R = G^{g(0)} is invariant
+        under the subset choice)."""
         if cl.epoch_hash != self.epoch.hash:
             return None
         t = self.epoch.threshold
         n = self.epoch.n
+        comms = dict(round1) if round1 is not None else self.round1_nonces(cl)
         valid = {}
         for (member_index, carrier) in subset:
             if (1 <= member_index <= n and member_index not in valid
-                    and self.verify_share(member_index, cl, carrier)):
+                    and self.verify_share(member_index, cl, carrier, round1=comms)):
                 valid[member_index] = carrier
         if len(valid) < t:
             return None                             # below t: no proof, stall
-        # PUBLIC aggregate R from the accepted carriers' nonce commitments.
-        comms = {i: carrier[1] for (i, carrier) in valid.items()}
+        # PUBLIC aggregate R from the close's AUTHENTICATED ROUND-1 nonce set
+        # (`comms`, already derived above) -- the SAME basis the challenge c was
+        # fixed against -- so the proof's R matches the aggregate every verifier
+        # derives from the committed transcript, not a subset-dependent value.
         R_b = self._public_aggregate(cl.hash, comms)
         if R_b is None:
             return None
@@ -1760,6 +1861,34 @@ def main():
           and not auth.verify_share(1, cl_a, rogue_share)
           and auth.recover_proof([(1, rogue_share)], cl_a) is None)
 
+    # ---------- R2b / thread evw-VYA: index-order key-vector commitment -------
+    # The epoch commits confirm_pub / feldman_pub in ROSTER INDEX ORDER, so a
+    # PERMUTATION of either vector must change epoch.hash (the positional mapping
+    # from member_index to verification key is part of the identity). Build an
+    # otherwise-identical epoch with members 1 and 2 of each committed vector
+    # swapped and assert its hash differs AND that the permuted reordering does
+    # not bind the same member to a different key.
+    perm_confirm = list(epoch.confirm_pub)
+    perm_confirm[0], perm_confirm[1] = perm_confirm[1], perm_confirm[0]
+    perm_feldman = list(epoch.feldman_pub)
+    perm_feldman[0], perm_feldman[1] = perm_feldman[1], perm_feldman[0]
+    permuted_epoch = EpochDescriptor(
+        format_version=1, authority_key=vkey, roster=epoch.roster,
+        activation=epoch.activation, retirement=epoch.retirement,
+        threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
+        scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        confirm_pub=tuple(perm_confirm), feldman_pub=tuple(perm_feldman))
+    check("R2b / thread evw-VYA (High): the epoch commits confirm_pub and "
+          "feldman_pub in ROSTER INDEX ORDER (not sorted), so permuting either "
+          "key vector yields a DIFFERENT epoch hash -- same roster, same members, "
+          "different positional binding -- and a verifier can no longer hold one "
+          "epoch identity with incompatible per-index meanings across nodes",
+          permuted_epoch.hash != epoch.hash
+          and permuted_epoch.membership_commitment == epoch.membership_commitment
+          and permuted_epoch.confirm_pub[0] == epoch.confirm_pub[1]
+          and permuted_epoch.feldman_pub[0] == epoch.feldman_pub[1])
+
     # ---------- R3 / Noot #5: predecessor-state epoch selection --------------
     wrong_prev = sha256(u32(slot - 1) + b"an-alien-predecessor")
     cl_wrong_prev = LockedClose(epoch, slot, wrong_prev,
@@ -1904,26 +2033,47 @@ def main():
           auth.recover_proof([(i, auth.share(i, cl_b)) for i in range(1, t + 1)],
                              cl_a) is None)
     # ======== Distributed FROST: verify/recover run WITHOUT the master secret
-    # (Copilot this review, High - evMSO). A verifier-only authority constructed
-    # from the SAME epoch but a SHAM seed (it holds NO group secret, NO share,
-    # NO nonce) must verify honest carriers and reconstruct the byte-identical
-    # canonical proof purely from the PUBLICLY broadcast nonce-commitment set
-    # {i -> N_i} and the N_i / C_i carried in each share -- contacting none of
-    # `self.seed`, `f(i)`, or `n(i)`. In a real distributed FROST the nonce
-    # commitments are broadcast up front, so the verifier legitimately holds
-    # that public set.
+    # (Copilot this review, High - evMSO / evw-VYO). A verifier-only authority
+    # constructed from the SAME epoch but a SHAM seed (it holds NO group secret,
+    # NO share, NO nonce) must verify honest carriers and reconstruct the
+    # byte-identical canonical proof purely from the AUTHENTICATED ROUND-1 nonce-
+    # commitment set {i -> N_i} and the N_i / C_i carried in each share --
+    # contacting none of `self.seed`, `f(i)`, or `n(i)`. In a real two-round FROST
+    # every contributor broadcasts its round-1 `N_i` BEFORE any round-2 partial,
+    # so the verifier receives that transcript through the normal API
+    # (`publish_nonce`) and passes it as `round1` -- it does NOT inject private
+    # per-process state (the prior test literally wrote into `_published_nonces`,
+    # which a fresh peer would never have; thread evw-VYO flags this). The
+    # SHAM-seed peer therefore has a genuinely empty private registry and only
+    # the public round-1 transcript, exactly like a fresh catchup/other-node.
     verifier_only = ThresholdAuthority.from_epoch(epoch, sha256(b"peer-verifier-only"))
-    public_nonces = {i: c[1] for (i, c) in full_shares}   # public broadcast set
-    verifier_only._published_nonces[cl_a.hash] = dict(public_nonces)
-    peer_accepted = all(verifier_only.verify_share(i, cl_a, carrier)
+    r1 = {}
+    for i in range(1, N_MEMBERS + 1):
+        r1[i] = auth.publish_nonce(i, cl_a)      # honest round-1 broadcast (public API)
+    # Each carrier's N_i MUST match the committed round-1 value, and the peer
+    # verifies with the committed transcript.
+    peer_accepted = all(verifier_only.verify_share(i, cl_a, carrier, round1=r1)
                         for (i, carrier) in full_shares)
-    peer_proof = verifier_only.recover_proof(full_shares, cl_a)
+    peer_proof = verifier_only.recover_proof(full_shares, cl_a, round1=r1)
     check("N3/threshold distributed-FROST peer verifiability (Copilot this "
           "review, High): an authority holding NO master seed -- the same epoch, "
-          "a SHAM seed -- verifies every honest public N_i/C_i carrier and "
-          "reconstructs the byte-identical canonical P_s, so verification is "
-          "authentically distributed (public commitments only, no secret)",
+          "a SHAM seed, and NO injected private nonce state, only the public "
+          "round-1 transcript -- verifies every honest public N_i/C_i carrier "
+          "and reconstructs the byte-identical canonical P_s, so verification is "
+          "authentically distributed (committed public commitments only, no "
+          "secret, no per-process hack)",
           peer_accepted and peer_proof == proof_a)
+    check("N3/threshold two-round round-1 binding (thread evw-VYO, High): a "
+          "peer that NEVER gathered the round-1 transcript cannot verify (the "
+          "close's aggregate R/c is not guessable from a lone carrier), and a "
+          "carrier whose N_i differs from the committed round-1 value is REJECTED "
+          "-- a contributor cannot swap its nonce between rounds to grind the "
+          "challenge",
+          (not ThresholdAuthority.from_epoch(epoch, sha256(b"no-r1-peer")).verify_share(
+               1, cl_a, full_shares[0][1], round1={1: full_shares[0][1][1]})
+           and not verifier_only.verify_share(1, cl_a,
+                (full_shares[0][1][0], sha256(b"wrong-r1-nonce"), full_shares[0][1][2]),
+                round1=r1)))
     check("N3/threshold distributed-FROST forged carriers (Copilot this review, "
           "High): a replayed/wrong-owner carrier is REJECTED by the secret-free "
           "verifier -- including the identity-Feldman attack `C_i = 1` (which "
@@ -1936,13 +2086,15 @@ def main():
                                                      (1).to_bytes(32, "big")))
           and not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
                                                        full_shares[0][1][1],
-                                                       sha256(b"wrong-feldman")))
+                                                       sha256(b"wrong-feldman")),
+                                             round1=r1)
           and not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
                                                        sha256(b"wrong-nonce"),
-                                                       full_shares[0][1][2]))
+                                                       full_shares[0][1][2]),
+                                             round1=r1)
           and not verifier_only.verify_share(
-              1, cl_a, (sha256(b"forged-s"), public_nonces[1],
-                        full_shares[0][1][2])))
+              1, cl_a, (sha256(b"forged-s"), r1[1],
+                        full_shares[0][1][2]), round1=r1))
     cl_foreign = LockedClose(other_win, slot, prev_hash,
                              sha256(b"externalized-value-A"))
     check("N3 mixed-epoch rejected: an authority instantiated for epoch A cannot "
@@ -2601,12 +2753,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "21426ca05e8e5d1b3685cbd3555a07d647aaf62b49cddbd4313fa82f83f251b9",
-        "96b916781f8444fee60dce11d2efb6032156ed7f6a5ffc66ecd9b752d2e28fb2",
-        "13b31a3952926dc3cdb083df8d10992935e076be80c533192d23f0825c4b8987",
-        "1a6f142fabd9080f7ab2ea625e12b4c16e9cfac083951301ce35a2facbb6f3cd",
+        "0dbc6fcbaeae2519372972ecbee4f869c8012378c63093468e0f634709274b22",
+        "34bf0c36dabe3eb6537bfbe88c09bd223531e9398ffadd47b7e06239ae37a325",
+        "143f0f27e0af24f08edccf62e56f7c500a07f6c53af39bacf857533e7a53ad25",
+        "586c1fc57865a33be7eec7924da8433af0f087a4202bb1a52e2a65094cc6473b",
     )
-    EXP_COMP = "2c2c1c51668848e6cb025e4c51e5dc0cd067a10a3ee9f556ba06f759f6dcd084"
+    EXP_COMP = "bc18abcf7ca3bd3c42a8bddcecafc2da1e623bcc68cef6f91aa14cdca6f51b93"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),
