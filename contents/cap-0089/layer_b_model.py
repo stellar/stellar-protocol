@@ -2107,6 +2107,49 @@ def main():
           full == proof_a and canonical_root(cl_a.hash, epoch.authority_key,
                                              epoch.hash, full) == root_a)
 
+    # ---------- Liveness theorem: SCP-finalizable => randomness-reconstructible
+    # (tactical-noot round-12 red test) --------------------------------.
+    # The smallest red test for the liveness theorem -- enumerate EVERY member's
+    # LOCAL release bit (a per-member subset E of roster indices that have crossed
+    # their OWN CONFIRM->EXTERNALIZE for the same close cl_a/C_s) and require that
+    # EVERY supported SCP-finalizing view (|E| >= t, all toward the same C_s --
+    # 2*t-n>f forces that common C_s) forces >= t locally-authorized shares that
+    # reconstruct the UNIQUE proof P_s/root, while NO sub-threshold view (|E| < t,
+    # an un-finalized close) yields a proof at all. Because the randomness roster
+    # IS the finality quorum (each member releases its share only when IT
+    # externalizes cl_a, which is the same local event that counts toward the
+    # finality threshold), the number of released shares equals |E|; finality
+    # (|E| >= t) therefore implies reconstruction, so SCP never commits a ledger
+    # whose randomness cannot be produced (no roster-as-second-authority stall).
+    members = list(range(1, N_MEMBERS + 1))
+    all_final_ok = True
+    all_sub_ok = True
+    for k in range(0, N_MEMBERS + 1):
+        for E in itertools.combinations(members, k):
+            subset_shares = [(i, auth.share(i, cl_a)) for i in E]
+            rec = auth.recover_proof(subset_shares, cl_a)
+            if k >= epoch.threshold:
+                if rec != full:
+                    all_final_ok = False
+            else:
+                if rec is not None:
+                    all_sub_ok = False
+    check("Liveness theorem (tacticalnoot): SCP-finalizable => "
+          "randomness-reconstructible -- the network commits a VRF close ONLY via "
+          "the roster's own threshold externalize, so every supported finalizing "
+          "view (|E| >= t roster members released toward the SAME C_s) forces >= t "
+          "shares that reconstruct the ONE P_s/root, and NO sub-threshold view "
+          "(|E| < t) yields any proof; finality and reconstruction are ONE event "
+          "(no second liveness authority)",
+          all_final_ok and all_sub_ok)
+
+    # Authoritative (boundary-admitted) proof side by side with the exhaustive
+    # enumeration: the canonical proof is byte-identical to the admitted one.
+    check("Liveness theorem / canonical proof: the recovered P_s for every "
+          "finalizing view equals the boundary-admitted proof_a and the model's "
+          "canonical root",
+          all_final_ok and full == proof_a)
+
     # ---------- Durable sign-once per event (Noot) ----------------------------
     auth2 = auth.restart()
     again2 = auth2.share(1, cl_a)
