@@ -75,7 +75,9 @@ Vectors:
       phantom is still rejected by the membership gate.
   V11 authenticated commit : each contributor's VRFCommit.sig is a REAL Ed25519
       sig over the normative domain "stellar-vrf/commit"|0x01|network_id|slot|
-      commitHash (node_id is the verification key and is NOT in the message),
+      commitHash|vrfPublicKey (node_id is the verification key and is NOT in the
+      message, while the VRF public key — a distinct point the reveal will be
+      checked against — IS bound in), 
       verified under its (node, network, slot, commitHash) scope; flipped sig,
       wrong-NodeID sig, and sigs replayed under a wrong slot/
       commitHash are rejected, and a fabricated (unauthenticated) commit cannot
@@ -116,7 +118,10 @@ DOMAIN = b"stellar-vrf"
 SUB_DOMAIN = b"stellar-vrf/sub"
 BETA_LABEL = b"stellar-vrf/beta"
 # Normative signature domain per the CAP/XDR: the Ed25519 signature is over
-# "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash (spec parity).
+# "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash | vrfPublicKey
+# (spec parity): the node's VRF public key -- the distinct point the reveal will
+# be validated against -- is bound into the commit signature so it cannot be
+# re-attributed to a different VRF key after the fact.
 COMMIT_SIG_LABEL = b"stellar-vrf/commit"
 # Normative VRF proof label per RFC 9381 (alpha_string domain separation). The
 # real ECVRF proof is deterministic in secret key + transcript, so we mirror
@@ -416,8 +421,13 @@ def run():
     commit_map = {ch.hex(): nid for nid, _, ch, _, _ in contribs}
 
     def make_verifier(network, slot_ctx, proofs, commits):
-        # commits maps nid -> (commit_hash_hex, sig, vrf_pub_hex) for that ctx.
-        context_commit_map = {nid: ch_hex for nid, (ch_hex, _, _)
+        # commits maps nid -> (commit_hash_bytes, sig_bytes, vrf_pub_bytes) for
+        # that context. Everything is compared in BYTES (commit_hash _bytes, and
+        # the reveal's own sha256(beta) _bytes) -- never a hex string -- so this
+        # accepter genuinely exercises the real cross-context rejection instead of
+        # failing any given commit (bytes-vs-hex) and passing the wrong-network /
+        # wrong-slot tests for the wrong reason (Copilot this review, Medium).
+        context_commit_map = {nid: chb for nid, (chb, _, _)
                               in commits.items()}
         vrf_map = {nid: vp for nid, (_, _, vp) in commits.items()}
         def verify_commit(nid, commit_hash, sig):
@@ -431,12 +441,12 @@ def run():
             nid, beta, th, proof = row
             if th != transcript_hash_val:
                 return False
-            c_v = sha256(beta).hex()
+            c_v = sha256(beta)                       # BYTES, not .hex()
             if nid not in context_commit_map:
                 return False
             if context_commit_map[nid] != c_v:
                 return False
-            ch, sg = commits[nid]
+            ch, sg, _vp = commits[nid]               # full 3-tuple unpack
             if not verify_commit(nid, ch, sg):
                 return False  # unauthenticated / scoped-mismatched commit
             if proof != proofs[nid]:

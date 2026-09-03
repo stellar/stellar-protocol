@@ -406,10 +406,14 @@ def _confirm_vote_verify(K_i_pub: bytes, epoch_hash: bytes, C_s: bytes,
 def _spf_sign(d: int, epoch_hash: bytes, C_s: bytes) -> bytes:
     # Deterministic, secret-nonce Schnorr signature (the model's CANONICAL
     # signature; RFC-6979-style). The model's own producer emits exactly one
-    # byte-string per (d, epoch, C_s). NOTE: the accepted ROOT does not depend
-    # on these signature bytes (see UniqueThresholdProof.verify) -- a second
-    # mathematically-valid signature under the same Y/yields the identical root,
-    # which is the one-future bound (Copilot this review).
+    # byte-string per (d, epoch, C_s). NOTE: the accepted ROOT DOES depend on
+    # these canonical proof bytes -- `R_s = H("Root", Y, epoch, C_s, P_s)` (see
+    # `canonical_root` / UniqueThresholdProof.verify) -- and because the nonce is
+    # deterministic and `d` is denied to every actor, only this ONE byte-identical
+    # `P_s` can exist per close (N3/I3): alternate ENCODINGS canonicalize to the
+    # same bytes, and a deviant `P_s` (which requires holding `d`) is never the
+    # source's genuine proof, so no second root for the same close is reachable
+    # (the one-future bound, Copilot this review).
     d_bytes = d.to_bytes(32, "big")
     r = _spf_scalar(sha256(b"SpfNonce" + d_bytes + epoch_hash + C_s))
     R = pow(_GRP_G, r, _GRP_P)
@@ -498,6 +502,22 @@ class EpochDescriptor:
                        for i in range(1, len(self.roster) + 1)))
         if len(self.confirm_pub) != len(self.roster):
             raise ValueError("confirm_pub must have one key per roster member")
+        # Validate every committed CONFIRM verification key K_i as a NON-IDENTITY
+        # element of the order-q subgroup (Copilot this review, High). If a K_i
+        # were out-of-group or the identity (e.g. K_i = 1), an observer could
+        # choose any valid s and set R = G^s so that K_i^c = 1 and the member's
+        # CONFIRM vote verifies without that member ever signing -- minting votes
+        # for keys the member never committed to. We reject at construction,
+        # exactly as for `authority_key`.
+        for _ki in self.confirm_pub:
+            if len(_ki) != 32:
+                raise ValueError("confirm_pub element must be 32 bytes")
+            _k_int = int.from_bytes(_ki, "big")
+            if not (1 < _k_int < _GRP_P
+                    and pow(_k_int, _GRP_Q, _GRP_P) == 1):
+                raise ValueError(
+                    "confirmed CONFIRM key K_i must be a non-identity order-q "
+                    "group element (1 < K_i < p and K_i^q == 1 mod p)")
         self.activation = activation
         self.retirement = retirement
         if not (1 <= threshold <= len(self.roster)):
@@ -640,9 +660,12 @@ def canonical_proof(proof: bytes):
     NOTE: shape-canonicalization is NOT verification. `verify()` additionally
     checks the public-key Schnorr equation, so an arbitrary 64-byte value that
     merely has the right length is REJECTED (Copilot line-519). The canonical
-    shape feeds authentication only; the ROOT is the proof-independent unique
-    function of the committed authority key + the close (see `canonical_root`),
-    so malleability of a valid signature cannot split the root."""
+    shape feeds authentication only; the ROOT is the proof-DEPENDENT unique
+    function `R_s = H("Root", authority_key, epoch_hash, C_s, P_s)` of the
+    committed authority key + the close + the canonical threshold proof (see
+    `canonical_root`), so malleability of a valid signature's ENCODING cannot
+    split the root: the byte-identical canonical P_s (N3/I3) gives the single,
+    predictable root."""
     if proof is None or len(proof) != 64:
         return None
     return proof
@@ -726,6 +749,14 @@ class ThresholdAuthority:
         # refuses every `_authorize_release` call, so an unpaired (attacker-held)
         # authority can authorize nothing.
         self._cap_check = None
+        # PUBLISHED per-member per-close NONCE commitments N_i = G^{n_i}, maps
+        # cl_hash -> {member_index: N_i_bytes}. These are PUBLIC (transported in
+        # every share carrier) and are the ONLY nonce material `verify_share` /
+        # `recover_proof` ever read: a peer-verifier needs NO master secret and
+        # NO member nonce n_i, exactly as a distributed FROST protocol requires
+        # (Copilot this review, High). The nonce SECRETS n_i live only in the
+        # issuance path (`_share_for`); they are never stored here.
+        self._published_nonces = {}
 
     @classmethod
     def from_epoch(cls, epoch: EpochDescriptor, seed: bytes,
@@ -747,18 +778,59 @@ class ThresholdAuthority:
         # secret NONCE share. Derived deterministically from the authority seed +
         # epoch_hash + C_s so restart / durable sign-once re-derives the
         # identical R without process memory (Copilot this review #3, High).
+        #
+        # THIS is the SECRET-ISSUANCE path: it is the ONLY place the master seed
+        # participates. The aggregate `R` and challenge `c` it yields are exactly
+        # the values a public verifier re-derives from the transported nonce
+        # commitments (see `_public_challenge`), so the final P_s is byte-
+        # identical whether computed here or by an ordinary peer with no secret.
         nonce_seed = sha256(b"FrostNonce" + self.seed + self.epoch.hash + cl_hash)
         coeffs = _frost_nonce_poly(nonce_seed, self.epoch.threshold, self.epoch.n)
         r = coeffs[0]                       # g(0) -- aggregate secret nonce
         R = pow(_GRP_G, r, _GRP_P).to_bytes(32, "big")
-        Y = int.from_bytes(self.epoch.authority_key, "big")
+        return coeffs, R
+
+    def _public_aggregate(self, cl_hash: bytes, comms: dict) -> bytes:
+        # PUBLIC per-close aggregate nonce commitment R = G^{g(0)}: the Lagrange
+        # combination (in the EXPONENT, on the group) of any >= t transported
+        # per-member nonce commitments N_i = G^{n_i}, where n_i = g(i). Because
+        # every n_i lies on the SAME degree-(t-1) nonce polynomial g, the sum
+        # `sum_j L_j(0) * n_j = g(0)` regardless of which t-subset is used, so R
+        # (and therefore the bound P_s) is byte-identical for every subset while
+        # being computable with NO master secret -- only public N_i commitments.
+        xs = list(comms.keys())
+        if len(xs) < 1:
+            return None
+        acc = 1
+        for i in xs:
+            xi = i % _GRP_Q
+            Ni = int.from_bytes(comms[i], "big") % _GRP_P
+            num = 1
+            den = 1
+            for j in xs:
+                if j == i:
+                    continue
+                xj = j % _GRP_Q
+                num = (num * ((-xj) % _GRP_Q)) % _GRP_Q
+                den = (den * ((xi - xj) % _GRP_Q)) % _GRP_Q
+            lam = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+            # N_i^{lambda}: acc *= Ni^lam (mod p); lam may be negative -> invert.
+            if lam < 0:
+                lam += _GRP_Q
+            acc = (acc * pow(Ni, lam, _GRP_P)) % _GRP_P
+        return acc.to_bytes(32, "big")
+
+    def _public_challenge(self, cl_hash: bytes, R: bytes) -> int:
+        # Public Fiat-Shamir challenge c = H(epoch_hash, C_s, R, Y, tag) applied
+        # mod q. Uses ONLY the (publicly derived) aggregate nonce commitment R
+        # and the committed authority key Y -- never the master secret. An
+        # ordinary peer can reproduce this exact value.
         Y_bytes = self.epoch.authority_key
         c = int.from_bytes(sha256(b"SpfChal" + self.epoch.hash + cl_hash
                                   + R + Y_bytes + b"cap-0089-v1"), "big")
-        c %= _GRP_Q
-        return coeffs, R, c
+        return c % _GRP_Q
 
-    def _share_for(self, member_index: int, cl_hash: bytes) -> bytes:
+    def _share_for(self, member_index: int, cl_hash: bytes):
         # The member's MESSAGE-DEPENDENT threshold partial signature
         # `s_i = n(i) + c*f(i) mod q` (32 bytes), the actual value `recover_proof`
         # Lagrange-combines into `s = r + c*d` (Copilot this review #3, High).
@@ -767,21 +839,22 @@ class ThresholdAuthority:
         # partials from one close yields NO usable value for any other close and
         # NEVER reveals f(i) or d -- combination produces only r+c*d for THIS
         # message. `recover_proof` is the only consumer of these partials.
-        coeffs, _R, c = self._nonce_material(cl_hash)
+        #
+        # Returns a SHARE CARRIER `(s_i, N_i, C_i)` (Copilot this review, High):
+        # the member's public nonce commitment N_i = G^{n_i} and public Feldman
+        # commitment C_i = G^{f(i)} travel WITH the partial so a peer can verify
+        # `G^{s_i} == N_i * C_i^c` without the master seed or any secret. The
+        # nonce secret n_i (and the long-lived f_i) are derived in this secret
+        # path and never leave it.
+        coeffs, R = self._nonce_material(cl_hash)
+        c = self._public_challenge(cl_hash, R)
         f_i = _poly_share(self.seed, self.epoch.threshold, self.epoch.n,
                           member_index) % _GRP_Q
         n_i = _frost_share(coeffs, member_index) % _GRP_Q
         s_i = (n_i + c * f_i) % _GRP_Q
-        return s_i.to_bytes(32, "big")
-
-    def _membership_confirm_pub(self, member_index: int) -> bytes:
-        # Public per-member FELDMAN commitment C_i = G^{f(i)} committed to the
-        # epoch (derived from the epoch's ROSTER/seed, not a module-global), used
-        # by `verify_share`/the boundary to check a partial without revealing
-        # f(i). Bound to the epoch so unrelated rosters never share keys
-        # (Copilot this review #4, High).
-        return _feldman_commit(self.seed, self.epoch.threshold, self.epoch.n,
-                               member_index)
+        N_i = pow(_GRP_G, n_i, _GRP_P).to_bytes(32, "big")
+        C_i = pow(_GRP_G, f_i, _GRP_P).to_bytes(32, "big")
+        return (s_i.to_bytes(32, "big"), N_i, C_i)
 
     def _set_boundary_cap(self, cap: bytes) -> None:
         """Bind a RELEASE capability derived from the source's boundary secret.
@@ -834,63 +907,100 @@ class ThresholdAuthority:
                 return None
         else:
             self._signed[key] = cl.hash
-        return self._share_for(member_index, cl.hash)
+        carrier = self._share_for(member_index, cl.hash)
+        # Publish the member's public nonce commitment N_i = G^{n_i} for this
+        # close. Peers (and `verify_share`/`recover_proof`) read ONLY this public
+        # commitment set to build R and c -- never the master seed.
+        self._published_nonces.setdefault(cl.hash, {})[member_index] = carrier[1]
+        return carrier
 
-    def verify_share(self, member_index: int, cl: LockedClose, share: bytes) -> bool:
-        """Verify a member's MESSAGE-DEPENDENT partial without revealing f(i):
-        check `G^{s_i} == N_i * C_i^c (mod p)` using only public per-message
-        nonce commitment N_i and per-member Feldman commitment C_i (Copilot this
-        review #3, High). `share` is a partial s_i bound to cl_hash, NOT a
-        reusable long-lived Shamir share."""
+    def verify_share(self, member_index: int, cl: LockedClose,
+                     share_carrier) -> bool:
+        """Verify a member's MESSAGE-DEPENDENT partial without revealing f(i)
+        and WITHOUT the master seed (Copilot this review, High):
+        check `G^{s_i} == N_i * C_i^c (mod p)` using ONLY publicly transported
+        values --
+          * the member's public nonce commitment N_i = G^{n_i} (carrier[1]), and
+          * the member's public Feldman commitment C_i = G^{f(i)} (carrier[2]),
+        with the aggregate nonce commitment R and challenge c PUBLICLY derived
+        from those commitments (`_public_aggregate`/`_public_challenge`). An
+        ordinary peer who has NEVER seen the master secret can run this exactly;
+        no secret, share, or nonce participates. `share_carrier` is a
+        `(s_i, N_i, C_i)` triple, NOT a reusable long-lived Shamir share."""
         if not (1 <= member_index <= self.epoch.n):
             return False
         if cl.epoch_hash != self.epoch.hash:
             return False
-        if share is None or len(share) != 32:
+        if share_carrier is None or not isinstance(share_carrier, tuple) \
+                or len(share_carrier) != 3:
             return False
-        s_i = int.from_bytes(share, "big")
+        s_i_b, N_i_b, C_i_b = share_carrier
+        if s_i_b is None or len(s_i_b) != 32 or N_i_b is None or len(N_i_b) != 32 \
+                or C_i_b is None or len(C_i_b) != 32:
+            return False
+        s_i = int.from_bytes(s_i_b, "big")
+        N_i = int.from_bytes(N_i_b, "big")
+        C_i = int.from_bytes(C_i_b, "big")
+        if not (1 <= N_i < _GRP_P) or pow(N_i, _GRP_Q, _GRP_P) != 1:
+            return False                                  # bad nonce commitment
+        if not (1 <= C_i < _GRP_P) or pow(C_i, _GRP_Q, _GRP_P) != 1:
+            return False                                # bad Feldman commitment
         if not (1 <= s_i < _GRP_Q):
             return False
-        coeffs, R_bytes, c = self._nonce_material(cl.hash)
-        n_i = _frost_share(coeffs, member_index) % _GRP_Q
-        N_i = pow(_GRP_G, n_i, _GRP_P)
-        C_i = int.from_bytes(self._membership_confirm_pub(member_index), "big")
+        # Public aggregate R from the published nonce commitments for this close
+        # (fall back to this member's own commitment when none are published yet,
+        # so a single-carrier smoke check still has a deterministic reference).
+        comms = dict(self._published_nonces.get(cl.hash, {}))
+        if member_index not in comms:
+            comms[member_index] = N_i_b
+        R_b = self._public_aggregate(cl.hash, comms)
+        if R_b is None:
+            return False
+        c = self._public_challenge(cl.hash, R_b)
         # G^{s_i} == N_i * C_i^c (mod p)
         return pow(_GRP_G, s_i, _GRP_P) == (N_i * pow(C_i, c, _GRP_P)) % _GRP_P
 
     def recover_proof(self, subset, cl: LockedClose):
-        """subset: iterable of (member_index, partial). Returns the canonical P_s
-        iff >= t VALID, distinct, in-roster message-dependent partials for THIS
-        exact close are present; invalid/duplicate/out-of-epoch/wrong-close
-        partials are discarded individually and never poison t otherwise-valid
-        partials.
+        """subset: iterable of (member_index, share_carrier). Returns the
+        canonical P_s iff >= t VALID, distinct, in-roster message-dependent
+        partials for THIS exact close are present; invalid/duplicate/out-of-
+        epoch/wrong-close partials are discarded individually and never poison t
+        otherwise-valid partials.
 
-        GENUINE MESSAGE-DEPENDENT THRESHOLD RECONSTRUCTION (Copilot this review
-        #3, High): the combined signing scalar `s = r + c*d` is obtained by
-        LAGRANGE-combining the supplied partials `s_i = n(i) + c*f(i)` over GF(q)
-        -- `s = sum_i L_i(0)*s_i = r + c*d` -- WITHOUT ever recovering the
-        long-lived group secret `d` or any member share `f(i)` (FROST/Feldman
-        structure). The partials are bound to cl_hash, so t partials collected
-        from one close are REUSELESS for any other close and cannot be used to
-        sign a pre-lock commitment. The final proof is `(R || s)` (64 bytes),
-        byte-identical for every >= t subset (deterministic nonce R per close)."""
+        GENUINE MESSAGE-DEPENDENT THRESHOLD RECONSTRUCTION, PEER-VERIFIABLE
+        (Copilot this review, High): the combined signing scalar `s = r + c*d` is
+        obtained by LAGRANGE-combining the supplied partials `s_i = n(i) + c*f(i)`
+        over GF(q) -- `s = sum_i L_i(0)*s_i = r + c*d` -- WITHOUT ever recovering
+        the long-lived group secret `d`, any member share `f(i)`, ANY nonce
+        secret `n(i)`, or the master seed. The aggregate nonce commitment R and
+        challenge c are derived PUBLICLY from the transported N_i commitments
+        (`_public_aggregate`/`_public_challenge`), so an ordinary peer holding no
+        secret reproduces the byte-identical P_s from any >= t valid partials.
+        The partials are bound to cl_hash, so t partials collected from one close
+        are REUSELESS for any other close and cannot be used to sign a pre-lock
+        commitment. The final proof is `(R || s)` (64 bytes), byte-identical for
+        every >= t subset (R = G^{g(0)} is invariant under the subset choice)."""
         if cl.epoch_hash != self.epoch.hash:
             return None
         t = self.epoch.threshold
         n = self.epoch.n
         valid = {}
-        for (member_index, share) in subset:
+        for (member_index, carrier) in subset:
             if (1 <= member_index <= n and member_index not in valid
-                    and self.verify_share(member_index, cl, share)):
-                valid[member_index] = share
+                    and self.verify_share(member_index, cl, carrier)):
+                valid[member_index] = carrier
         if len(valid) < t:
             return None                             # below t: no proof, stall
-        # Lagrange-combine partials into s = r + c*d over GF(q).
-        xs = list(valid.keys())
+        # PUBLIC aggregate R from the accepted carriers' nonce commitments.
+        comms = {i: carrier[1] for (i, carrier) in valid.items()}
+        R_b = self._public_aggregate(cl.hash, comms)
+        if R_b is None:
+            return None
         s = 0
+        xs = list(valid.keys())
         for i in xs:
             xi = i % _GRP_Q
-            yi = int.from_bytes(valid[i], "big") % _GRP_Q
+            yi = int.from_bytes(valid[i][0], "big") % _GRP_Q
             num = 1
             den = 1
             for j in xs:
@@ -902,8 +1012,7 @@ class ThresholdAuthority:
             li = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
             s = (s + yi * li) % _GRP_Q
         s %= _GRP_Q
-        _coeffs, R_bytes, _c = self._nonce_material(cl.hash)
-        return R_bytes + s.to_bytes(32, "big")
+        return R_b + s.to_bytes(32, "big")
 
     def restart(self) -> "ThresholdAuthority":
         """Deterministic re-derivation from (epoch, seed) that CARRIES the
@@ -1435,6 +1544,46 @@ def main():
               root_rule=b"unique-threshold/v1",
               event_mapping=b"single-pulse:LockedClose->C_s/v1").authority_key
           is not None)
+    # Copilot this review #1 (High): the committed per-member CONFIRM
+    # verification keys must ALSO be non-identity order-q subgroup elements. A
+    # K_i = 1 (or out-of-group K_i) would let an observer choose any valid s and
+    # set R = G^s so that K_i^c = 1 and the member's CONFIRM vote verifies
+    # without that member ever signing -- minting votes for members who never
+    # reached CONFIRM. Both the default-derived keys and any caller-supplied
+    # confirm_pub go through the same gate.
+    good_confirm_pub = tuple(_validator_confirm_pub(GROUP_SK, i)
+                             for i in range(1, N_MEMBERS + 1))
+    bad_confirm_identity = (1).to_bytes(32, "big")
+    bad_confirm_out = (_GRP_P + 1).to_bytes(32, "big")
+    check("R2 confirm_pub subgroup validation (Copilot this review #1, High): "
+          "a per-member CONFIRM key that is the identity (K_i=1), out-of-group "
+          "(>= p), or a NON-residue (K_i^q != 1 mod p) is REJECTED at epoch "
+          "construction, so an observer cannot forge a member's CONFIRM vote via "
+          "K_i^c = 1, and the committed order-q keys pass",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=(identity_key,) + good_confirm_pub[1:]))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=(out_of_group,) + good_confirm_pub[1:]))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=(non_residue,) + good_confirm_pub[1:]))
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=good_confirm_pub).confirm_pub == good_confirm_pub)
     check("R2 honest-intersection Byzantine bound (thread eW_rR): an epoch whose "
           "threshold violates 2*t - n > f is rejected -- two t-subsets could "
           "overlap only in Byzantine members and mint two same-slot proofs. "
@@ -1631,6 +1780,40 @@ def main():
           "cl_a's proof (share is close-bound)",
           auth.recover_proof([(i, auth.share(i, cl_b)) for i in range(1, t + 1)],
                              cl_a) is None)
+    # ======== Distributed FROST: verify/recover run WITHOUT the master secret
+    # (Copilot this review, High - evMSO). A verifier-only authority constructed
+    # from the SAME epoch but a SHAM seed (it holds NO group secret, NO share,
+    # NO nonce) must verify honest carriers and reconstruct the byte-identical
+    # canonical proof purely from the PUBLICLY broadcast nonce-commitment set
+    # {i -> N_i} and the N_i / C_i carried in each share -- contacting none of
+    # `self.seed`, `f(i)`, or `n(i)`. In a real distributed FROST the nonce
+    # commitments are broadcast up front, so the verifier legitimately holds
+    # that public set.
+    verifier_only = ThresholdAuthority.from_epoch(epoch, sha256(b"peer-verifier-only"))
+    public_nonces = {i: c[1] for (i, c) in full_shares}   # public broadcast set
+    verifier_only._published_nonces[cl_a.hash] = dict(public_nonces)
+    peer_accepted = all(verifier_only.verify_share(i, cl_a, carrier)
+                        for (i, carrier) in full_shares)
+    peer_proof = verifier_only.recover_proof(full_shares, cl_a)
+    check("N3/threshold distributed-FROST peer verifiability (Copilot this "
+          "review, High): an authority holding NO master seed -- the same epoch, "
+          "a SHAM seed -- verifies every honest public N_i/C_i carrier and "
+          "reconstructs the byte-identical canonical P_s, so verification is "
+          "authentically distributed (public commitments only, no secret)",
+          peer_accepted and peer_proof == proof_a)
+    check("N3/threshold distributed-FROST forged carriers (Copilot this review, "
+          "High): a replayed/wrong-owner carrier (honest N_i but a bad C_i, or a "
+          "good C_i with a bad N_i, or a forged s_i) is REJECTED by the "
+          "secret-free verifier without corrupting the accepted set",
+          not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
+                                                   full_shares[0][1][1],
+                                                   sha256(b"wrong-feldman")))
+          and not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
+                                                       sha256(b"wrong-nonce"),
+                                                       full_shares[0][1][2]))
+          and not verifier_only.verify_share(
+              1, cl_a, (sha256(b"forged-s"), public_nonces[1],
+                        full_shares[0][1][2])))
     cl_foreign = LockedClose(other_win, slot, prev_hash,
                              sha256(b"externalized-value-A"))
     check("N3 mixed-epoch rejected: an authority instantiated for epoch A cannot "
@@ -2096,8 +2279,11 @@ def main():
           "resolve() rejects every crafted candidate (flow + public-key property, "
           "not a source flag)",
           all(attacker_forged[k] is None for k in range(len(cand_closes)))
-          and not any(auth.verify_share(i, cand_closes[0], sha256(b"forged"))
-                      for i in range(1, t + 1))
+          and not any(auth.verify_share(
+              i, cand_closes[0],
+              (sha256(b"forged"), sha256(b"not-a-real-nonce"),
+               sha256(b"not-a-real-feldman")))
+              for i in range(1, t + 1))
           and all(source.genuine_proof(_c) is None for _c in cand_closes)
           and all(resolve(epoch, _c, source, public_candidates[k])["outcome"]
                   != "ROOT" for k, _c in enumerate(cand_closes))
@@ -2208,7 +2394,10 @@ def main():
         format_version=epoch.format_version, authority_key=epoch.authority_key,
         roster=epoch.roster, activation=epoch.activation,
         retirement=epoch.retirement, threshold=epoch.threshold,
-        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping)
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+        byzantine_bound=epoch.byzantine_bound,
+        confirm_pub=epoch.confirm_pub)
     archival_root = UniqueThresholdProof.verify(archival_epoch, cl_a.hash,
                                                 proof_a)
     check("K3 kill-Q3: archival replay preserving only the canonical epoch "

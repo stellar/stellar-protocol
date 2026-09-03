@@ -60,7 +60,10 @@ DOMAIN = b"stellar-vrf"
 SUB_DOMAIN = b"stellar-vrf/sub"
 BETA_LABEL = b"stellar-vrf/beta"
 # Normative signature domain per the CAP/XDR: the Ed25519 signature is over
-# "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash (spec parity).
+# "stellar-vrf/commit" | 0x01 | network_id | slot | commitHash | vrfPublicKey
+# (spec parity): the node's VRF public key -- the distinct point the reveal will
+# be validated against -- is bound into the commit signature so it cannot be
+# re-attributed to a different VRF key after the fact.
 COMMIT_SIG_LABEL = b"stellar-vrf/commit"
 VER = 0x01
 SLOT = 123456789
