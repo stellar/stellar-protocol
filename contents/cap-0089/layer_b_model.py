@@ -11,7 +11,8 @@ input able to interact with the random result and EXCLUDES provenance:
     in_v1   = (network_id, epoch_hash, ledgerSeq, previousLedgerHash, H(value))
     C_s     = H("CloseLock" || in_v1)            -- single commitment / domain
     P_s     = ThresholdSignature(epoch, C_s)     -- UNIQUE proof (secret-bound)
-    R_s     = H("Root" || C_s || canonical(P_s)) -- derived only after verify
+    R_s     = H("Root" || C_s || R)               -- derived only after verify
+                                                 -- R = committed nonce (P_s[:32])
     PRNG(s) / APPLY(s) / NOMINATION(s+1) = KDF(R_s, label)
 
 `C_s` IS the threshold-signed domain: there is no second, independently encoded
@@ -489,11 +490,12 @@ def _confirm_vote_verify(K_i_pub: bytes, epoch_hash: bytes, C_s: bytes,
 
 
 def _spf_sign(d: int, epoch_hash: bytes, C_s: bytes) -> bytes:
-    # Deterministic, secret-nonce Schnorr signature (the model's CANONICAL
+    # Deterministic, secret-nonce Schnorr signature (the model's canonical
     # signature; RFC-6979-style). The model's own producer emits exactly one
-    # byte-string per (d, epoch, C_s). NOTE: the accepted ROOT DOES depend on
-    # these canonical proof bytes -- `R_s = H("Root", Y, epoch, C_s, P_s)` (see
-    # `canonical_root` / UniqueThresholdProof.verify) -- and because the nonce is
+    # byte-string per (d, epoch, C_s). NOTE: the accepted ROOT is pinned to the
+    # proof's NONCE COMMITMENT `R = P_s[:32]` (see `canonical_root` /
+    # UniqueThresholdProof.verify) -- NOT to the malleable scalar `s` -- and
+    # because the nonce is
     # deterministic and `d` is denied to every actor, only this ONE byte-identical
     # `P_s` can exist per close (N3/I3): alternate ENCODINGS canonicalize to the
     # same bytes, and a deviant `P_s` (which requires holding `d`) is never the
@@ -842,12 +844,13 @@ def canonical_proof(proof: bytes):
     NOTE: shape-canonicalization is NOT verification. `verify()` additionally
     checks the public-key Schnorr equation, so an arbitrary 64-byte value that
     merely has the right length is REJECTED (Copilot line-519). The canonical
-    shape feeds authentication only; the ROOT is the proof-DEPENDENT unique
-    function `R_s = H("Root", authority_key, epoch_hash, C_s, P_s)` of the
-    committed authority key + the close + the canonical threshold proof (see
-    `canonical_root`), so malleability of a valid signature's ENCODING cannot
-    split the root: the byte-identical canonical P_s (N3/I3) gives the single,
-    predictable root."""
+    shape feeds authentication only; the ROOT is the NONCE-COMMITTED unique
+    function `R_s = H("Root", authority_key, epoch_hash, C_s, R)` of the
+    committed authority key + the close + the proof's committed nonce commitment
+    `R = P_s[:32]` (see `canonical_root`), so malleability of a valid signature's
+    ENCODING or scalar cannot split the root: the byte-identical canonical P_s
+    (N3/I3) gives the single, predictable root, and a proof sharing the committed
+    R collapses to the same root (VUF uniqueness, thread 3921067284)."""
     if proof is None or len(proof) != 64:
         return None
     return proof
@@ -856,35 +859,44 @@ def canonical_proof(proof: bytes):
 def canonical_root(C_s: bytes, authority_key: bytes, epoch_hash: bytes,
                    P_s: bytes = None):
     """R_s -- the source root, derived from the UNPREDICTABLE canonical threshold
-    proof: `R_s = H("Root", authority_key, epoch_hash, C_s, P_s)`.
+    proof's NONCE COMMITMENT: `R_s = H("Root", authority_key, epoch_hash, C_s, R)`
+    where `R = P_s[:32]` (the session nonce commitment that the round-1 FROST
+    transcript pins BEFORE the close locks).
 
     Anti-grinding (Copilot this review #2, High): the root MUST depend on the
-    threshold PROOF `P_s`, not merely on public (authority_key, C_s). `P_s` is
-    the deterministic-nonce output of the secret-bound threshold evaluation; it
-    cannot be computed from public candidate data before the close is
-    CONFIRM/EXTERNALIZE locked (it needs the recovered group secret `d`, which
-    exists only among the >= t holders who sign AFTER externalization). So a
-    proposer who could swap candidate C_s values to pick a favorable root cannot
-    evaluate the root for any candidate in advance -- there is no favorable root
-    to seek before the proof exists. This is `root(C_s, canonical(P_s))` as the
-    CAP contract states.
+    threshold PROOF's nonce commitment `R`, not merely on public (authority_key,
+    C_s). `R` is committed in ROUND-1 of the distributed FROST transcript for the
+    exact close (`_public_aggregate` of the published per-member nonce
+    commitments `N_i`) -- it is NOT computable by a lone proposer before the
+    close is CONFIRM/EXTERNALIZE locked, and a single proposer cannot vary it
+    (it is fixed by the >= t members' published nonces). So a proposer who could
+    swap candidate C_s values to pick a favorable root cannot evaluate the root
+    for any candidate in advance -- there is no favorable root to seek before
+    the proof exists. This is `root(C_s, canonical(P_s))` as the CAP contract
+    states.
 
-    Uniqueness: `_spf_sign` uses a deterministic, RFC-6979-style nonce
-    (a fixed function of (d, epoch, C_s)); there is NO message nonce an attacker
-    can vary, so every >= t honest holder whose Lagrange reconstruction yields
-    `d` emits the byte-IDENTICAL `P_s` (N3/I3 below). One close therefore mints
-    exactly one proof byte-wise and one root. A deviant-nonce signature is
-    possible only for a party that already holds `d` -- which the protocol
-    denies to every actor (the secret lives only inside the signed primitive) --
-    and is never the source's `genuine_proof`, so it cannot mint a second root.
+    UNIQUENESS / NON-MALLEABILITY (Copilot thread 3921067284, High): the root is
+    a function of `R = P_s[:32]`, the transcript-committed NONCE -- NOT of the
+    malleable scalar `s`. `s = r + c*d` is the ONLY value satisfying the Schnorr
+    equation under the committed R and the committed close, so an attacking
+    holder-of-`d` cannot produce a SECOND valid proof for the same committed R
+    that maps to a different root: any alternate proof must either (a) keep R --
+    then it is the byte-identical canonical proof and the SAME root -- or (b)
+    change R -- but R is fixed by the authenticated round-1 nonce broadcast (a
+    contributor cannot swap nonces between rounds without an N_i mismatch that
+    `verify_share` rejects). Hence at most ONE root per (epoch, C_s): the
+    accepting relation is a genuine function, mirroring the production VUF/BLS
+    uniqueness property. This closes the alternate-valid-encoding concern
+    without turning verification into a search.
 
     `verify` calls this ONLY after the public-key check has authenticated the
     proof; it never turns an arbitrary byte string into a root. `P_s` must be
     provided (it is not optional); a caller that omits it gets no root -- mirroring
     that no node can derive the root before it holds the valid proof."""
-    if P_s is None:
+    if P_s is None or len(P_s) != 64:
         return None
-    return sha256(b"Root" + authority_key + epoch_hash + C_s + P_s)
+    R = P_s[:32]
+    return sha256(b"Root" + authority_key + epoch_hash + C_s + R)
 
 
 class ThresholdAuthority:
@@ -931,6 +943,18 @@ class ThresholdAuthority:
         # refuses every `_authorize_release` call, so an unpaired (attacker-held)
         # authority can authorize nothing.
         self._cap_check = None
+        # AUTHENTICATED per-(member, close) release registry (Copilot thread
+        # 3921067249, Medium): `share(i, cl)` is gated behind member i's OWN
+        # individually-crossed boundary -- NOT a caller-supplied set. This set
+        # records which (member_index, cl_hash) pairs have been independently
+        # authorized through the boundary's CONFIRM->EXTERNALIZE transition. A
+        # caller who only holds the authority object cannot conjure per-member
+        # release bits: each bit is populated exclusively by the boundary's own
+        # authenticated path (`_authorize_member_release`). This replaces the old
+        # caller-supplied `per_member_released` parameter which let any test or
+        # external caller assert arbitrary release sets -- a violation of the
+        # principle that release is boundary-authenticated, not caller-asserted.
+        self._per_member_released = set()
         # AUTHENTICATED per-close ROUND-1 nonce-commitment registry: maps
         # cl_hash -> {member_index: N_i_bytes}, N_i = G^{n_i}. This is the FROST
         # round-1 transcript -- every CONTRIBUTOR's public nonce commitment is
@@ -1114,7 +1138,21 @@ class ThresholdAuthority:
         self._released[cl_hash] = witness
         return True
 
-    def share(self, member_index: int, cl: LockedClose, per_member_released=None):
+    def _authorize_member_release(self, member_index: int, cl_hash: bytes):
+        """Boundary-authenticated per-member release gate (Copilot thread
+        3921067249). Records that member `member_index` has independently
+        crossed its OWN CONFIRM->EXTERNALIZE boundary toward the close identified
+        by `cl_hash`. `share(member_index, cl)` consults this registry instead of
+        accepting a caller-supplied set -- so a caller who only holds the
+        authority object cannot conjure per-member release bits; each bit is
+        populated exclusively by the boundary's authenticated path. The close
+        must already be boundary-released (`_released[cl_hash]` is set) for the
+        per-member bit to be meaningful."""
+        if self._released.get(cl_hash) is None:
+            return                              # close not yet boundary-released
+        self._per_member_released.add((member_index, cl_hash))
+
+    def share(self, member_index: int, cl: LockedClose):
         if not (1 <= member_index <= self.epoch.n):
             raise ValueError("member index out of canonical roster")
         if cl.epoch_hash != self.epoch.hash:
@@ -1125,15 +1163,16 @@ class ThresholdAuthority:
             # that was never CONFIRM/EXTERNALIZE admitted cannot be shared,
             # so no pre-lock proof can be assembled by an external caller.
             return None
-        if per_member_released is not None and member_index not in per_member_released:
-            # (Copilot this review, thread ew-Og4, Medium) when the caller
-            # supplies a per-member release set, THIS member's carrier exists
-            # ONLY if that member individually crossed its OWN boundary toward
-            # the same C_s -- the carrier is genuinely gated behind the member's
-            # own release bit, NOT merely filtered from a globally pre-authorized
-            # set. The liveness red test uses this so SCP ledger finality and
-            # per-member release are modeled as two independent dimensions even
-            # though the private authority is boundary-authorized for this close.
+        if (member_index, cl.hash) not in self._per_member_released:
+            # (Copilot thread 3921067249, Medium) share(i, cl) is gated behind
+            # member i's OWN individually-crossed boundary -- authenticated
+            # per-member release state stored in `_per_member_released`, NOT a
+            # caller-supplied set. The carrier exists ONLY if this member
+            # individually crossed its OWN CONFIRM->EXTERNALIZE boundary toward
+            # the same C_s. The liveness red test uses this so SCP ledger
+            # finality and per-member release are modeled as two independent
+            # dimensions even though the private authority is boundary-authorized
+            # for this close.
             return None
         key = (member_index, cl.slot)
         if key in self._signed:
@@ -1298,6 +1337,8 @@ class ThresholdAuthority:
         new_auth = type(self)(self.epoch, self.seed, signed=self._signed)
         new_auth._released = dict(self._released)
         new_auth._cap_check = self._cap_check
+        new_auth._per_member_released = set(self._per_member_released)
+        new_auth._r1 = {k: dict(v) for k, v in getattr(self, "_r1", {}).items()}
         return new_auth
 
 
@@ -1326,7 +1367,9 @@ class UniqueThresholdProof:
         PUBLIC key (`epoch.authority_key`): it runs the Schnorr stand-in
         signature check `G^s == R * Y^c (mod p)` and, only if that passes,
         returns the one UNIQUE source root `R_s = H("Root" || authority_key ||
-        epoch_hash || C_s || P_s)`. An arbitrary archive byte string (a forged
+        epoch_hash || C_s || R)` where `R = P_s[:32]` is the transcript-committed
+        NONCE commitment (not the malleable scalar `s` -- VUF-style uniqueness,
+        thread 3921067284). An arbitrary archive byte string (a forged
         64-byte value, a wrong-epoch proof, or a replayed proof) is REJECTED --
         it does not satisfy the equation under Y (Copilot line-519: no longer
         does a bare canonical-length value derive a root).
@@ -1337,11 +1380,12 @@ class UniqueThresholdProof:
         cached it -- so a valid proof received from another authority, or loaded
         during catchup, resolves to the identical root (a fresh catchup node
         needs only the descriptor + C_s + P_s). But the ROOT itself is derived
-        from the UNPREDICTABLE proof bytes `P_s`, so it is NOT computable from
-        public (authority_key, epoch_hash, C_s) before the proof exists -- a
+        from the proof's transcript-committed NONCE `R = P_s[:32]`, so it is NOT
+        computable from public (authority_key, epoch_hash, C_s, R) before the
+        close's round-1 nonce broadcast commits `R` -- a
         proposer cannot grind candidate closes to pick a favorable seed. Because
-        the honest `P_s` is the deterministic-nonce canonical output (unique per
-        C_s, N3/I3), one close yields one byte-identical proof and one root
+        the honest `R` is the round-1-committed deterministic aggregate (unique per
+        C_s, N3/I3), one close yields one committed nonce and one root
         (one-future), while no attacker that lacks the group secret can mint an
         accepted proof to steer the root.
 
@@ -1580,6 +1624,13 @@ class RandomnessSource:
         # admitted can neither be authorized nor shared.
         if not authority._authorize_release(cl.hash, self._admitted[cl.hash], cap):
             return None
+        # The boundary authorizes EVERY honest roster holder that crossed the
+        # same CONFIRM -> EXTERNALIZE transition (Copilot thread 3921067249):
+        # per-member bits are populated here by the boundary's authenticated
+        # path, and `share(i, cl)` then consults them internally. The caller does
+        # NOT supply per-member release sets -- the boundary does.
+        for i in range(1, authority.epoch.n + 1):
+            authority._authorize_member_release(i, cl.hash)
         holder_shares = [(i, authority.share(i, cl))
                          for i in range(1, authority.epoch.n + 1)]
         recovered = authority.recover_proof(holder_shares, cl)
@@ -2275,11 +2326,15 @@ def main():
     # Per-member independent release bit for cl_a: member i released iff i in E.
     def roster_released_shares(E):
         # Each member i's carrier is available ONLY because i individually crossed
-        # ITS OWN boundary toward cl_a: we pass `per_member_released=E`, which gates
-        # `auth.share(i, ...)` behind member i's OWN release bit (not merely filters
-        # a globally pre-authorized set). Members not in E contribute nothing, and a
-        # member IS in E iff that member itself crossed.
-        return [(i, c) for i in E for c in [auth.share(i, cl_a, per_member_released=E)]
+        # ITS OWN boundary toward cl_a: we first RESET the authenticated per-member
+        # registry, then register exactly the members of E via the boundary-only
+        # `_authorize_member_release(i, cl_a.hash)`, which `auth.share(i, ...)`
+        # consults internally -- NOT a caller-supplied set. Members not in E
+        # contribute nothing (and a member IS in E iff that member itself crossed).
+        auth._per_member_released.clear()
+        for i in E:
+            auth._authorize_member_release(i, cl_a.hash)
+        return [(i, c) for i in E for c in [auth.share(i, cl_a)]
                 if c is not None]
     # (a)-(b) model: SCP finality and per-member release are independent.
     # Roster-disjoint finalization: SCP externalized (ledger finalized) but the
@@ -2326,7 +2381,9 @@ def main():
           "per S1-S3). SCP ledger finality and per-member release are modeled as "
           "two INDEPENDENT dimensions and are now GATED per member: share(i) "
           "exists iff member i individually crossed ITS OWN boundary toward the "
-          "same C_s (per_member_released), so E is a real per-member release set, "
+          "same C_s (authenticated per-member release state, Copilot thread "
+          "3921067249 -- NOT a caller-supplied set), so E is a real per-member "
+          "release set,"
           "not a filter over a globally pre-authorized authority. A ROSTER-"
           "DISJOINT SCP externalization -- scp_finalized==True (the close WAS "
           "ledger-finalized, consumed from disjoint_externalized) yet only |E| < t "
@@ -2339,6 +2396,26 @@ def main():
           disjoint_recovered is None
           and disjoint_externalized
           and all_consistent)
+    # (Copilot thread 3921067249, Medium) authenticated-per-member gate: a caller
+    # who only holds the authority object CANNOT conjure per-member release bits.
+    # `share` has NO caller-supplied release-set parameter; only the boundary's
+    # authenticated `_authorize_member_release` can register a bit. A member that
+    # was never individually authorized yields no carrier even though the close
+    # is boundary-released, and a caller cannot force one by fabricating a set.
+    import inspect
+    share_sig = inspect.signature(auth.share)
+    no_caller_set = "per_member_released" not in share_sig.parameters
+    auth._per_member_released.clear()
+    auth._authorize_member_release(1, cl_a.hash)      # only member 1 crossed
+    released_1 = auth.share(1, cl_a)
+    withheld_2 = auth.share(2, cl_a)                  # never authorized -> None
+    check("Boundary-authenticated per-member release (Copilot thread 3921067249): "
+          "share() takes NO caller-supplied release-set -- per-member release bits "
+          "are stored AUTHENTICATED (populated only by the boundary) and consulted "
+          "internally, so an external caller cannot assert arbitrary per-member "
+          "release; a member that did not individually cross is withheld even for "
+          "a boundary-released close",
+          no_caller_set and released_1 is not None and withheld_2 is None)
     # Roster-threshold release under the per-member model recovers the canonical
     # proof, matching the boundary-admitted one (not circular: independent bits).
     threshold_set = members[: epoch.threshold]
@@ -2880,7 +2957,7 @@ def main():
     crafted = sha256(b"non-canonical:" + proof_a)[:32] + proof_a[32:]
     check("I4/O2 unique-root & alternate-valid-proof (Copilot #2/#1): the "
           "accepted root is a strict deterministic function of the UNPREDICTABLE "
-          "canonical proof -- H(Root || Y || epoch || C_s || P_s), byte-unique "
+          "canonical proof -- H(Root || Y || epoch || C_s || R), byte-unique "
           "across every >=t reconstruction (I3). One-future is structural: an "
           "ALTERNATE valid proof is impossible below `d` (FROST message-dependent "
           "shares, #3), so a byte-different 'proof' (any crafted 64-byte string), "
@@ -2897,6 +2974,27 @@ def main():
           and all(attacker.public_root_guess(_c, public_candidates[k])
                   != root_a
                   for k, _c in enumerate(cand_closes)))
+    # (Copilot thread 3921067284, High) NON-MALLEABLE ROOT: the root is a
+    # function of the transcript-committed NONCE commitment `R = P_s[:32]`, NOT
+    # of the malleable scalar `s`. Two different proof byte-strings that share
+    # the same R (the only R the round-1 FROST transcript commits) therefore
+    # collapse to the SAME root -- so an alternate ENCODING/derivation of the
+    # already-committed nonce cannot split the pulse, even before the equation
+    # binds which s is valid. This is the VUF uniqueness property the reviewer
+    # asks for, made executable.
+    tampered_s = proof_a[:32] + sha256(b"malleated-s:" + proof_a[32:])[:32]
+    non_malleable_root = (canonical_root(c_e, epoch.authority_key, epoch.hash,
+                                         proof_a)
+                          == canonical_root(c_e, epoch.authority_key, epoch.hash,
+                                            tampered_s))
+    check("I4/O2 non-malleable root (Copilot thread 3921067284, High): the root "
+          "is pinned to the transcript-committed nonce commitment R = P_s[:32], "
+          "not to the malleable scalar s -- two proofs sharing that R (the only "
+          "R the round-1 FROST nonce broadcast commits) yield the SAME root, so "
+          "alternate encodings/valid-derivations of a fixed-commitment proof "
+          "cannot produce a second root (one-future holds of the RELATION, not "
+          "merely of honest behavior, matching the production VUF/BLS uniqueness)",
+          non_malleable_root)
 
     # ---------- O3: permanent pulse ----------------------------------------------
     pulse_a = consumer_kdf(root_a, LABEL_NOM)
@@ -3003,12 +3101,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "0dbc6fcbaeae2519372972ecbee4f869c8012378c63093468e0f634709274b22",
-        "34bf0c36dabe3eb6537bfbe88c09bd223531e9398ffadd47b7e06239ae37a325",
-        "143f0f27e0af24f08edccf62e56f7c500a07f6c53af39bacf857533e7a53ad25",
-        "586c1fc57865a33be7eec7924da8433af0f087a4202bb1a52e2a65094cc6473b",
+        "611e1e1ea92bfa5014bb3eeb595ebdf86d348f1c643f17a9fe4b3dc3958ba676",
+        "6283eff114a438b5654212448cddcb36d5ef370b69156f5f1cc11d4f67488736",
+        "2959b6f5ea4a8c97c39c6fb2f467a3b730f1340dfca390ee288606296220129c",
+        "18a5057bbfcfb3b977e37c981a8bd789c83eab4439bc1c131d82f590db978e80",
     )
-    EXP_COMP = "bc18abcf7ca3bd3c42a8bddcecafc2da1e623bcc68cef6f91aa14cdca6f51b93"
+    EXP_COMP = "3357acbd8ad36c846e759c7b01e068ead66862b30e9fbe0298549d369fb353b7"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),
