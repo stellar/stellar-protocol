@@ -43,11 +43,17 @@ Vectors:
       B(s) = SHA-256( LedgerHeaderHash(s-2) ).
   V3 commit/reveal binding : a reveal whose computed beta does not bind to its
       committed hash is rejected at the protocol layer.
-  V4 cross-network : a contribution/beacon produced under the testnet
-      transcript does not match the mainnet transcript -- a testnet value
-      cannot verify under the mainnet network id.
-  V5 cross-slot : the transcript for slot s differs from the transcript for
-      slot s+1 (transcript mismatch).
+  V4 cross-network : PROOF-CONTEXT binding isolated. The target (mainnet)
+      context is made fully self-consistent (commit signatures re-signed under
+      the mainnet scope, mainnet transcript, mainnet-derived proofs) and
+      ACCEPTED (positive control); substituting only the proof bytes derived
+      for the testnet context into those same rows is REJECTED -- a valid
+      signature, valid commit, valid transcript and correct roster with a
+      wrong-context proof fails at the PROOF gate, not at the signature gate.
+  V5 cross-slot : same isolation for slot-(s+1) -- full slot-(s+1)-scoped set
+      accepted; the slot-s-derived proof substituted alone is rejected at the
+      proof gate. The prior tests rejected at the commit-signature scope and
+      never exercised proof binding; these do.
   V6 purpose separation : subseed(0x02), subseed(0x03), subseed(0x04) are
       pairwise distinct for the same B(s).
   V7 malformed contribution / wrong key : the protocol acceptance verifier
@@ -334,6 +340,26 @@ def make_committed_clone(name: bytes, net: bytes, slot: int, anchor: bytes) -> d
     th = sha256(transcript(net, slot, 0x01, anchor))
     return {"nid": nid, "beta": beta, "commit_hash": ch, "sig": sig,
             "vrf_pub": vp, "th": th}
+
+
+_NODE_NAMES = (b"validator:alpha", b"validator:beta", b"validator:gamma",
+               b"validator:delta", b"validator:epsilon", b"validator:zeta")
+
+
+def _node_sk_for(pub: bytes) -> Ed25519PrivateKey:
+    # Deterministic reconstruction of a contributor's private NodeID key from its
+    # public NodeID, using the SAME canonical derivation as gen_vectors
+    # (node_key: seed = SHA-512("stellar-vrf/node-key" | name)[:32]). Only the
+    # fixture's deterministic validator set can be recovered; an unknown public
+    # key (a real out-of-band node, or a clone) has no recoverable private seed
+    # here, which is correct -- cross-context VRFCommit re-signing is only a
+    # TEST-CONTEXT construction, never a capability the protocol grants.
+    for name in _NODE_NAMES:
+        sk = Ed25519PrivateKey.from_private_bytes(
+            sha512(NODE_KEY_LABEL + name)[0:32])
+        if sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw) == pub:
+            return sk
+    raise ValueError("no recoverable private seed for this contributor NodeID")
 
 
 def subseed(net: bytes, slot: int, purpose: int, bcn: bytes) -> bytes:
@@ -778,52 +804,100 @@ def run():
               (row[0], row[1], th_leader_b, expected_proof[row[0]])
               for row in contribs], sha256(bytes(t_mut))))
 
-    # --- V4: cross-network replay ---
-    # Contributions are transcript-scoped; the testnet leader transcript differs
-    # from the mainnet leader transcript, so the same node's beta (and thus the
-    # beacon) differs. A testnet value cannot satisfy the mainnet transcript.
+    # --- V4/V5: CROSS-CONTEXT PROOF-CONTEXT BINDING (this audit) ---------------
+    # The reviewer's round-16 point (thread 3934384644 / d7OZI): the previous
+    # cross-context tests rejected at the COMMIT-SIGNATURE gate -- the raw
+    # testnet VRFCommit.sig does not verify under the mainnet key scope, so they
+    # never exercised the property they claimed: PROOF binding to (network,
+    # slot). Security-boundary isolation can be shown only by a test whose sole
+    # divergent field is the PROOF bytes while every other field -- commit,
+    # signature, transcript hash, roster -- is internally valid for the TARGET
+    # context.
+    #
+    # Per target context C in {mainnet-s, testnet-(s+1)} we build:
+    #   C-commits : the SAME committed beta/commitHash, RE-SIGNED by the node's
+    #               canonical private key under scope (C.net, C.slot) -> every
+    #               VRFCommit.sig is cryptographically valid IN C.
+    #   C-proofs  : placeholder_proof(node_id, C.net, C.slot, anchor) -- proof
+    #               bytes DERIVED FOR C (a native RFC 9381 ECVRF proof is
+    #               deterministic in secret key + transcript, hence network/slot
+    #               scoped exactly the same way).
+    #   C-transcript: transcript_hash(C.net, C.slot, 0x01, anchor).
+    # Positive control: rows carrying C-proofs are ACCEPTED in C (so C is
+    # internally consistent -- the rejection below is not a context-wide
+    # catch-all). Negative test: the IDENTICAL rows with only the proof derived
+    # for the WRONG context substituted are REJECTED; because the sole differing
+    # field is the proof bytes, the failure is specifically PROOF-context
+    # binding -- never a signature-scope failure.
+    def _resigned_commits(net_c, slot_c):
+        return {nid: (ch, _node_sk_for(nid).sign(
+                    commit_message(net_c, slot_c, ch, vp)), vp)
+                for nid, _, ch, _sg, vp in contribs}
+
+    def _context_reveal_set(net_c, slot_c, proof_of):
+        th_c = transcript_hash(net_c, slot_c, 1, anchor)
+        return ([(nid, beta, th_c, proof_of(nid))
+                 for nid, beta, _ch, _sg, _vp in contribs], th_c)
+
+    # -- V4: mainnet context (same slot s) --
     beta_a_test = contribs[0][1]
     beta_a_main = placeholder_beta(contribs[0][0], net_main, slot, anchor)
-    # The acceptance path REJECTS the whole testnet set when replayed under the
-    # MAINNET transcript (V4 real rejection, not a byte-inequality tautology):
-    # the verifier is run in the MAINNET CONTEXT -- a DIFFERENT (network,
-    # slot, expected_proofs, commits) -- so the testnet transcript hash, the
-    # testnet-authored commits, and the testnet proofs are all verified against
-    # mainnet and refused (a testnet commit signature does not verify under the
-    # mainnet context even if the transcript byte otherwise matched).
-    th_main = transcript_hash(net_main, slot, 1, anchor)
-    _, _m_accept, _m_set = make_verifier(net_main, slot, expected_proof,
-                                         commit_auth)
-    check("V4  cross-network replay detected: a testnet contribution does not "
-          "match the mainnet transcript (byte-level)",
+    main_commits = _resigned_commits(net_main, slot)
+    main_proofs = {nid: placeholder_proof(nid, net_main, slot, anchor)
+                   for nid in commit_auth}
+    _, _m_accept, _m_set = make_verifier(net_main, slot, main_proofs, main_commits)
+    main_good, th_main = _context_reveal_set(
+        net_main, slot, lambda nid: main_proofs[nid])
+    main_bad, _ = _context_reveal_set(
+        net_main, slot, lambda nid: expected_proof[nid])  # testnet-s proof bytes
+    check("V4  mainnet-derived proofs differ from testnet-derived proofs "
+          "(the isolation is non-vacuous)",
+          all(main_proofs[nid] != expected_proof[nid] for nid in commit_auth))
+    check("V4  cross-network PROOF-context binding (positive control): a reveal "
+          "set fully scoped to mainnet -- mainnet-re-signed VRFCommit.sig, "
+          "mainnet transcript, mainnet-derived proofs -- is ACCEPTED by the "
+          "mainnet verifier",
+          _m_set(main_good, th_main))
+    check("V4  cross-network PROOF-context binding (isolated): the SAME "
+          "mainnet-scoped set with ONLY the proof bytes swapped for the "
+          "testnet-derived proof is REJECTED -- valid signature, valid commit, "
+          "valid transcript, correct roster, wrong-context proof fails at the "
+          "PROOF gate, not the signature gate",
+          not _m_set(main_bad, th_main))
+    check("V4  cross-network replay detected (byte-level): a testnet "
+          "contribution does not match the mainnet transcript",
           beta_a_main.hex() == t["V4_beta_under_mainnet"]
           and beta_a_main != beta_a_test
           and th_main != th_leader_b)
-    check("V4  cross-network replay REJECTED by the acceptance path under the "
-          "MAINNET VERIFICATION CONTEXT: the testnet-bound reveal set is "
-          "refused because the verifier is parameterized to mainnet -- the "
-          "transcript hash differs AND the testnet commits/proofs do not "
-          "authenticate under that context (network binding is enforced by the "
-          "verifier, not assumed)",
-          not _m_set([(row[0], row[1], th_main, expected_proof[row[0]])
-                      for row in contribs], th_main))
 
-    # --- V5: cross-slot replay ---
-    th_next_slot = transcript_hash(net_id, slot + 1, 1, anchor)
-    _, _s_accept, _s_set = make_verifier(net_id, slot + 1, expected_proof,
-                                         commit_auth)
-    check("V5  cross-slot replay detected (transcript differs by slot)",
+    # -- V5: slot-(s+1) context (same testnet network) --
+    next_slot_commits = _resigned_commits(net_id, slot + 1)
+    next_slot_proofs = {nid: placeholder_proof(nid, net_id, slot + 1, anchor)
+                        for nid in commit_auth}
+    _, _s_accept, _s_set = make_verifier(net_id, slot + 1, next_slot_proofs,
+                                         next_slot_commits)
+    ns_good, th_next_slot = _context_reveal_set(
+        net_id, slot + 1, lambda nid: next_slot_proofs[nid])
+    ns_bad, _ = _context_reveal_set(
+        net_id, slot + 1, lambda nid: expected_proof[nid])  # slot-s proof bytes
+    check("V5  slot-(s+1)-derived proofs differ from slot-s proofs "
+          "(the isolation is non-vacuous)",
+          all(next_slot_proofs[nid] != expected_proof[nid]
+              for nid in commit_auth))
+    check("V5  cross-slot PROOF-context binding (positive control): a reveal "
+          "set fully scoped to slot-(s+1) -- VRFCommit.sig re-signed for s+1, "
+          "s+1 transcript, s+1-derived proofs -- is ACCEPTED by the "
+          "slot-(s+1) verifier",
+          _s_set(ns_good, th_next_slot))
+    check("V5  cross-slot PROOF-context binding (isolated): the SAME "
+          "slot-(s+1)-scoped set with ONLY the proof bytes swapped for the "
+          "slot-s derived proof is REJECTED -- valid signature, valid commit, "
+          "valid transcript, correct roster, wrong-slot proof fails at the "
+          "PROOF gate, not the signature gate",
+          not _s_set(ns_bad, th_next_slot))
+    check("V5  cross-slot replay detected (byte-level)",
           th_next_slot.hex() == t["V5_transcript_hash_cross_slot"]
           and th_next_slot.hex() != th_leader.hex())
-    check("V5  cross-slot replay REJECTED by the acceptance path under the "
-          "slot-(s+1) VERIFICATION CONTEXT: the slot-s set is refused because "
-          "the verifier is parameterized to the next slot -- the transcript "
-          "hash differs AND the slot-s commits/proofs do not authenticate under "
-          "the slot-(s+1) context (slot binding is enforced by the verifier, "
-          "not assumed)",
-          not _s_set([(row[0], row[1], th_next_slot,
-                       expected_proof[row[0]])
-                      for row in contribs], th_next_slot))
 
     # --- V7: protocol verifier rejects wrong-NodeID / malformed records ---
     # V1's `derive_beacon_for_context` already proves that altering committed
