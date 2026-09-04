@@ -1556,10 +1556,26 @@ def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
     # the model returns a concrete priority -- never None -- and there is exactly
     # ONE priority per slot for all nodes, independent of delivery speed: the
     # transition point is consensus-bound (finality), not proof-bound.
-    pulse = (consumer_kdf(root, LABEL_NOM, event_mapping)
-             if slot_finalized else None)
-    if pulse is not None:
-        return pulse
+    if slot_finalized:
+        # Observer- and delivery-independent (round-19 thread 3935684450): a
+        # FINALIZED close has exactly ONE priority -- the canonical KDF pulse
+        # derived from the SAME root R_s that every honest node converges on.
+        # The root, being consensus-final, is identical for every node; a node
+        # that has not yet RECEIVED those bytes does NOT silently diverge to the
+        # closed-form fallback (that would yield a second, per-node priority).
+        # Instead it STALLS (returns None -- "await the canonical root") until
+        # the root is available, then returns the identical pulse. A finalized
+        # close reaches the closed-form fallback only via the committed,
+        # consensus-wide opt-out of the NOMINATION consumer (label absent from
+        # the event map) -- which is itself observer-independent, never
+        # delivery-dependent.
+        if root is None:
+            return None                       # stall: await the canonical root
+        pulse = consumer_kdf(root, LABEL_NOM, event_mapping)
+        if pulse is not None:
+            return pulse                      # finalized + root + enabled -> pulse
+    # not finalized, or finalized but NOMINATION opted out -> single closed-form
+    # fallback, a pure function of committed state, identical for every node
     return nomination_fallback_priority(epoch_hash, slot, close_commitment,
                                         canonical_value_hash, network_id)
 
@@ -2958,6 +2974,26 @@ def main():
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
                                   True) == pulse_nom)
+    # --- Round-19 thread 3935684450 (Medium): for a FINALIZED close the choice
+    # is never delivery-dependent. A lagging node that has received the close but
+    # not yet the root MUST NOT diverge to the closed-form fallback (that would
+    # give two priorities for one slot). It STALLS (returns None == "await the
+    # canonical root"), then returns the SAME pulse as every other node. None on a
+    # finalized close is a wait, never a second value. ---
+    check("Delivery-independent finalized nomination (round-19 3935684450): a "
+          "finalized, NOMINATION-enabled close with the root not yet received "
+          "stalls (None) -- it NEVER falls back to the closed-form priority, so "
+          "no per-node priority fork exists for a finalized slot",
+          nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                              cl_a.hash,
+                              canonical_value_hash(cl_a.value_bytes),
+                              True) is None
+          and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True)
+          != nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                          canonical_value_hash(cl_a.value_bytes)))
     # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
     # validator AND by the epoch constructor / hash path (thread 3930443019). ---
     check("Mapping missing APPLY is INVALID and the epoch is rejected "
