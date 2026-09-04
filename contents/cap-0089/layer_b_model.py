@@ -1207,16 +1207,40 @@ class ThresholdAuthority:
         self._released[cl_hash] = witness
         return True
 
-    def _authorize_member_release(self, member_index: int, cl_hash: bytes):
+    def _authorize_member_release(self, member_index: int, cl_hash: bytes,
+                                  cap: bytes, witness: bytes):
         """Boundary-authenticated per-member release gate (Copilot thread
-        3921067249). Records that member `member_index` has independently
-        crossed its OWN CONFIRM->EXTERNALIZE boundary toward the close identified
-        by `cl_hash`. `share(member_index, cl)` consults this registry instead of
-        accepting a caller-supplied set -- so a caller who only holds the
-        authority object cannot conjure per-member release bits; each bit is
-        populated exclusively by the boundary's authenticated path. The close
-        must already be boundary-released (`_released[cl_hash]` is set) for the
+        3921067249; round-21 thread 3936363759). Records that member
+        `member_index` has independently crossed its OWN CONFIRM->EXTERNALIZE
+        boundary toward the close identified by `cl_hash`. `share(member_index,
+        cl)` consults this registry instead of accepting a caller-supplied set --
+        so a caller who only holds the authority object cannot conjure
+        per-member release bits; each bit is populated exclusively by the
+        boundary's authenticated path.
+
+        UNFORGEABLE BOUNDARY WITNESS (round-21 3936363759): a bit is accepted
+        ONLY if the caller presents the boundary-minted (cap, witness) pair:
+        `cap` is the RELEASE capability derived from the boundary secret (its
+        commit must match the bound `_cap_check`; the caller knows `_cap_check`
+        but, holding only the authority, not the secret's preimage), and
+        `witness` is the PER-MEMBER witness
+        `H("MREWitness", cap, epoch_hash, member_index, C_s)` that the boundary
+        mints ONLY for a member whose CONFIRM vote `externalize()` actually
+        verified. A caller who holds only the authority object therefore cannot
+        register a bit for a member whose CONFIRM vote was never verified --
+        it cannot mint `cap`/`witness` without the boundary secret, so
+        `share()` can never be enabled for an unverified member. The close must
+        already be boundary-released (`_released[cl_hash]` is set) for the
         per-member bit to be meaningful."""
+        if member_index is None or not (1 <= member_index <= self.epoch.n):
+            return                              # out of canonical roster
+        if self._cap_check is None:
+            return                              # unpaired: nothing can be released
+        if sha256(b"CapCommit" + cap) != self._cap_check:
+            return                              # fabricated capability -> refuse
+        if (sha256(b"MREWitness" + cap + self.epoch.hash +
+                   bytes([member_index]) + cl_hash) != witness):
+            return                              # not the boundary-minted witness
         if self._released.get(cl_hash) is None:
             return                              # close not yet boundary-released
         self._per_member_released.add((member_index, cl_hash))
@@ -1560,33 +1584,41 @@ def nomination_fallback_priority(epoch_hash: bytes, slot: int,
 def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
                         slot: int, close_commitment: bytes,
                         canonical_value_hash: bytes,
-                        slot_finalized: bool,
+                        slot_finalized: bool, root_released: bool,
                         network_id: bytes = NETWORK) -> bytes:
     # The ONE-way, OBSERVER-INDEPENDENT, NEVER-None nomination priority (threads
-    # 3929943621 / 3930443124 / round-18 3935393898 / round-20 3936012529).
-    # Selection is NEVER a function of locally-DELIVERED bytes: `root` here is the
-    # CANONICAL root state `R_s` of the close -- a consensus fact IDENTICAL for
-    # every honest node (for a finalized close `R_s` is committed and
-    # deterministically reconstructable from the public aggregate commitments),
-    # NOT a per-node "have I seen the proof yet" flag. For a FINALIZED close the
-    # priority is therefore a PURE, PERMANENT function of canonical consensus
-    # state: the hidden-entropy pulse `KDF(R_s, NOMINATION)` when `R_s` is
-    # canonically RELEASED (`root` present), and the single closed-form fallback
-    # when `R_s` is canonically UNKNOWN (`root` absent -- the roster has not
-    # canonically released) or when the NOMINATION consumer is committed-opted-
-    # out. It returns a CONCRETE priority -- NEVER None (thread 3936012529),
-    # honouring the CAP contract that NOMINATION never returns None and uses the
-    # closed-form fallback during UNKNOWN: a node that has not finalized
-    # (`slot_finalized=False`) uses the fallback, and a finalized close whose
-    # canonical root is UNKNOWN likewise uses the fallback. Because every decision
-    # is a function of canonical consensus state (finality + canonical release
-    # state), all nodes compute EXACTLY ONE priority per slot with no delivery
-    # fork -- there is no "root bytes lagging" branch that could split priorities.
-    if slot_finalized:
+    # 3929943621 / 3930443124 / round-18 3935393898 / round-20 3936012529 /
+    # round-21 3936363900). Selection is NEVER a function of locally-DELIVERED
+    # bytes and NEVER of whether THIS caller happens to hold the root at the call
+    # instant -- that would give two priorities for one slot (the pulse for a
+    # node that already has P_s, the fallback for a node that does not). The
+    # decision is a PURE function of TWO CONSENSUS FACTS, identical for every
+    # honest node:
+    #   * `slot_finalized` -- the close was SCP-finalized / externalized
+    #     (committed consensus state, same for every node);
+    #   * `root_released`  -- the close's canonical root R_s is CONSENSUS-released
+    #     (the roster's `>= t` releases are committed/observable; derived from the
+    #     committed release registry, NOT from whether the proof bytes arrived at
+    #     this node).
+    # `root` is therefore only the VALUE to derive the pulse from -- when
+    # `root_released` is True the canonical R_s is deterministically the same for
+    # every node and must be supplied (we assert it); it is NEVER a decision
+    # input. There is ONE rule for the entire slot: the hidden-entropy pulse
+    # `KDF(R_s, NOMINATION)` when `slot_finalized and root_released` and
+    # NOMINATION is enabled by the committed `event_mapping`; otherwise the
+    # single closed-form fallback -- in every case a concrete priority, NEVER
+    # None (thread 3936012529), so nodes cannot observe two values for one slot
+    # no matter how asynchronously the proof is delivered.
+    if slot_finalized and root_released:
+        if root is None:
+            raise ValueError(
+                "consensus-committed root_released=True requires the canonical "
+                "root R_s (identical for every node); a None root is a "
+                "caller/state error, never a valid decision input")
         pulse = consumer_kdf(root, LABEL_NOM, event_mapping)
         if pulse is not None:
             return pulse                      # finalized + R_s released + enabled
-    # not finalized, or finalized but canonical-root UNKNOWN, or NOMINATION opted
+    # not (consensus-)finalized-with-released-root, or NOMINATION committed-opted-
     # out -> the single closed-form fallback, a pure function of committed state,
     # identical for every node (never None)
     return nomination_fallback_priority(epoch_hash, slot, close_commitment,
@@ -1720,6 +1752,29 @@ class ConfirmExternalizeBoundary:
         if not self.has_externalized(cl):
             return ()
         return self._externalized_members.get(cl.hash, ())
+
+    def member_release_witness(self, cl: LockedClose,
+                               member_index: int) -> bytes:
+        """Boundary-minted, PER-MEMBER release witness (round-21 thread
+        3936363759). The boundary issues a member's release witness `H(
+        "MREWitness", cap, epoch_hash, member_index, C_s)` ONLY if that member's
+        CONFIRM vote was ACTUALLY verified by `externalize()` for this close
+        (i.e. `member_index in externalized_members(cl)`). Combined with `cap`,
+        it makes per-member release bits unforgeable: a caller who holds only
+        the authority object cannot register a bit for a member whose CONFIRM
+        vote was never verified, because the witness cannot be minted without
+        the boundary secret. An unverified member, or a close that was never
+        externalized, is refused (raises) rather than silently issued."""
+        if not self.has_externalized(cl):
+            raise ValueError(
+                "no per-member release witness before the close is externalized")
+        if member_index not in self.externalized_members(cl):
+            raise ValueError(
+                "member %d has no verified CONFIRM vote for this close; the "
+                "boundary will not mint a release witness for it"
+                % (member_index,))
+        return sha256(b"MREWitness" + self._cap() + cl.epoch_hash +
+                      bytes([member_index]) + cl.hash)
 
     def finalize_scp(self, cl: LockedClose, scp_cert: dict = None) -> bool:
         # The independent SCP-FINALITY edge (Copilot round-16, thread
@@ -1883,8 +1938,11 @@ class RandomnessSource:
         # be boundary-released (`_released`), so no member is authorized before
         # the release gate.
         auth_members = self._boundary.externalized_members(cl)
+        cap = self._boundary._cap()
         for i in auth_members:
-            authority._authorize_member_release(i, cl.hash)
+            authority._authorize_member_release(
+                i, cl.hash, cap,
+                self._boundary.member_release_witness(cl, i))
         # FROST ROUND-1 FIRST: publish each authenticated member's nonce
         # commitment (gated on CONFIRM by `publish_nonce`) so the aggregate R and
         # challenge c are publicly FIXED before ANY round-2 partial is emitted.
@@ -2542,7 +2600,10 @@ def main():
     _ = barrier_src.proof(cl_a, barrier_auth)                 # sets _released/per-member
     barrier_auth._per_member_released.clear()                 # isolate the member bit
     barrier_auth._r1.pop(cl_a.hash, None)                     # isolate the round-1 set
-    barrier_auth._authorize_member_release(1, cl_a.hash)      # member 1's bit only
+    _bnd = barrier_src._boundary
+    barrier_auth._authorize_member_release(  # member 1's verified bit (boundary-minted)
+        1, cl_a.hash, _bnd._cap(),
+        _bnd.member_release_witness(cl_a, 1))
     # Not enough round-1 nonces yet (< t): share() refuses.
     before_r1 = barrier_auth.share(1, cl_a)
     for i in range(1, epoch.threshold + 1):
@@ -2701,12 +2762,21 @@ def main():
         # Each member i's carrier is available ONLY because i individually crossed
         # ITS OWN boundary toward cl_a: we first RESET the authenticated per-member
         # registry, then register exactly the members of E via the boundary-only
-        # `_authorize_member_release(i, cl_a.hash)`, which `auth.share(i, ...)`
-        # consults internally -- NOT a caller-supplied set. Members not in E
-        # contribute nothing (and a member IS in E iff that member itself crossed).
+        # `_authorize_member_release(i, cl_a.hash, cap, witness)` with the
+        # UNFORGEABLE boundary-minted per-member witness (round-21 3936363759) --
+        # only members i whose CONFIRM vote was actually VERIFIED by the shared
+        # source's boundary can obtain a witness, so the per-member bits are
+        # populated through the authenticated path, never by mutating release
+        # state directly. `auth.share(i, ...)` consults the bit internally, NOT a
+        # caller-supplied set. Members not in E contribute nothing (and a member
+        # IS in E iff that member itself crossed).
+        src_bnd = source._boundary
+        cap = src_bnd._cap()
         auth._per_member_released.clear()
         for i in E:
-            auth._authorize_member_release(i, cl_a.hash)
+            auth._authorize_member_release(
+                i, cl_a.hash, cap,
+                src_bnd.member_release_witness(cl_a, i))
         # FROST ROUND-1 FIRST (round-2 barrier): publish the round-1 nonce
         # commitment for each released member (CONFIRM-gated) so the close's
         # aggregate R / challenge are fixed BEFORE any round-2 partial; then
@@ -2814,7 +2884,10 @@ def main():
     share_sig = inspect.signature(auth.share)
     no_caller_set = "per_member_released" not in share_sig.parameters
     auth._per_member_released.clear()
-    auth._authorize_member_release(1, cl_a.hash)      # only member 1 crossed
+    _bnd = source._boundary
+    auth._authorize_member_release(          # only member 1 crossed (verified)
+        1, cl_a.hash, _bnd._cap(),
+        _bnd.member_release_witness(cl_a, 1))
     released_1 = auth.share(1, cl_a)
     withheld_2 = auth.share(2, cl_a)                  # never authorized -> None
     check("Boundary-authenticated per-member release (Copilot thread 3921067249): "
@@ -2959,7 +3032,7 @@ def main():
           and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True) is not None)
+                                  True, True) is not None)
     # --- Closed-form NOMINATION fallback priority (thread 3930443124). ---
     fb1 = nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                        canonical_value_hash(cl_a.value_bytes))
@@ -2974,7 +3047,7 @@ def main():
           and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True) == fb1)
+                                  True, True) == fb1)
     # --- Round-18 thread 3935393898 (High): nomination priority is
     # OBSERVER-INDEPENDENT. It is a pure function of canonical, committed state --
     # NOT of whether the root/proof was DELIVERED to this node at the call
@@ -2993,26 +3066,59 @@ def main():
           and nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True) == pulse_nom)
-    # --- Round-20 thread 3936012529: nomination is NEVER None and the pulse-vs-
-    # fallback choice is CONSENSUS-bound and permanent. `root` is CANONICAL state,
-    # not a local-delivery flag: for a FINALIZED close whose canonical root R_s is
-    # UNKNOWN (roster failed to canonically release), nomination uses the single
-    # closed-form fallback -- every node, never None, never mixing one pulse for
-    # net A and a fallback for net B. ---
-    check("Never-None, consensus-bound finalized nomination (round-20 "
-          "3936012529): a finalized, NOMINATION-enabled close whose canonical "
-          "root is UNKNOWN returns the closed-form fallback -- NEVER None and "
-          "NEVER the hidden pulse -- so the contract 'NOMINATION never returns "
-          "None' holds and all nodes still compute exactly one priority per slot",
-          nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                                  True, True) == pulse_nom)
+    # --- Round-21 thread 3936363900: ONE consensus-determined rule for the
+    # entire slot. The pulse-vs-fallback decision is a pure function of the two
+    # CONSENSUS facts `(slot_finalized, root_released)` -- the canonical root is
+    # CONSENSUS-released (committed registry), NOT "the caller happens to hold
+    # the proof". A node that has not yet received the proof bytes still has the
+    # SAME consensus facts, so it computes the SAME priority; proof delivery is
+    # asynchronous and is NOT a committed consensus transition, so it cannot
+    # change the slot's priority. No branch reads "root is None" as a decision
+    # input anymore (a None root with root_released=True is a state error that
+    # raises, never a fallback). ---
+    check("One consensus-determined nomination rule for the entire slot (round-21 "
+          "3936363900): 'root present/pulse' vs 'root absent/fallback' is NOT a "
+          "per-node delivery fork -- the DECISION is `(slot_finalized, "
+          "root_released)`, a pure function of committed consensus state, so a "
+          "finalized close whose canonical root is RELEASED yields the SAME pulse "
+          "for every node and a finalized close whose canonical root is UNKNOWN "
+          "yields the SAME fallback for every node, never two priorities and "
+          "never None",
+          nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
                               cl_a.hash,
                               canonical_value_hash(cl_a.value_bytes),
-                              True) is not None
+                              True, True) == pulse_nom
           and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True)
+                                  True, False)
+          == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                          canonical_value_hash(cl_a.value_bytes))
+          and raises(lambda: nomination_priority(
+              None, full_nom_map, epoch.hash, cl_a.slot, cl_a.hash,
+              canonical_value_hash(cl_a.value_bytes), True, True)))
+    # --- Round-20 thread 3936012529: nomination is NEVER None and the pulse-vs-
+    # fallback choice is CONSENSUS-bound and permanent. The DECISION is the pair
+    # `(slot_finalized, root_released)` -- canonical consensus facts -- never
+    # local delivery: for a FINALIZED close whose canonical root R_s is UNKNOWN
+    # (root_released=False: the roster never canonically released), nomination
+    # uses the single closed-form fallback -- every node, never None, never
+    # mixing one pulse for net A and a fallback for net B. ---
+    check("Never-None, consensus-bound finalized nomination (round-20 "
+          "3936012529 / round-21 3936363900): a finalized, NOMINATION-enabled "
+          "close whose canonical root is UNKNOWN (consensus root_released=False) "
+          "returns the closed-form fallback -- NEVER None and NEVER the hidden "
+          "pulse -- so the contract 'NOMINATION never returns None' holds and "
+          "all nodes still compute exactly one priority per slot",
+          nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                              cl_a.hash,
+                              canonical_value_hash(cl_a.value_bytes),
+                              True, False) is not None
+          and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, False)
           == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                           canonical_value_hash(cl_a.value_bytes)))
     # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
