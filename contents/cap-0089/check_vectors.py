@@ -292,17 +292,36 @@ def beacon(rows) -> bytes:
     return sha256(b"".join(row[1] for row in rows))
 
 
+def _clone_vrf_pub(name: bytes, net: bytes) -> bytes:
+    # A GENUINE ECVRF public key for the clone, derived from a private,
+    # domain-separated seed exactly as the fixture generator does (the CAP's one
+    # canonical TAI derivation, gen_vectors.vrf_private_seed /
+    # vrf_public_key_from_seed). Round-17 thread 3935081252: the previous
+    # SHA-256 hash was NOT a decompressible Edwards25519 point, so a real ECVRF
+    # verifier would reject the clone's alleged `vrf_pub` and V10 would not
+    # demonstrate identity-splitting by VALID VRF participants. Each clone now
+    # carries a real, decompressible prime-order VRF key.
+    n_seed = sha512(NODE_KEY_LABEL + name)[:32]            # PRIVATE NodeID seed
+    vrf_seed = sha512(b"stellar-vrf/v1/derive" + net + n_seed)[:32]
+    return (Ed25519PrivateKey.from_private_bytes(vrf_seed)
+            .public_key().public_bytes(Encoding.Raw, PublicFormat.Raw))
+
+
+NODE_KEY_LABEL = b"stellar-vrf/node-key"
+
+
 def make_committed_clone(name: bytes, net: bytes, slot: int, anchor: bytes) -> dict:
     # A single controller folds a fresh identity into the committed set by giving
     # it a CORRECT self-signed VRFCommit (so it enters commit_auth / Q on its
     # own). node_id is a real Ed25519 verification key, sig is a genuine Ed25519
     # signature over the canonical commit message, and the reveal binds to the
     # committed hash -- i.e. within Layer A's membership rule (self-authentication
-    # -> Q) the clone is indistinguishable from an independent validator.
+    # -> Q) the clone is indistinguishable from an independent validator, and its
+    # `vrf_pub` is a genuine ECVRF point (so the native verifier accepts it).
     seed = sha512(b"stellar-vrf/clone" + name)[0:32]
     sk = Ed25519PrivateKey.from_private_bytes(seed)
     nid = sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
-    vp = sha256(b"stellar-vrf/node-key/vrf-public-key" + nid)
+    vp = _clone_vrf_pub(name, net)
     beta = placeholder_beta(nid, net, slot, anchor)
     ch = sha256(beta)
     sig = sk.sign(commit_message(net, slot, ch, vp))
@@ -926,6 +945,14 @@ def run():
                           c["vrf_pub"])
         and sha256(c["beta"]) == c["commit_hash"]
         for c in clones)
+    # Round-17 thread 3935081252: the clones must carry GENUINE, strictly
+    # decompressible ECVRF points (not a SHA-256 hash stand-in), so V10
+    # demonstrates identity-splitting by VALID VRF participants -- every clone
+    # `vrf_pub` passes the same RFC 8032 strict decoder the fixture keys use,
+    # and each differs from its own NodeID.
+    clones_valid_vrf = all(
+        _ed_strict_decompress(c["vrf_pub"]) and c["vrf_pub"] != c["nid"]
+        for c in clones)
     # Make the clones genuinely COMMITTED so they enter Q exactly the way an
     # independent, correctly self-signed validator does: insert them into the
     # authenticated commit set (`commit_auth`, keyed BY NID) that
@@ -956,7 +983,7 @@ def run():
           "constant consensus influence -- so Layer A's raw identity count is not "
           "controller-independent authority (this is why Layer B's precommitted "
           "rosters are the bar)",
-          clones_authenticated and augmented_ok
+          clones_authenticated and clones_valid_vrf and augmented_ok
           and augmented_beacon != beacon(contribs))
     phantom = (sha256(b"cloned-controller-uncommitted"), contribs[0][1], th_leader_b,
                placeholder_proof(sha256(b"cloned-controller-uncommitted"),
