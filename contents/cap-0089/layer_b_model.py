@@ -584,13 +584,34 @@ class EpochDescriptor:
                 "authority_key must be a non-identity order-q group element "
                 "(1 < Y < p and Y^q == 1 mod p)")
         self.authority_key = authority_key
-        roster_tup = tuple(sorted(roster))
+        # Canonical member ordering (Copilot round-20 thread 3936012458): sort the
+        # member RECORDS as a UNIT -- (roster_key, confirm_pub[k], feldman_pub[k])
+        # -- so that reordering `roster` does NOT silently detach a caller-supplied
+        # per-member `confirm_pub` / `feldman_pub` from its roster index. Sorting
+        # `roster` alone while leaving caller-supplied key vectors in their original
+        # order would bind every K_i / C_i to the WRONG member at construction
+        # (authenticating / reconstructing under a silently-remapped member
+        # mapping). A provided key vector is carried WITH its member; an omitted
+        # one is later derived by canonical (sorted) index, which already agrees.
+        _cp = list(confirm_pub) if confirm_pub is not None else None
+        _fp = list(feldman_pub) if feldman_pub is not None else None
+        _pairs = [(_m, (None if _cp is None else _cp[_k]),
+                   (None if _fp is None else _fp[_k]))
+                  for _k, _m in enumerate(roster)]
+        _pairs.sort(key=lambda _r: _r[0])
+        roster_tup = tuple(_r[0] for _r in _pairs)
         if len(set(roster_tup)) != len(roster_tup):
             # thread e6WbkN: duplicate roster keys would let one verification
             # identity occupy multiple threshold indices -- reject before n and
             # membership_commitment are derived.
             raise ValueError("roster must contain distinct member keys")
         self.roster = roster_tup
+        # Bind any caller-supplied per-member public keys to the canonical order
+        # resolved above; None keeps "derive by index" for the default paths.
+        self._confirm_pub_raw = (
+            tuple(_r[1] for _r in _pairs) if _cp is not None else None)
+        self._feldman_pub_raw = (
+            tuple(_r[2] for _r in _pairs) if _fp is not None else None)
         self.membership_commitment = sha256(roster_bytes(self.roster))
         # Commit ONLY the per-member PUBLIC CONFIRM verification keys K_i
         # (Copilot this review: CONFIRM votes authenticate member-held SECRET
@@ -598,7 +619,7 @@ class EpochDescriptor:
         # `confirm_pub` is a tuple of n public keys K_i = G^{k_i}; the private
         # k_i is held only by the member/authority (never public, never here).
         self.confirm_pub = (
-            tuple(confirm_pub) if confirm_pub is not None
+            self._confirm_pub_raw if self._confirm_pub_raw is not None
             else tuple(_validator_confirm_pub(GROUP_SK, i)
                        for i in range(1, len(self.roster) + 1)))
         if len(self.confirm_pub) != len(self.roster):
@@ -644,7 +665,7 @@ class EpochDescriptor:
         # carrier whose C_i is not the epoch-committed one for that member.
         n_feld = len(self.roster)
         self.feldman_pub = (
-            tuple(feldman_pub) if feldman_pub is not None
+            self._feldman_pub_raw if self._feldman_pub_raw is not None
             else tuple(_feldman_commit(GROUP_SK, threshold, n_feld, i)
                        for i in range(1, n_feld + 1)))
         if len(self.feldman_pub) != len(self.roster):
@@ -1541,41 +1562,33 @@ def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
                         canonical_value_hash: bytes,
                         slot_finalized: bool,
                         network_id: bytes = NETWORK) -> bytes:
-    # The ONE-way, OBSERVER-INDEPENDENT nomination priority (threads 3929943621 /
-    # 3930443124 / round-18 thread 3935393898). Selection is NEVER a function of
-    # whether the root/proof bytes happen to be DELIVERED at the call instant --
-    # that would give two priorities for one slot (the pulse for a node that
-    # already has P_s, the fallback for a lagging node), contradicting the
-    # CAP's single network-wide ordering. Instead the decision is a PURE FUNCTION
-    # of CANONICAL, COMMITTED state: `slot_finalized` is a consensus fact (the
-    # close was SCP-finalized / externalized) that is IDENTICAL for every honest
-    # node. Once finalized the root R_s is deterministically derivable from the
-    # committed aggregate, so the priority is the hidden-entropy pulse
-    # `KDF(R_s, NOMINATION)`; strictly-before that canonical point it is the
-    # single closed-form fallback, applied uniformly by every node. Either way
-    # the model returns a concrete priority -- never None -- and there is exactly
-    # ONE priority per slot for all nodes, independent of delivery speed: the
-    # transition point is consensus-bound (finality), not proof-bound.
+    # The ONE-way, OBSERVER-INDEPENDENT, NEVER-None nomination priority (threads
+    # 3929943621 / 3930443124 / round-18 3935393898 / round-20 3936012529).
+    # Selection is NEVER a function of locally-DELIVERED bytes: `root` here is the
+    # CANONICAL root state `R_s` of the close -- a consensus fact IDENTICAL for
+    # every honest node (for a finalized close `R_s` is committed and
+    # deterministically reconstructable from the public aggregate commitments),
+    # NOT a per-node "have I seen the proof yet" flag. For a FINALIZED close the
+    # priority is therefore a PURE, PERMANENT function of canonical consensus
+    # state: the hidden-entropy pulse `KDF(R_s, NOMINATION)` when `R_s` is
+    # canonically RELEASED (`root` present), and the single closed-form fallback
+    # when `R_s` is canonically UNKNOWN (`root` absent -- the roster has not
+    # canonically released) or when the NOMINATION consumer is committed-opted-
+    # out. It returns a CONCRETE priority -- NEVER None (thread 3936012529),
+    # honouring the CAP contract that NOMINATION never returns None and uses the
+    # closed-form fallback during UNKNOWN: a node that has not finalized
+    # (`slot_finalized=False`) uses the fallback, and a finalized close whose
+    # canonical root is UNKNOWN likewise uses the fallback. Because every decision
+    # is a function of canonical consensus state (finality + canonical release
+    # state), all nodes compute EXACTLY ONE priority per slot with no delivery
+    # fork -- there is no "root bytes lagging" branch that could split priorities.
     if slot_finalized:
-        # Observer- and delivery-independent (round-19 thread 3935684450): a
-        # FINALIZED close has exactly ONE priority -- the canonical KDF pulse
-        # derived from the SAME root R_s that every honest node converges on.
-        # The root, being consensus-final, is identical for every node; a node
-        # that has not yet RECEIVED those bytes does NOT silently diverge to the
-        # closed-form fallback (that would yield a second, per-node priority).
-        # Instead it STALLS (returns None -- "await the canonical root") until
-        # the root is available, then returns the identical pulse. A finalized
-        # close reaches the closed-form fallback only via the committed,
-        # consensus-wide opt-out of the NOMINATION consumer (label absent from
-        # the event map) -- which is itself observer-independent, never
-        # delivery-dependent.
-        if root is None:
-            return None                       # stall: await the canonical root
         pulse = consumer_kdf(root, LABEL_NOM, event_mapping)
         if pulse is not None:
-            return pulse                      # finalized + root + enabled -> pulse
-    # not finalized, or finalized but NOMINATION opted out -> single closed-form
-    # fallback, a pure function of committed state, identical for every node
+            return pulse                      # finalized + R_s released + enabled
+    # not finalized, or finalized but canonical-root UNKNOWN, or NOMINATION opted
+    # out -> the single closed-form fallback, a pure function of committed state,
+    # identical for every node (never None)
     return nomination_fallback_priority(epoch_hash, slot, close_commitment,
                                         canonical_value_hash, network_id)
 
@@ -1979,7 +1992,14 @@ def main():
             failed += 1
 
     def mk_roster(n):
-        return [sha256(b"member-verify:%d" % i) for i in range(1, n + 1)]
+        # NodeID-ascending canonical member list (Copilot round-20 thread
+        # 3936012458): the roster is committed in canonical NodeID order so that
+        # caller-supplied per-member key vectors are positionally bound to a
+        # NON-AMBIGUOUS member ordering (position i in `confirm_pub` /
+        # `feldman_pub` is the key of roster[i], identical for every node, and
+        # the constructor's zip-sort is a verified no-op instead of a silent
+        # re-detachment of keys from members).
+        return sorted(sha256(b"member-verify:%d" % i) for i in range(1, n + 1))
 
     def boundary_release(src, cl, n_votes=None):
         # Wraps the REAL transition: the genuine CONFIRM->EXTERNALIZE edge runs
@@ -2974,25 +2994,26 @@ def main():
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
                                   True) == pulse_nom)
-    # --- Round-19 thread 3935684450 (Medium): for a FINALIZED close the choice
-    # is never delivery-dependent. A lagging node that has received the close but
-    # not yet the root MUST NOT diverge to the closed-form fallback (that would
-    # give two priorities for one slot). It STALLS (returns None == "await the
-    # canonical root"), then returns the SAME pulse as every other node. None on a
-    # finalized close is a wait, never a second value. ---
-    check("Delivery-independent finalized nomination (round-19 3935684450): a "
-          "finalized, NOMINATION-enabled close with the root not yet received "
-          "stalls (None) -- it NEVER falls back to the closed-form priority, so "
-          "no per-node priority fork exists for a finalized slot",
+    # --- Round-20 thread 3936012529: nomination is NEVER None and the pulse-vs-
+    # fallback choice is CONSENSUS-bound and permanent. `root` is CANONICAL state,
+    # not a local-delivery flag: for a FINALIZED close whose canonical root R_s is
+    # UNKNOWN (roster failed to canonically release), nomination uses the single
+    # closed-form fallback -- every node, never None, never mixing one pulse for
+    # net A and a fallback for net B. ---
+    check("Never-None, consensus-bound finalized nomination (round-20 "
+          "3936012529): a finalized, NOMINATION-enabled close whose canonical "
+          "root is UNKNOWN returns the closed-form fallback -- NEVER None and "
+          "NEVER the hidden pulse -- so the contract 'NOMINATION never returns "
+          "None' holds and all nodes still compute exactly one priority per slot",
           nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
                               cl_a.hash,
                               canonical_value_hash(cl_a.value_bytes),
-                              True) is None
+                              True) is not None
           and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
                                   True)
-          != nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+          == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                           canonical_value_hash(cl_a.value_bytes)))
     # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
     # validator AND by the epoch constructor / hash path (thread 3930443019). ---
