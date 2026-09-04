@@ -167,32 +167,38 @@ def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
 
 def provenance_free_value(value_bytes: bytes) -> bytes:
     """The canonical PROVENANCE-FREE value payload (Copilot this review, threads
-    evw_K / evw-VY7 / evw-VZa, High+Medium).
+    evw_K / evw-VY7 / evw-VZa, High+Medium; re-review thread 3930442982).
 
     For a real serialized Core `StellarValue`, provenance is NOT a cleanly
     strippable trailing 32 bytes -- the signed `ext` V0 arm ends with a
     `LedgerCloseValueSignature { NodeID nodeID; Signature signature; }` member,
-    and a BASIC arm has none -- so byte-truncation would retain most provenance
-    for signed values and chop semantic bytes from unsigned ones. Core therefore
-    PARSES the emitted value's `ext` arm and RE-ENCODES a precisely defined
-    provenance-free value: the value with the `lcValueSignature` member dropped
-    (present only in the signed V0 arm) before re-serialization. This harness
-    models that canonical re-encode as `payload || signer` where the trailing
-    `signer` is a FIXED trailing 32-byte field that is dropped; the payload that
-    remains is the canonical provenance-free encoding. (NodeIDs are 32 bytes in
-    the model's XDR widths; real `NodeID` is a 32-byte PublicKey and the re-encode
-    carries it inside the dropped member, so no provenance survives either way.)
-    Model closes supplied already as a 32-byte payload hash are simply that hash.
+    and a BASIC arm has none. The CAP's canonical rule is XDR-AWARE: parse the
+    emitted value's `ext` arm, re-encode the value with the `lcValueSignature`
+    members (nodeID, signature) set to their CANONICAL ZERO values **while
+    PRESERVING the arm structure and full wire width** (thread 3930443090 fixes
+    the signature member to its full 64-byte width), then re-serialize. This
+    harness mirrors that rule for its synthetic serialized form `payload ||
+    signer`: the trailing `signer` region (the provenance) is **zeroed IN PLACE
+    to its full fixed width**, NOT stripped -- so `payload || signerA` and
+    `payload || signerB` both canonicalize to `payload || <zeroed signer of the
+    SAME width>`, matching the CAP's "structure and width preserved, signer
+    fields zeroed" property (thread 3930442982). Model closes supplied already as
+    a 32-byte payload hash are simply that hash.
 
     `value_bytes` is therefore one of:
       * a 32-byte bare payload hash (the harness norm, e.g. `sha256(payload)`),
         which is the canonical provenance-free digest already; or
       * the harness's canonical serialized form `payload || signer` where the
-        fixed trailing 32-byte `signer` is the provenance to EXCLUDE."""
+        fixed trailing 32-byte `signer` is the provenance to EXCLUDE -- it is
+        zeroed in place (same width), not dropped."""
     if len(value_bytes) == 32:
         return value_bytes                     # already the canonical digest
     if len(value_bytes) > 32:
-        return value_bytes[:-32]               # drop the fixed 32-byte signer
+        # Zero the fixed 32-byte signer region IN PLACE (width preserved), per
+        # the CAP's XDR-aware "preserve arm, zero the signer fields" rule. This
+        # is the canonical-provenance FREE form, not a naive slice.
+        payload = value_bytes[:-32]
+        return payload + (b"\x00" * 32)
     return value_bytes                         # degenerate/short (defensive)
 
 
@@ -737,6 +743,21 @@ class EpochDescriptor:
                 "threshold must satisfy t <= n - f for AVAILABILITY "
                 "(the n-f honest members must be able to gather t shares)")
         self.verifier_rule = verifier_rule
+        if not is_valid_event_mapping(event_mapping):
+            # Thread 3930443019: an invalid committed event_mapping (one missing
+            # a MANDATORY consumer, APPLY or PRNG) must be REJECTED AT ACTIVATION
+            # -- not silently hashed into a live epoch. APPLY/PRNG genuinely
+            # require post-lock hidden entropy (an unstalled apply cannot proceed
+            # without a seed), so a mapping omitting either is an INVALID epoch and
+            # can never become active (see is_valid_event_mapping / thread
+            # 3929943643). Enforcing here (in the descriptor constructor / hash
+            # path) makes the CAP's "rejected at activation" a property of the
+            # boundary epoch itself, not a test-only helper call.
+            raise ValueError(
+                "event_mapping must enable both mandatory consumers APPLY and PRNG "
+                "(only NOMINATION may be opted out); got: "
+                + event_mapping.decode("ascii", "replace") if event_mapping else ""
+            )
         self.root_rule = root_rule
         self.event_mapping = event_mapping
         self.scheme = scheme
@@ -1469,6 +1490,46 @@ def consumer_kdf(root: bytes, label: bytes, event_mapping: bytes = None) -> [byt
     return sha256(b"KDF" + root + label)
 
 
+def nomination_fallback_priority(epoch_hash: bytes, slot: int,
+                                 close_commitment: bytes,
+                                 canonical_value_hash: bytes,
+                                 network_id: bytes = NETWORK) -> bytes:
+    # CLOSED-FORM, canonical, UNSEEDED priority for the NEXT round's nomination
+    # candidates when the NOMINATION pulse is NOT deliverable (opted out via the
+    # committed event_mapping, or the root is UNKNOWN). Copilot round-15 thread
+    # 3930443124 requires an exact byte encoding / hash-to-priority formula, not
+    # a vague "canonical rotation" and not `None`.
+    #
+    # It is a PURE FUNCTION of canonical, committed state -- epoch_hash, the
+    # target slot, the protected close_commitment C_s, and the canonical value
+    # hash V_s -- domain-separated by a dedicated label. It is deliberately NOT
+    # hidden entropy and NOT a second root: it is the single, deterministic way
+    # every implementation orders the next round's candidates during UNKNOWN, so
+    # there is exactly one priority in every case (threads 3929943621 /
+    # 3930443124). It never introduces a caller-chosen value and never invents a
+    # second consensus/nomination authority.
+    return sha256(b"NOMINATION-Fallback" + hash32(network_id) + hash32(epoch_hash)
+                  + struct.pack(">Q", slot) + hash32(close_commitment)
+                  + hash32(canonical_value_hash))
+
+def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
+                        slot: int, close_commitment: bytes,
+                        canonical_value_hash: bytes,
+                        network_id: bytes = NETWORK) -> bytes:
+    # The ONE-way nomination priority (threads 3929943621 / 3930443124): if
+    # NOMINATION is enabled by the committed mapping AND the root is deliverable,
+    # the priority is the hidden-entropy pulse `KDF(R_s, NOMINATION)`; otherwise
+    # it is the closed-form fallback. Either way the model returns a concrete
+    # canonical priority -- never `None` -- so implementations share exactly one
+    # candidate ordering in every consensus state.
+    pulse = consumer_kdf(root, LABEL_NOM, event_mapping)
+    if pulse is not None:
+        return pulse
+    return nomination_fallback_priority(epoch_hash, slot, close_commitment,
+                                        canonical_value_hash, network_id)
+
+
+
 class ConfirmExternalizeBoundary:
     """Modeled CONFIRM -> EXTERNALIZE transition -- the **sole producer** of a
     release witness (Copilot 3917696297 + suppressed line-506 note + this
@@ -1550,22 +1611,22 @@ class ConfirmExternalizeBoundary:
         if not isinstance(confirm_cert, dict):
             return False
         valid = 0
-        seen = set()
+        verified = set()
         for idx, vote in confirm_cert.items():
             if not isinstance(idx, int) or not (1 <= idx <= self.epoch.n):
                 continue
-            if idx in seen:
+            if idx in verified:
                 continue
-            seen.add(idx)
             K_i = self._confirm_pub.get(idx)
             if K_i is None:
                 continue
             if _confirm_vote_verify(K_i, cl.epoch_hash, cl.hash, vote):
+                verified.add(idx)
                 valid += 1
         if valid < self.epoch.threshold:
             return False
         self._externalized[cl.hash] = True
-        self._externalized_members[cl.hash] = tuple(sorted(seen))
+        self._externalized_members[cl.hash] = tuple(sorted(verified))
         return True
 
     def has_externalized(self, cl: LockedClose) -> bool:
@@ -1956,6 +2017,30 @@ def main():
               roster=dup_roster, activation=12300, retirement=13000,
               threshold=3, root_rule=b"unique-threshold/v1",
               event_mapping=b"single-pulse:LockedClose->C_s/v1")))
+    # Copilot re-review thread 3930443019: a committed event_mapping missing a
+    # MANDATORY consumer (APPLY or PRNG) must be rejected at EPOCH CONSTRUCTION /
+    # HASH PATH, not merely by a test-only validator -- otherwise an invalid
+    # mapping could become an active modeled epoch. Only NOMINATION is
+    # opt-outable.
+    check("Invalid event_mapping (missing mandatory APPLY/PRNG) is rejected at "
+          "epoch construction (Copilot 3930443019): EpochDescriptor raises for a "
+          "mapping that omits APPLY or PRNG, and accepts a mapping that keeps "
+          "both and opts only NOMINATION out",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"PRNG,NOMINATION"))                       # APPLY omitted
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"APPLY,NOMINATION"))                       # PRNG omitted
+          and not raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"APPLY,PRNG")))                           # NOM opt-out valid
     # Copilot this review #1 (High): the committed authority key must be a
     # non-identity order-q subgroup element. Y=1 would let anyone satisfy
     # G^s == R*Y^c with Y^c=1 and forge proofs; an out-of-subgroup key is
@@ -2718,16 +2803,37 @@ def main():
     optout_map = b"PRNG,APPLY"          # NOMINATION opted out; APPLY/PRNG kept
     check("Valid event_mapping keeps both mandatory consumers (APPLY, PRNG) "
           "and opts NOMINATION out (Copilot 3929943643): APPLY/PRNG still "
-          "derive their distinct KDF labels while NOMINATION releases None, "
-          "and the mapping passes is_valid_event_mapping",
+          "derive their distinct KDF labels while NOMINATION falls back to its "
+          "closed-form canonical priority, and the mapping passes "
+          "is_valid_event_mapping",
           is_valid_event_mapping(optout_map)
           and consumer_kdf(root_a, LABEL_APPLY, optout_map) is not None
           and consumer_kdf(root_a, LABEL_PRN, optout_map) is not None
-          and consumer_kdf(root_a, LABEL_NOM, optout_map) is None)
-    # --- Invalid mapping: omitting a MANDATORY consumer is rejected. ---
+          and consumer_kdf(root_a, LABEL_NOM, optout_map) is None
+          and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes)) is not None)
+    # --- Closed-form NOMINATION fallback priority (thread 3930443124). ---
+    fb1 = nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                       canonical_value_hash(cl_a.value_bytes))
+    fb2 = nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                       canonical_value_hash(cl_a.value_bytes))
+    check("Closed-form NOMINATION fallback (Copilot 3930443124): an opted-out "
+          "NOMINATION never returns None -- it yields a deterministic, "
+          "reproducible priority that is a pure function of committed canonical "
+          "state and distinct from the hidden-entropy pulse",
+          fb1 is not None and fb1 == fb2
+          and fb1 != consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping)
+          and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes)) == fb1)
+    # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
+    # validator AND by the epoch constructor / hash path (thread 3930443019). ---
     check("Mapping missing APPLY is INVALID and the epoch is rejected "
-          "(Copilot 3929943643): a committed epoch must not be able to opt out "
-          "of post-lock hidden entropy that unstalled apply requires",
+          "(Copilot 3929943643 / 3930443019): a committed epoch must not be able "
+          "to opt out of post-lock hidden entropy that unstalled apply requires "
+          "-- the validator rejects it AND EpochDescriptor cannot construct an "
+          "epoch with an invalid mapping",
           not is_valid_event_mapping(b"PRNG,NOMINATION")
           and not is_valid_event_mapping(b"NOMINATION")
           and is_valid_event_mapping(b"PRNG,APPLY,NOMINATION")
@@ -2782,15 +2888,16 @@ def main():
                             authority_key=epoch.authority_key,
                             roster=epoch.roster, activation=epoch.activation,
                             retirement=epoch.retirement, threshold=epoch.threshold,
-                            root_rule=b"a", event_mapping=b"bc")
+                            root_rule=b"a", event_mapping=b"APPLY,PRNG")
     pair2 = EpochDescriptor(format_version=epoch.format_version,
                             authority_key=epoch.authority_key,
                             roster=epoch.roster, activation=epoch.activation,
                             retirement=epoch.retirement, threshold=epoch.threshold,
-                            root_rule=b"ab", event_mapping=b"c")
+                            root_rule=b"ab", event_mapping=b"APPLY,PRNG,NOMINATION")
     check("dnFWC epoch preimage is injective (length-prefixed): "
-          "(root_rule=b'a',event_mapping=b'bc') vs (root_rule=b'ab',event_mapping"
-          "=b'c') yields DIFFERENT epoch hashes", pair1.hash != pair2.hash)
+          "(root_rule=b'a',event_mapping=b'APPLY,PRNG') vs "
+          "(root_rule=b'ab',event_mapping=b'APPLY,PRNG,NOMINATION') yields "
+          "DIFFERENT epoch hashes", pair1.hash != pair2.hash)
 
     # ---------- dnFV1: the proof verifier/encoding is canonicalized in the -----
     # ---------- epoch identity (Copilot d7OY2) --------------------------------
@@ -3326,6 +3433,23 @@ def main():
           and LockedClose(epoch, slot, prev_hash, payload_v).hash !=
           LockedClose(epoch, slot, prev_hash,
                       sha256(b"different-payload")).hash)
+    # Copilot re-review thread 3930442982: the canonicalization must be
+    # XDR-aware -- ZERO the signer members IN PLACE (preserving the arm width),
+    # not naively strip a trailing field. The harness's `payload || signer`
+    # form therefore canonicalizes to `payload || <32 zero bytes>` (same total
+    # width, signer fields zeroed), and a genuinely different payload still
+    # maps to a different value.
+    pf_full = provenance_free_value(payload_v + sha256(b"signer-A"))
+    check("S1 / thread 3930442982 (XDR-aware canonical zero): the signer region "
+          "is zeroed IN PLACE with its full width preserved (NOT stripped), so "
+          "differently-SIGNED payloads canonicalize byte-identically and a "
+          "genuinely different payload differs",
+          provenance_free_value(payload_v + sha256(b"signer-A")) ==
+          provenance_free_value(payload_v + sha256(b"signer-B"))
+          and pf_full == payload_v + (b"\x00" * 32)
+          and len(pf_full) == len(payload_v + sha256(b"signer-A"))
+          and provenance_free_value(payload_v + sha256(b"signer-A")) !=
+              provenance_free_value(b"different-payload" + sha256(b"signer-A")))
     check("S2 pre-lock unavailability: before the CONFIRM/EXTERNALIZE boundary "
           "admits the lock, a proposer holds NO valid proof -- no genuine "
           "recovered proof exists and no candidate resolves to a root (source "
