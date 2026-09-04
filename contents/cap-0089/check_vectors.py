@@ -197,7 +197,13 @@ def _ed_strict_decompress(b32) -> "bool":
         if xsign != (x & 1):
             x = (_ED_P - x) % _ED_P
         T = x * y % _ED_P
-        return _ed_affine_is_identity(*_ed_pt_mul((x, y, 1, T), _ED_L))
+        # Round-18 thread 3935393823: RFC 9381 ECVRF public-key validation also
+        # REJECTS the identity point (encoding '{01 00...00}' -> (x,y)=(0,1)),
+        # which otherwise trivially satisfies [L]P == identity. Exclude it here.
+        if x == 0 and y == 1:
+            return False
+        xL, yL, zL, tL = _ed_pt_mul((x, y, 1, T), _ED_L)
+        return _ed_affine_is_identity(xL, yL, zL, tL)
     except Exception:
         return False
 

@@ -1539,14 +1539,25 @@ def nomination_fallback_priority(epoch_hash: bytes, slot: int,
 def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
                         slot: int, close_commitment: bytes,
                         canonical_value_hash: bytes,
+                        slot_finalized: bool,
                         network_id: bytes = NETWORK) -> bytes:
-    # The ONE-way nomination priority (threads 3929943621 / 3930443124): if
-    # NOMINATION is enabled by the committed mapping AND the root is deliverable,
-    # the priority is the hidden-entropy pulse `KDF(R_s, NOMINATION)`; otherwise
-    # it is the closed-form fallback. Either way the model returns a concrete
-    # canonical priority -- never `None` -- so implementations share exactly one
-    # candidate ordering in every consensus state.
-    pulse = consumer_kdf(root, LABEL_NOM, event_mapping)
+    # The ONE-way, OBSERVER-INDEPENDENT nomination priority (threads 3929943621 /
+    # 3930443124 / round-18 thread 3935393898). Selection is NEVER a function of
+    # whether the root/proof bytes happen to be DELIVERED at the call instant --
+    # that would give two priorities for one slot (the pulse for a node that
+    # already has P_s, the fallback for a lagging node), contradicting the
+    # CAP's single network-wide ordering. Instead the decision is a PURE FUNCTION
+    # of CANONICAL, COMMITTED state: `slot_finalized` is a consensus fact (the
+    # close was SCP-finalized / externalized) that is IDENTICAL for every honest
+    # node. Once finalized the root R_s is deterministically derivable from the
+    # committed aggregate, so the priority is the hidden-entropy pulse
+    # `KDF(R_s, NOMINATION)`; strictly-before that canonical point it is the
+    # single closed-form fallback, applied uniformly by every node. Either way
+    # the model returns a concrete priority -- never None -- and there is exactly
+    # ONE priority per slot for all nodes, independent of delivery speed: the
+    # transition point is consensus-bound (finality), not proof-bound.
+    pulse = (consumer_kdf(root, LABEL_NOM, event_mapping)
+             if slot_finalized else None)
     if pulse is not None:
         return pulse
     return nomination_fallback_priority(epoch_hash, slot, close_commitment,
@@ -2911,7 +2922,8 @@ def main():
           and consumer_kdf(root_a, LABEL_NOM, optout_map) is None
           and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
-                                  canonical_value_hash(cl_a.value_bytes)) is not None)
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True) is not None)
     # --- Closed-form NOMINATION fallback priority (thread 3930443124). ---
     fb1 = nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                        canonical_value_hash(cl_a.value_bytes))
@@ -2925,7 +2937,27 @@ def main():
           and fb1 != consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping)
           and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
-                                  canonical_value_hash(cl_a.value_bytes)) == fb1)
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True) == fb1)
+    # --- Round-18 thread 3935393898 (High): nomination priority is
+    # OBSERVER-INDEPENDENT. It is a pure function of canonical, committed state --
+    # NOT of whether the root/proof was DELIVERED to this node at the call
+    # instant. Two honest nodes with the same finalized close (same canonical root
+    # R_s) must select the SAME priority: the KDF pulse KDF(R_s, NOMINATION), never
+    # the fallback that a lagging node would reach by passing root=None. The
+    # transition is consensus-bound (`slot_finalized` from the externalized close),
+    # never delivery-bound. ---
+    full_nom_map = b"APPLY,PRNG,NOMINATION"
+    pulse_nom = consumer_kdf(root_a, LABEL_NOM, full_nom_map)
+    check("Observer-independent nomination priority (round-18 3935393898): a "
+          "finalized close yields the SAME canonical KDF pulse for the nomination "
+          "slot whether the root bytes are already delivered or not -- no "
+          "pulse-vs-fallback fork on delivery, no second per-node priority",
+          pulse_nom is not None
+          and nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True) == pulse_nom)
     # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
     # validator AND by the epoch constructor / hash path (thread 3930443019). ---
     check("Mapping missing APPLY is INVALID and the epoch is rejected "
