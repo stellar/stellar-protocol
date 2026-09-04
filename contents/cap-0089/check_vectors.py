@@ -114,6 +114,94 @@ def sha512(b: bytes) -> bytes:
     return hashlib.sha512(b).digest()
 
 
+# ---- Strict Edwards25519 point validation -----------------------------------
+# Copilot round-16 (thread 3934383160, Medium): `Ed25519PublicKey.from_public_bytes`
+# only checks that the argument is 32 bytes; it does NOT decompress the point or
+# enforce the prime-order subgroup, so arbitrary 32-byte values could pass and the
+# test could not establish native ECVRF acceptance. The functions below perform the
+# FULL RFC 8032 decompression (field square-root solve, sign handling) PLUS the
+# subgroup check ([L]P == identity), matching what the native ECVRF-Ed25519
+# verifier requires before it accepts a VRF public key.
+_ED_P = 2 ** 255 - 19
+_ED_D = (-121665 * pow(121666, _ED_P - 2, _ED_P)) % _ED_P
+_ED_I = pow(2, (_ED_P - 1) // 4, _ED_P)
+_ED_L = 2 ** 252 + 27742317777372353535851937790883648493   # group order
+
+
+def _ed_is_square(v: int) -> bool:
+    return pow(v, (_ED_P - 1) // 2, _ED_P) in (0, 1)
+
+
+def _ed_affine_is_identity(X, Y, Z, T=None):
+    # extended coords (X,Y,Z,T); identity is (0,1,1,0) i.e. affine (0,1).
+    if Z == 0:
+        return False
+    return (X * pow(Z, _ED_P - 2, _ED_P) % _ED_P == 0
+            and Y * pow(Z, _ED_P - 2, _ED_P) % _ED_P == 1)
+
+
+def _ed_pt_add(P, Q):
+    X1, Y1, Z1, T1 = P
+    X2, Y2, Z2, T2 = Q
+    A = (Y1 - X1) * (Y2 - X2) % _ED_P
+    B = (Y1 + X1) * (Y2 + X2) % _ED_P
+    C = 2 * T1 * _ED_D * T2 % _ED_P
+    D = 2 * Z1 * Z2 % _ED_P
+    E, F, G, H = (B - A) % _ED_P, (D - C) % _ED_P, (D + C) % _ED_P, (B + A) % _ED_P
+    return (E * F % _ED_P, G * H % _ED_P, F * G % _ED_P, E * H % _ED_P)
+
+
+def _ed_pt_double(P):
+    X1, Y1, Z1 = P[:3]
+    A = X1 * X1 % _ED_P
+    B = Y1 * Y1 % _ED_P
+    C = 2 * Z1 * Z1 % _ED_P
+    H = (A + B) % _ED_P
+    E = (H - (X1 + Y1) * (X1 + Y1)) % _ED_P
+    G = (A - B) % _ED_P
+    F = (C + G) % _ED_P
+    return (E * F % _ED_P, G * H % _ED_P, F * G % _ED_P, E * H % _ED_P)
+
+
+def _ed_pt_mul(P, s):
+    R = (0, 1, 1, 0)                       # identity
+    while s:
+        if s & 1:
+            R = _ed_pt_add(R, P)
+        P = _ed_pt_double(P)
+        s >>= 1
+    return R
+
+
+def _ed_strict_decompress(b32) -> "bool":
+    """Full RFC 8032 decompression + prime-order subgroup validation of a
+    32-byte compressed Edwards25519 point. Returns True only for a point the
+    native ECVRF-Ed25519 verifier accepts."""
+    if not isinstance(b32, (bytes, bytearray)) or len(b32) != 32:
+        return False
+    xsign = (b32[31] >> 7) & 1
+    y = int.from_bytes(b32, "little") & ((1 << 255) - 1)
+    if y >= _ED_P:
+        return False
+    try:
+        x2 = (y * y - 1) * pow(_ED_D * y * y + 1, _ED_P - 2, _ED_P) % _ED_P
+        if not _ed_is_square(x2):
+            return False
+        x = pow(x2, (_ED_P + 3) // 8, _ED_P)
+        if (x * x - x2) % _ED_P != 0:
+            x = x * _ED_I % _ED_P
+        if (x * x - x2) % _ED_P != 0:
+            return False
+        if x == 0 and xsign == 1:
+            return False
+        if xsign != (x & 1):
+            x = (_ED_P - x) % _ED_P
+        T = x * y % _ED_P
+        return _ed_affine_is_identity(*_ed_pt_mul((x, y, 1, T), _ED_L))
+    except Exception:
+        return False
+
+
 DOMAIN = b"stellar-vrf"
 SUB_DOMAIN = b"stellar-vrf/sub"
 BETA_LABEL = b"stellar-vrf/beta"
@@ -293,11 +381,10 @@ def run():
     # VRF key is a separate committed public key, never the same bytes as the
     # Ed25519 node key).
     def _is_decompressible_point(b32):
-        try:
-            Ed25519PublicKey.from_public_bytes(b32)
-            return True
-        except Exception:
-            return False
+        # Copilot round-16 (thread 3934383160): the reference codec only length-
+        # checks; STRICT decompression + subgroup validation is what the native
+        # ECVRF verifier requires, so we use the full RFC 8032 decoder above.
+        return _ed_strict_decompress(b32)
     _vrf_keys = [bytes.fromhex(c["vrf_public_key"]) for c in t["contributors"]]
     check("rule VRF-public-key (Copilot round-15 3929898654): every committed "
           "`vrf_public_key` decompresses as a valid RFC 8032 / ECVRF-Ed25519 "

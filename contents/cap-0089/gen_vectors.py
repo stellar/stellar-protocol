@@ -144,30 +144,41 @@ def commit_message(net: bytes, slot: int, commit_hash: bytes,
             + (vrf_pub or b""))
 
 
-def vrf_public_key(node_id: bytes) -> bytes:
-    """The contributor's ECVRF public key (VKF), a DISTINCT 32-byte value from
-    the NodeID (the CAP's `vrfPublicKey` field). Deriving it from a private seed
-    means it is NOT publicly inferable from the NodeID, so the CAP commits it in
-    `VRFCommit` and has the NodeID signature bind it (this review: without the
-    committed+authenticated mapping, `ECVRF_Verify(VKF, ...)` could not bind the
-    reveal's beta to the node that committed it).
+def vrf_private_seed(name: bytes, net: bytes) -> bytes:
+    """The contributor's PRIVATE, domain-separated ECVRF seed (32 bytes), fed as
+    the actual RFC 8032 secret-key seed to the primitive (PR #5409's TAI
+    ciphersuite). It is derived from the node's PRIVATE NodeID seed -- NOT from
+    its public NodeID -- so the VRF secret is not publicly reconstructible.
 
-    COPILOT round-15 (thread 3929898654, High): a RAW 32-byte digest is NOT a
-    valid ECVRF-Ed25519 public key -- roughly half of all 32-byte strings fail
-    Edwards25519 point decompression, so the fixtures could not be replayed
-    through the native VRF acceptance path. We therefore generate a GENUINE,
-    valid Edwards25519 public point deterministically from the node seed: the
-    domain-separated secret seed `s_v` is expanded (SHA-512) to 32 bytes, an
-    Ed25519 keypair is derived from that exact seed, and the COMPRESSED public
-    point (32 bytes, decomposable by the RFC 8032 point decoder) is returned.
-    This is the ECVRF-Ed25519 key-derivation shape: `VKF = s_v * B` with
-    `s_v = H(...)` clamped, and the compressed point is the valid ECVRF public
-    key the native `ECVRF_Verify` accepts. The value remains deterministic per
-    node (same node_id -> same seed -> same valid point) and still differs from
-    the NodeID, and the NodeID signature still binds this exact key."""
-    seed = sha512(NODE_KEY_LABEL + b"/vrf-public-key" + node_id)[:32]
-    vk = Ed25519PrivateKey.from_private_bytes(seed).public_key()
-    return vk.public_bytes(Encoding.Raw, PublicFormat.Raw)
+    COPILOT round-15b/16 (thread 3934382949, High): previously `vrf_public_key`
+    derived its seed entirely from the PUBLIC `node_id`, so anyone could
+    reconstruct the VRF secret, and it used a private label that differed from
+    the CAP's prescribed network/domain-separated seed. This helper instead
+    consumes the node's existing private seed (the same `NODE_KEY_LABEL + name`
+    secret that mints the NodeID signing key) and domain-separates it with the
+    network ID exactly as the CAP's single canonical rule specifies:
+
+        vrf_seed = SHA-512("stellar-vrf/v1/derive" | network_id | private_seed)[:32]
+
+    This is now byte-identical to the CAP's one TAI derivation (cap-0089.md,
+    'Key separation'), so fixture keys, the checker, and the native primitive
+    all interoperate."""
+    n_seed = sha512(NODE_KEY_LABEL + name)[:32]            # PRIVATE NodeID seed
+    return sha512(b"stellar-vrf/v1/derive" + net + n_seed)[:32]
+
+
+def vrf_public_key_from_seed(vrf_seed: bytes) -> bytes:
+    """The ECVRF public key (VKF) for a given private VRF seed. `vrf_seed` is the
+    RFC 8032 32-byte secret-key seed; `Ed25519PrivateKey.from_private_bytes` runs
+    the RFC 8032 key expansion (incl. clamping, little-endian scalar) so the
+    returned compressed point is a GENUINE, decomposable Edwards25519 point --
+    the shape the native ECVRF verifier and the checker's strict decoder accept.
+
+    The result is a DISTINCT 32-byte value from the NodeID, NOT publicly
+    inferable from it (the seed is private), deterministic per (node, network),
+    and bound to the node by the NodeID signature over `commit_message`."""
+    sk = Ed25519PrivateKey.from_private_bytes(vrf_seed)
+    return sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
 
 
 def commit_signature(sk: Ed25519PrivateKey, net: bytes, slot: int,
@@ -188,11 +199,12 @@ def contributors(net, slot, anchor):
     # node's vrfPublicKey), made by that node's secret key.
     rows = sorted((pub for _, pub, _ in NODES))
     key_of = {pub: sk for sk, pub, _ in NODES}
+    name_of = {pub: name for _, pub, name in NODES}
     out = []
     for nid in rows:
         beta = placeholder_beta(nid, net, slot, anchor)
         ch = commit_hash_of(beta)
-        vp = vrf_public_key(nid)
+        vp = vrf_public_key_from_seed(vrf_private_seed(name_of[nid], net))
         sg = commit_signature(key_of[nid], net, slot, ch, vp)
         out.append((nid, vp, beta, ch, sg))
     return out

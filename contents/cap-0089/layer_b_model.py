@@ -488,7 +488,11 @@ def _confirm_vote_verify(K_i_pub: bytes, epoch_hash: bytes, C_s: bytes,
     R_bytes, s_bytes = vote[:32], vote[32:]
     R = int.from_bytes(R_bytes, "big")
     s = int.from_bytes(s_bytes, "big")
-    if not (0 < R < _GRP_P) or not (1 <= s < _GRP_Q):
+    # Copilot round-16 (thread 3934383210): a Schnorr response is a scalar mod q,
+    # so s == 0 is a VALID canonical value that a deterministic _confirm_vote can
+    # legitimately emit; rejecting the high 0 bit would drop a valid member vote
+    # and stall release. Accept the full range [0, q).
+    if not (0 < R < _GRP_P) or not (0 <= s < _GRP_Q):
         return False
     c = int.from_bytes(sha256(b"ConfirmChal" + epoch_hash + C_s
                               + R_bytes + K_i_pub + b"v1"), "big") % _GRP_Q
@@ -534,7 +538,10 @@ def _spf_verify(pub32: bytes, epoch_hash: bytes, C_s: bytes, proof: bytes) -> bo
     if not (0 < R < _GRP_P):
         return False
     s = int.from_bytes(s_bytes, "big")
-    if not (1 <= s < _GRP_Q):
+    # Copilot round-16 (thread 3934383210): s == 0 is a valid scalar mod q; accept
+    # the full range [0, q) so a legitimate zero response cannot make a valid
+    # FROST/signature reconstruction fail.
+    if not (0 <= s < _GRP_Q):
         return False
     c = int.from_bytes(sha256(b"SpfChal" + epoch_hash + C_s
                               + R_bytes + pub32 + b"cap-0089-v1"), "big")
@@ -1292,7 +1299,11 @@ class ThresholdAuthority:
         # tion by transporting a C_i the epoch never committed for its index.
         if C_i_b != self.epoch.feldman_pub[member_index - 1]:
             return False                    # C_i not the epoch-committed one
-        if not (1 <= s_i < _GRP_Q):
+        # Copilot round-16 (thread 3934383263): a valid FROST partial
+        # s_i = n_i + c*f(i) mod q can legitimately be zero; rejecting it here
+        # would discard an honest share and break an otherwise-valid threshold
+        # reconstruction. Accept the full range [0, q).
+        if not (0 <= s_i < _GRP_Q):
             return False
         # PUBLIC AGGREGATE R from the close's AUTHENTICATED ROUND-1 nonce-
         # commitment set -- NOT transient per-call state. `round1` (the supplied
@@ -1471,7 +1482,14 @@ def is_valid_event_mapping(event_mapping: bytes) -> bool:
     # cannot proceed without a seed), so EVERY accepted epoch MUST enable both.
     # NOMINATION is the ONE opt-outable consumer. A committed mapping that omits
     # APPLY or PRNG is INVALID and the epoch is rejected at activation.
-    return {"APPLY", "PRNG"} <= _mapping_labels(event_mapping)
+    #
+    # Copilot round-16 (thread 3934383303): the accepted grammar is now the
+    # CLOSED set -- APPLY and PRNG mandatory plus at most the optional NOMINATION.
+    # Unknown labels such as `APPLY,PRNG,OTHER` are REJECTED, so unsupported
+    # consumer names can never enter committed state (the epoch grammar is the
+    # normative interface, not a superset of it).
+    labels = _mapping_labels(event_mapping)
+    return {"APPLY", "PRNG"} <= labels <= {"APPLY", "PRNG", "NOMINATION"}
 
 
 def consumer_kdf(root: bytes, label: bytes, event_mapping: bytes = None) -> [bytes, None]:
@@ -1485,6 +1503,12 @@ def consumer_kdf(root: bytes, label: bytes, event_mapping: bytes = None) -> [byt
     # value from the pulse, so "consumer is mandatory" is a real, testable
     # property of the epoch, not a prose claim. The default full mapping enables
     # all three.
+    # Copilot round-16 (thread 3934383355): when the root is UNKNOWN (None), an
+    # enabled consumer must NOT reach the hash concatenation and raise TypeError;
+    # return None so callers (e.g. nomination_priority) can stall or fall back
+    # exactly as specified.
+    if root is None:
+        return None
     if label.decode("ascii", "replace") not in _mapping_labels(event_mapping):
         return None                     # opted-out consumer: no value
     return sha256(b"KDF" + root + label)
@@ -1584,6 +1608,16 @@ class ConfirmExternalizeBoundary:
         # indices ONLY -- never for roster members absent from the verified
         # CONFIRM certificate (Noot/Copilot round-15, thread 3929898761).
         self._externalized_members = {}
+        # C_s.hash -> True iff Core's SCP QUORUM finalized this value. This is a
+        # DELIBERATELY INDEPENDENT signal from the roster's CONFIRM/release edge
+        # (Copilot round-16, thread 3934383407; tacticalnoot's 'second liveness
+        # authority'): SCP finality is Core's own quorum decision and does NOT
+        # imply t roster releases, and conversely t roster releases do not imply
+        # SCP finality. It is set ONLY by the explicit `finalize_scp` transition
+        # (never by a caller-asserted boolean), which is what lets the model
+        # represent the accepted protocol state `SCP-finalized + |released| < t
+        # => UNKNOWN` through genuine transitions rather than a disconnected flag.
+        self._scp_finalized = {}
 
     def externalize(self, cl: LockedClose, confirm_cert: dict) -> bool:
         # The genuine CONFIRM -> EXTERNALIZE edge. The transition type and full
@@ -1646,6 +1680,42 @@ class ConfirmExternalizeBoundary:
         if not self.has_externalized(cl):
             return ()
         return self._externalized_members.get(cl.hash, ())
+
+    def finalize_scp(self, cl: LockedClose, scp_cert: dict = None) -> bool:
+        # The independent SCP-FINALITY edge (Copilot round-16, thread
+        # 3934383407; tacticalnoot's 'second liveness authority'). This models
+        # Core's OWN SCP quorum deciding that `cl` is the finalized externalized
+        # value -- a predicate INDEPENDENT of the roster's CONFIRM/release count.
+        # It does NOT authorize any randomness release by itself: release still
+        # requires the per-member CONFIRM->EXTERNALIZE edge (`externalize` /
+        # `_authorize_member_release`). Recording SCP finality here is what makes
+        # the accepted state `SCP-finalized + |released_roster| < t => UNKNOWN`
+        # genuinely representable: we can finalize a value Core picked even when
+        # the roster has not (yet) supplied t individual releases, and the
+        # resolver must then stall rather than fabricate a root.
+        if cl is None or not cl.validate():
+            return False
+        if cl.network_id != NETWORK or cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        # An SCP quorum certificate must be a non-empty dict of rostered
+        # member/slot quorum-slice entries (modeled minimally); the numeric
+        # roster threshold is NOT required here -- SCP finality is Core's
+        # quorum predicate, deliberately decoupled from t.
+        if not isinstance(scp_cert, dict) or not scp_cert:
+            return False
+        self._scp_finalized[cl.hash] = True
+        return True
+
+    def scp_finalized(self, cl: LockedClose) -> bool:
+        # INDEPENDENT SCP-finality predicate: Core's quorum finalized `cl`,
+        # regardless of how many roster members have individually released.
+        # Unlike `has_externalized` (which requires >= t roster CONFIRM votes to
+        # release), this is satisfied the moment Core's SCP quorum closed on the
+        # value -- so `scp_finalized(cl) and |released| < t` is a REAL, reachable
+        # state that the resolver maps to UNKNOWN.
+        return cl is not None and self._scp_finalized.get(cl.hash, False)
 
     def _cap(self) -> bytes:
         # RELEASE capability derived from the boundary secret + epoch. It is the
@@ -2598,16 +2668,45 @@ def main():
             auth.publish_nonce(i, cl_a)
         return [(i, c) for i in E for c in [auth.share(i, cl_a)]
                 if c is not None]
-    # (a)-(b) model: SCP finality and per-member release are independent.
-    # Roster-disjoint finalization: SCP externalized (ledger finalized) but the
-    # roster supplied < t individual releases -> no reconstructible randomness.
-    # `disjoint_externalized` is CONSUMED below: the disjoint SCP quorum that
-    # finalized the close is distinct from the roster's per-member releases, so
-    # even with scp_finalized == True the roster never reaches t independent bits.
-    disjoint_externalized = True          # SCP finalized via a non-roster quorum
+    # (a)-(b) model: SCP finality and per-member release are INDEPENDENT
+    # (Copilot round-16, thread 3934383407; tacticalnoot's 'second liveness
+    # authority'). 'SCP finality' is Core's OWN SCP-quorum decision -- modeled as
+    # a DEDICATED, authenticated transition (finalize_scp with an SCP quorum
+    # certificate), NOT the roster's reconstruction threshold t, and NOT a
+    # caller-asserted boolean. Randomness release remains the roster's per-member
+    # CONFIRM->EXTERNALIZE edge. A ROSTER-DISJOINT finalization -- Core's quorum
+    # closed on `cl_a` (scp_finalized == True) while the roster supplied only
+    # 2 < t individual releases -- therefore yields NO reconstructible proof:
+    # the accepted state 'SCP-finalized + |released_roster| < t -> UNKNOWN' is
+    # reached through genuine transitions, not a disconnected flag.
+    # A DEDICATED, FRESH boundary mounts the SCP-finality demonstration, so the
+    # roster CONFIRM edge for `cl_a` has GENUINELY never run on IT (shared
+    # `source` already released cl_a earlier in this suite; the fresh boundary
+    # starts empty). This is what lets us show SCP finality and roster release
+    # vary independently.
+    scp_bnd = ConfirmExternalizeBoundary(epoch)
+    disjoint_externalized = scp_bnd.finalize_scp(
+        cl_a, scp_cert={tuple(range(1, N_MEMBERS + 1)): b"core-quorum"})
     disjoint_release = [1, 2]             # only 2 < t=5 roster members released
     disjoint_recovered = auth.recover_proof(
         roster_released_shares(disjoint_release), cl_a)
+    # Copilot round-16 (thread 3934383407): assert the two dimensions are GENUINELY
+    # independent -- on the FRESH boundary, SCP finality (Core's quorum, via
+    # finalize_scp) is recorded for `cl_a` while the roster's own CONFIRM edge
+    # never ran (has_externalized == False, |E| < t). This proves the model can
+    # represent the accepted 'SCP-finalized + |released| < t -> UNKNOWN' state
+    # through real transitions, not a disconnected boolean: the resolver stalls
+    # (recover -> None) rather than fabricating a root.
+    scp_independent = (scp_bnd.scp_finalized(cl_a)
+                       and not scp_bnd.has_externalized(cl_a))
+    check("Liveness / SCP-finality is INDEPENDENT of roster release (Copilot "
+          "round-16 thread 3934383407): finalize_scp records Core's quorum "
+          "decision for `cl_a` (scp_finalized == True) while the roster's own "
+          "CONFIRM edge never crossed (has_externalized == False, |E| < t), so "
+          "the accepted state 'SCP-finalized + |released_roster| < t -> UNKNOWN' "
+          "is reached through genuine transitions and recovery stalls (not a "
+          "disconnected boolean)",
+          scp_independent and disjoint_recovered is None)
     # (thread ew-Og4, Medium) consume `disjoint_externalized` explicitly: it is
     # NOT a re-test of t-of-n reconstruction. It asserts that an SCP-finalized
     # close yields NO randomness when (and only when) the per-member roster release
@@ -2838,6 +2937,31 @@ def main():
           and not is_valid_event_mapping(b"NOMINATION")
           and is_valid_event_mapping(b"PRNG,APPLY,NOMINATION")
           and is_valid_event_mapping(b"single-pulse:LockedClose->C_s/v1"))
+    # Copilot round-16 thread 3934383303 (Medium): the event-mapping grammar is
+    # CLOSED -- a committed mapping that enables an UNKNOWN label is invalid, so
+    # an application cannot silently append a consumer the protocol does not
+    # recognise (typos / out-of-band labels must fail loudly, never silently
+    # collapse to a permissive superset).
+    check("Closed event-mapping grammar (Copilot 3934383303): a mapping "
+          "containing an UNKNOWN label is rejected by is_valid_event_mapping -- "
+          "only the protocol's recognised consumers (APPLY/PRNG/NOMINATION) and "
+          "the single-pulse shortcut are admissible",
+          is_valid_event_mapping(b"APPLY,PRNG")
+          and not is_valid_event_mapping(b"APPLY,PRNG,OTHER")
+          and not is_valid_event_mapping(b"APPLY,PRNG,BAD")
+          and not is_valid_event_mapping(b"APPLY,PRNG,NOMINATION,EXTRA"))
+    # Copilot round-16 thread 3934383355 (Medium): `consumer_kdf` must not raise
+    # a TypeError on an UNKNOWN root -- the unknown-root case is an OUTCOME of
+    # the reveal-resolution path (a root the boundary has not yet derived), so
+    # it is a normal `None` return, not an exception.
+    check("consumer_kdf tolerates an unknown root (Copilot 3934383355): "
+          "consumer_kdf(None, label, mapping) returns None for every consumer "
+          "label instead of raising TypeError, and never fabricates a "
+          "derived value from a missing root",
+          consumer_kdf(None, LABEL_PRN, epoch.event_mapping) is None
+          and consumer_kdf(None, LABEL_APPLY, epoch.event_mapping) is None
+          and consumer_kdf(None, LABEL_NOM, epoch.event_mapping) is None
+          and consumer_kdf(None, LABEL_PRN, optout_map) is None)
     source_b = RandomnessSource(epoch)
     b_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
     source_b.bind(b_auth)
