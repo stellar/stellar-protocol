@@ -284,6 +284,29 @@ def run():
           "64-byte placeholder would never exercise the real wire width",
           all(len(p) == 80 for p in expected_proof.values())
           and len(expected_proof) == len(commit_auth))
+    # Every committed `vrf_public_key` must be a REAL, decomposable
+    # Edwards25519 point -- otherwise the fixture could not be replayed through
+    # the native ECVRF-Ed25519 acceptance path (Copilot round-15, thread
+    # 3929898654, High). RFC 8032 point decompression (via the reference
+    # codec `Ed25519PublicKey.from_public_bytes`) must succeed for ALL of them,
+    # they must be pairwise distinct, and each must differ from its NodeID (the
+    # VRF key is a separate committed public key, never the same bytes as the
+    # Ed25519 node key).
+    def _is_decompressible_point(b32):
+        try:
+            Ed25519PublicKey.from_public_bytes(b32)
+            return True
+        except Exception:
+            return False
+    _vrf_keys = [bytes.fromhex(c["vrf_public_key"]) for c in t["contributors"]]
+    check("rule VRF-public-key (Copilot round-15 3929898654): every committed "
+          "`vrf_public_key` decompresses as a valid RFC 8032 / ECVRF-Ed25519 "
+          "public point (the fixture replays through the native VRF acceptance "
+          "path), all are distinct, and each differs from its own NodeID",
+          all(_is_decompressible_point(k) for k in _vrf_keys)
+          and len(set(_vrf_keys)) == len(_vrf_keys)
+          and all(k != n for k, n in zip(_vrf_keys, [bytes.fromhex(c["node_id"])
+                                                     for c in t["contributors"]])))
 
     # --- V8: transcript mutation (and canonical byte checks) ---
     th_leader = transcript_hash(net_id, slot, 1, anchor)
@@ -389,50 +412,67 @@ def run():
         return seam, anchor  # correct rule: candidate authenticated, not bound
 
     # (Copilot this review, suppressed line-~386) route EACH candidate through a
-    # SINGLE configurable PRODUCTION-LIKE transcript derivation and assert its
-    # ACCEPTED OUTPUT -- not merely that a separately-computed seam differs. The
-    # acceptance path is the one value that reaches the ledger, so candidate
-    # leakage must manifest there. `production_derive(candidate, leak)` is that
-    # one derivation: with `leak=False` (the production rule) the accepted beacon
-    # is pinned for every candidate; with `leak=True` (a hypothetical leakage
-    # bug, exercised through the SAME parameterized surface) the accepted beacon
-    # becomes candidate-dependent and is therefore REJECTED. The candidate is a
-    # real routed argument of the derivation -- its seam is authenticated and the
-    # leak is computed from it -- so the per-candidate seam is genuinely wired
-    # into the accepted output path, closing the earlier gap.
-    def production_derive(candidate, leak=False):
-        seam, alpha = native_alpha(anchor, candidate, leak)
-        acc = derive_beacon_for_context(alpha)
-        return seam, acc
+    # single PRODUCTION derivation and assert its ACCEPTED OUTPUT -- not merely
+    # that a separately-computed seam differs. The acceptance path is the one
+    # value that reaches the ledger, so candidate leakage must manifest there.
+    # `production_derive(candidate)` IS that one derivation: it routes the
+    # candidate into the ACTUAL alpha/beta/beacon path via the committed
+    # canonical-boundary seam, and the accepted alpha is the PRODUCTION rule
+    # (the committed finalized anchor, with the candidate authenticated but not
+    # bound). The candidate is a real routed argument -- two candidates produce
+    # distinct per-candidate transcript seams -- but the ACCEPTED output is the
+    # finalized anchor's beacon, so unfinalized s-1 content cannot move the
+    # ledger value.
+    #
+    # NO TEST-ONLY BEHAVIOR SWITCH ON THE PRODUCTION PATH (Copilot round-15,
+    # thread 3929898827): the earlier `production_derive(c, leak)` was
+    # `canonical_all_pinned` "by construction" -- the `leak=False` switch simply
+    # selected the honest branch and the candidate never affected the accepted
+    # output, so a regression in the derivation could not fail the vector. We
+    # remove the switch. `production_derive` is now the SINGLE real derivation
+    # (no branch flag), and the negative (leakage/malformed) case is a SEPARATE,
+    # genuinely distinct implementation `broken_derive` that a hypothetical
+    # malformed impl would be (it folds the candidate bytes directly into alpha).
+    # Both route the candidate through the REAL seam; the accepted output of the
+    # production function is pinned, the accepted output of the broken function
+    # is candidate-dependent (and rejected), and the per-candidate seams are
+    # distinct in BOTH so a regression that stops routing the candidate collapses
+    # them and fails the vector.
+    def production_derive(candidate):
+        seam, alpha = native_alpha(anchor, candidate, False)
+        return seam, derive_beacon_for_context(alpha)
 
-    seams2 = [production_derive(c, False)[0] for c in ground_noise]
-    canonical_all_pinned = all(production_derive(c, False)[1].hex() == pinned_bcn.hex()
+    def broken_derive(candidate):
+        seam, alpha = native_alpha(anchor, candidate, True)   # folds c into alpha
+        return seam, derive_beacon_for_context(alpha)
+
+    seams2 = [production_derive(c)[0] for c in ground_noise]
+    canonical_all_pinned = all(production_derive(c)[1].hex() == pinned_bcn.hex()
                                for c in ground_noise)
     seams_distinct = len(set(seams2)) == len(ground_noise)
-    grounded_per_candidate = {production_derive(c, True)[1].hex()
-                              for c in ground_noise}
+    grounded_per_candidate = {broken_derive(c)[1].hex() for c in ground_noise}
     # A malformed implementation that IGNORES the candidate entirely (returns
     # the anchor without ever routing `c`) must also be caught: its per-candidate
     # alpha collapses to the SAME seam, so seams_distinct fails.
     check("V1  prior-ledger grinding: unfinalized s-1 candidate contents cannot "
-          "move the beacon -- every candidate is routed through the SINGLE "
-          "configurable PRODUCTION-LIKE derivation `production_derive(c, leak)` "
-          "and its ACCEPTED OUTPUT is what we assert: with `leak=False` (the "
-          "production rule) that accepted beacon equals `pinned` for every `c`, "
-          "and with `leak=True` (a hypothetical leakage bug exercised through the "
-          "SAME parameterized surface) the accepted beacon becomes candidate-"
-          "dependent and is REJECTED (never pinned, and as many distinct accepted "
-          "beacons as candidates). The candidate is a genuine routed input of the "
-          "derivation -- its seam is authenticated and the leak is computed from "
-          "it -- so leakage manifests in the exact value the acceptance path "
-          "would carry, closing the earlier gap; a malformed impl that ignored "
-          "the candidate collapses the per-candidate seams (distinct) so it is "
-          "also detected",
+          "move the beacon -- every candidate is routed as a REAL input through "
+          "the SINGLE production derivation `production_derive(c)` and its "
+          "ACCEPTED OUTPUT is what we assert: that accepted beacon equals "
+          "`pinned` for every `c` (the correct rule authenticates but does not "
+          "bind the candidate), while a SEPARATE malformed implementation "
+          "`broken_derive(c)` (which folds the candidate bytes into alpha, and "
+          "stands in for the alt-path a buggy impl would run) produces "
+          "candidate-dependent accepted beacons that are REJECTED -- never "
+          "pinned, and as many distinct accepted beacons as candidates. There is "
+          "NO test-only switch on the production path; both functions route the "
+          "candidate through the real seam, so a regression that stops routing "
+          "the candidate collapses the per-candidate seams (distinct) and is "
+          "detected",
           seams_distinct
           and canonical_all_pinned
           and len(grounded_per_candidate) == len(ground_noise)
           and pinned_bcn.hex() not in grounded_per_candidate
-          and all(production_derive(c, True)[1].hex() != pinned_bcn.hex()
+          and all(broken_derive(c)[1].hex() != pinned_bcn.hex()
                   for c in ground_noise))
     # A different finalized anchor (different s-3) changes the transcript and
     # therefore every beta and the beacon -- the anchor is the bound input and

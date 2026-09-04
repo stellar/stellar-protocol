@@ -858,36 +858,36 @@ def canonical_proof(proof: bytes):
 
 def canonical_root(C_s: bytes, authority_key: bytes, epoch_hash: bytes,
                    P_s: bytes = None):
-    """R_s -- the source root, derived from the UNPREDICTABLE canonical threshold
-    proof's NONCE COMMITMENT: `R_s = H("Root", authority_key, epoch_hash, C_s, R)`
-    where `R = P_s[:32]` (the session nonce commitment that the round-1 FROST
-    transcript pins BEFORE the close locks).
+    """R_s -- the source root, derived from the VERIFIED canonical threshold
+    PROOF, binding BOTH the (public) round-1 nonce commitment `R = P_s[:32]` AND
+    the UNPREDICTABLE verified signature scalar `s = P_s[32:]`:
+    `R_s = H("Root", authority_key, epoch_hash, C_s, R, s)`.
 
-    Anti-grinding (Copilot this review #2, High): the root MUST depend on the
-    threshold PROOF's nonce commitment `R`, not merely on public (authority_key,
-    C_s). `R` is committed in ROUND-1 of the distributed FROST transcript for the
-    exact close (`_public_aggregate` of the published per-member nonce
-    commitments `N_i`) -- it is NOT computable by a lone proposer before the
-    close is CONFIRM/EXTERNALIZE locked, and a single proposer cannot vary it
-    (it is fixed by the >= t members' published nonces). So a proposer who could
-    swap candidate C_s values to pick a favorable root cannot evaluate the root
-    for any candidate in advance -- there is no favorable root to seek before
-    the proof exists. This is `root(C_s, canonical(P_s))` as the CAP contract
-    states.
-
-    UNIQUENESS / NON-MALLEABILITY (Copilot thread 3921067284, High): the root is
-    a function of `R = P_s[:32]`, the transcript-committed NONCE -- NOT of the
-    malleable scalar `s`. `s = r + c*d` is the ONLY value satisfying the Schnorr
-    equation under the committed R and the committed close, so an attacking
-    holder-of-`d` cannot produce a SECOND valid proof for the same committed R
-    that maps to a different root: any alternate proof must either (a) keep R --
-    then it is the byte-identical canonical proof and the SAME root -- or (b)
-    change R -- but R is fixed by the authenticated round-1 nonce broadcast (a
-    contributor cannot swap nonces between rounds without an N_i mismatch that
-    `verify_share` rejects). Hence at most ONE root per (epoch, C_s): the
-    accepting relation is a genuine function, mirroring the production VUF/BLS
-    uniqueness property. This closes the alternate-valid-encoding concern
-    without turning verification into a search.
+    This is the reconciled answer to two review rounds that pull in opposite
+    directions:
+      * Copilot 3929898690 / 3929943584 (round-15, High): S2 earliest-knowledge
+        sealing. If the root depended ONLY on the public `R`, then once the
+        round-1 nonce commitments `N_i` are broadcast the aggregate `R` is
+        public and an observer could compute the exact consumer root BEFORE the
+        proof scalar exists -- a pre-finality root oracle. Binding in the
+        verified scalar `s = r + c*d` closes this: `s` exists only once the
+        threshold has ACTUALLY produced it (it requires the secret `d`), so the
+        root is genuinely unpredictable until a VERIFIED proof is in hand. This
+        is exactly "derive the root from unpredictable post-boundary proof
+        material."
+      * Copilot 3921067284 (round-14b, High): uniqueness / non-malleability.
+        Deriving from `s` alone would be malleable (a holder of `d` could emit a
+        different proof with a different `r`). But `s` is bound TOGETHER WITH the
+        transcript-committed `R`: `R` is fixed by the authenticated round-1
+        nonce broadcast (a contributor cannot swap nonces between rounds without
+        an N_i mismatch that `verify_share` rejects), and for a FIXED committed
+        `R` and committed close the Schnorr equation `G^s == R * Y^c` forces a
+        SINGLE `s`. So two valid proofs for the same committed session have the
+        SAME `(R, s)` and hence the SAME root -- at most ONE root per
+        (epoch, C_s), the relation is a genuine function (VUF/BLS uniqueness) --
+        while a tampered `s` (same R) simply FAILS verification and yields NO
+        root. Both properties hold simultaneously: sealed (unpredictable until
+        verified proof) AND unique (one root per committed session).
 
     `verify` calls this ONLY after the public-key check has authenticated the
     proof; it never turns an arbitrary byte string into a root. `P_s` must be
@@ -895,8 +895,9 @@ def canonical_root(C_s: bytes, authority_key: bytes, epoch_hash: bytes,
     that no node can derive the root before it holds the valid proof."""
     if P_s is None or len(P_s) != 64:
         return None
-    R = P_s[:32]
-    return sha256(b"Root" + authority_key + epoch_hash + C_s + R)
+    R = P_s[:32]            # public round-1 nonce commitment (not secret-bearing)
+    s = P_s[32:]            # unpredictable verified scalar (secret-derived)
+    return sha256(b"Root" + authority_key + epoch_hash + C_s + R + s)
 
 
 class ThresholdAuthority:
@@ -1059,6 +1060,25 @@ class ThresholdAuthority:
             raise ValueError("member index out of canonical roster")
         if cl.epoch_hash != self.epoch.hash:
             return None
+        # CONFIRM/release gate (Copilot round-15 3929898704, High): round-1
+        # nonce publication is NOT unconditional. An authority must NOT publish
+        # commitment material for an arbitrary candidate close before the lock --
+        # if it did, a caller holding the authority could request nonce
+        # commitments for t indices of ANY candidate close they pull, exposing the
+        # aggregate R and letting them compute the root pre-lock (a grinding
+        # oracle). So `publish_nonce` only fires once the close has reached the
+        # authenticated CONFIRM/release boundary (`_released[cl.hash]` set by the
+        # boundary-release path). A durable one-close-per-slot decision also
+        # applies: the same (member_index, slot) publishes once, and a competing
+        # C_s for the same slot is refused (mirrors the sign-once gate).
+        if self._released.get(cl.hash) is None:
+            return None
+        slot_key = (member_index, cl.slot)
+        if slot_key in self._signed:
+            if self._signed[slot_key] != cl.hash:
+                return None                     # same slot, competing C_s -> refuse
+        else:
+            self._signed[slot_key] = cl.hash
         coeffs, _R = self._nonce_material(cl.hash)
         n_i = _frost_share(coeffs, member_index) % _GRP_Q
         N_i = pow(_GRP_G, n_i, _GRP_P).to_bytes(32, "big")
@@ -1181,16 +1201,25 @@ class ThresholdAuthority:
                 return None
         else:
             self._signed[key] = cl.hash
+        # ROUND-2 PARTIAL BARRIER (Copilot round-15, thread 3929898725, High):
+        # a round-2 partial is emitted ONLY after the close's AUTHENTICATED
+        # ROUND-1 nonce-commitment set is COMPLETE -- i.e. at least `t` distinct
+        # committed nonce commitments for this close already exist in the
+        # authenticated round-1 registry. This fixes the ordering: `s_i` is
+        # computed and handed out only once the signer set / aggregate R /
+        # challenge are PUBLICLY FIXED (the >= t authenticated commitments), so a
+        # partial can never predate the fixed nonce basis it commits to and the
+        # first callers never receive a partial before the protocol's two-round
+        # barrier. The caller (the boundary release path) is responsible for
+        # publishing the round-1 commitments first; a partial request that
+        # arrives before the round-1 set reaches t is REFUSED (None).
+        if len(self._r1.get(cl.hash, {})) < self.epoch.threshold:
+            return None
         carrier = self._share_for(member_index, cl.hash)
-        # FROST ROUND-1 publication, folded in for convenience: ensure this
-        # member's public nonce commitment N_i = G^{n_i} is in the AUTHENTICATED
-        # round-1 registry for this close BEFORE the round-2 partial is handed
-        # out, so a peer verifying the partial has the fixed aggregate R/c basis.
-        # The carrier's N_i MUST equal the committed round-1 value -- a
+        # The carrier's N_i MUST equal the already-committed round-1 value -- a
         # contributor cannot return one N_i in round 1 and a different one in the
         # partial (that would let it grind c per challenge).
-        self.publish_nonce(member_index, cl)
-        if self._r1[cl.hash].get(member_index) != carrier[1]:
+        if self._r1.get(cl.hash, {}).get(member_index) != carrier[1]:
             return None                 # round-1/round-2 N_i mismatch: fail peer-bound
         return carrier
 
@@ -1405,6 +1434,25 @@ class UniqueThresholdProof:
         return canonical_root(C_s, epoch.authority_key, epoch.hash, p)
 
 
+def _mapping_labels(event_mapping: bytes) -> set:
+    # Split a committed `event_mapping` into its set of ENABLED consumer labels.
+    if event_mapping is None:
+        return {"PRNG", "APPLY", "NOMINATION"}       # unset => full default
+    if event_mapping in (b"", b"single-pulse:LockedClose->C_s/v1"):
+        return {"PRNG", "APPLY", "NOMINATION"}       # default full mapping
+    return set(p.strip().decode("ascii", "replace")
+               for p in event_mapping.split(b",") if p.strip())
+
+
+def is_valid_event_mapping(event_mapping: bytes) -> bool:
+    # Mandatory-consumer validation (Copilot round-15 thread 3929943643): APPLY
+    # and PRNG genuinely require post-lock hidden entropy (an unstalled apply
+    # cannot proceed without a seed), so EVERY accepted epoch MUST enable both.
+    # NOMINATION is the ONE opt-outable consumer. A committed mapping that omits
+    # APPLY or PRNG is INVALID and the epoch is rejected at activation.
+    return {"APPLY", "PRNG"} <= _mapping_labels(event_mapping)
+
+
 def consumer_kdf(root: bytes, label: bytes, event_mapping: bytes = None) -> [bytes, None]:
     # KDF(R_s, label): three distinct labelled consumers of ONE root (dnFWi;
     # Noot round-15 / CAP "consumer-by-consumer requirement matrix").
@@ -1416,12 +1464,8 @@ def consumer_kdf(root: bytes, label: bytes, event_mapping: bytes = None) -> [byt
     # value from the pulse, so "consumer is mandatory" is a real, testable
     # property of the epoch, not a prose claim. The default full mapping enables
     # all three.
-    if event_mapping is not None:
-        if event_mapping not in (b"", b"single-pulse:LockedClose->C_s/v1"):
-            enabled = set(p.strip() for p in
-                          event_mapping.decode("ascii", "replace").split(",") if p.strip())
-            if label.decode("ascii", "replace") not in enabled:
-                return None                     # opted-out consumer: no value
+    if label.decode("ascii", "replace") not in _mapping_labels(event_mapping):
+        return None                     # opted-out consumer: no value
     return sha256(b"KDF" + root + label)
 
 
@@ -1473,6 +1517,12 @@ class ConfirmExternalizeBoundary:
         # edge; it never answers "which value is an SCP quorum", only "Core
         # locally externalized THIS value behind >= t rostered CONFIRM votes").
         self._externalized = {}
+        # C_s.hash -> sorted tuple of the DISTINCT member indices whose CONFIRM
+        # votes `externalize()` authenticated (>= t "rostered members Core saw
+        # reach CONFIRM"). `proof()` authorizes per-member release for THESE
+        # indices ONLY -- never for roster members absent from the verified
+        # CONFIRM certificate (Noot/Copilot round-15, thread 3929898761).
+        self._externalized_members = {}
 
     def externalize(self, cl: LockedClose, confirm_cert: dict) -> bool:
         # The genuine CONFIRM -> EXTERNALIZE edge. The transition type and full
@@ -1515,6 +1565,7 @@ class ConfirmExternalizeBoundary:
         if valid < self.epoch.threshold:
             return False
         self._externalized[cl.hash] = True
+        self._externalized_members[cl.hash] = tuple(sorted(seen))
         return True
 
     def has_externalized(self, cl: LockedClose) -> bool:
@@ -1522,6 +1573,18 @@ class ConfirmExternalizeBoundary:
         # caller-asserted boolean here; only the boundary knows whether this
         # close really reached the CONFIRM->EXTERNALIZE edge.
         return cl is not None and self._externalized.get(cl.hash, False)
+
+    def externalized_members(self, cl: LockedClose):
+        # The DISTINCT roster members whose CONFIRM votes `externalize()`
+        # authenticated for this close (>= t). This is the authoritative set for
+        # per-member release: an honest node releases for a member, and only a
+        # member, that individually crossed this boundary -- a member whose vote
+        # was NEVER in the verified CONFIRM certificate is withheld (thread
+        # 3929898761). Guarded by `has_externalized` so it is never callable for
+        # a non-externalized close.
+        if not self.has_externalized(cl):
+            return ()
+        return self._externalized_members.get(cl.hash, ())
 
     def _cap(self) -> bytes:
         # RELEASE capability derived from the boundary secret + epoch. It is the
@@ -1639,15 +1702,28 @@ class RandomnessSource:
         # admitted can neither be authorized nor shared.
         if not authority._authorize_release(cl.hash, self._admitted[cl.hash], cap):
             return None
-        # The boundary authorizes EVERY honest roster holder that crossed the
-        # same CONFIRM -> EXTERNALIZE transition (Copilot thread 3921067249):
-        # per-member bits are populated here by the boundary's authenticated
-        # path, and `share(i, cl)` then consults them internally. The caller does
-        # NOT supply per-member release sets -- the boundary does.
-        for i in range(1, authority.epoch.n + 1):
+        # The boundary authorizes release per-member for the DISTINCT indices
+        # that ACTUALLY authenticated in the verified CONFIRM certificate
+        # (>= t) -- NOT for every roster member (Copilot round-15 thread
+        # 3929898761, High). A member absent from the certificate is withheld
+        # even though the close is boundary-released: per-member release is a
+        # strict function of which members independently crossed the boundary.
+        # `_authorize_member_release` additionally requires the close to already
+        # be boundary-released (`_released`), so no member is authorized before
+        # the release gate.
+        auth_members = self._boundary.externalized_members(cl)
+        for i in auth_members:
             authority._authorize_member_release(i, cl.hash)
+        # FROST ROUND-1 FIRST: publish each authenticated member's nonce
+        # commitment (gated on CONFIRM by `publish_nonce`) so the aggregate R and
+        # challenge c are publicly FIXED before ANY round-2 partial is emitted.
+        # `share()` enforces the round-2 barrier (>= t committed nonces), so this
+        # ordering is what lets the subsequent round-2 collection proceed at all
+        # (Copilot round-15, threads 3929898704 / 3929898725).
+        for i in auth_members:
+            authority.publish_nonce(i, cl)
         holder_shares = [(i, authority.share(i, cl))
-                         for i in range(1, authority.epoch.n + 1)]
+                         for i in auth_members]
         recovered = authority.recover_proof(holder_shares, cl)
         if recovered is not None:
             self._genuine[cl.hash] = recovered
@@ -1759,7 +1835,14 @@ def main():
         # threshold yields an incomplete cert and the boundary REJECTS (mirrors a
         # close that did not actually reach the externalize quorum).
         src_epoch = src.epoch
-        n_votes = src_epoch.threshold if n_votes is None else n_votes
+        # Default: EVERY honest rostered member's authentic CONFIRM vote is in the
+        # certificate (all n validators reached CONFIRM for the same value), so
+        # `externalize()` records all n as authenticated and `proof()` authorizes
+        # per-member release for all n. Passing n_votes (== threshold, or less)
+        # yields a partial cert, and then ONLY the members WITH valid votes in it
+        # are per-member-released -- the strict-function-of-the-cert property
+        # (thread 3929898761) instead of a blanket all-n grant.
+        n_votes = src_epoch.n if n_votes is None else n_votes
         cert = {i: _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
                                  cl.epoch_hash, cl.hash)
                 for i in range(1, n_votes + 1)}
@@ -2194,6 +2277,79 @@ def main():
           "and that proof is a distinct authenticator -- NOT the root",
           ok_boundary and proof_a is not None
           and proof_a != root_a and root_a is not None)
+    # Per-member release is a STRICT function of the verified CONFIRM certificate
+    # (Copilot round-15, thread 3929898761, High): `proof()` authorizes release
+    # ONLY for the DISTINCT members whose votes `externalize()` authenticated --
+    # NEVER every roster member. A partial-but-valid cert (>= t votes) releases
+    # exactly those members; a roster member whose vote was never in the cert is
+    # withheld even though the close itself is boundary-released.
+    partial_src = RandomnessSource(epoch)
+    boundary_release(partial_src, cl_a, n_votes=epoch.threshold)  # t votes only
+    partial_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    partial_src.bind(partial_auth)
+    _ = partial_src.proof(cl_a, partial_auth)                     # authorizes 1..t
+    allowed = set(range(1, epoch.threshold + 1))
+    denied = set(range(epoch.threshold + 1, N_MEMBERS + 1))
+    check("Per-member release = strict function of the authenticated CONFIRM cert "
+          "(Copilot round-15 3929898761): after a threshold-sized cert, ONLY the "
+          "certified members are released (a t-subset reconstructs the canonical "
+          "proof) while a roster member whose vote was absent from the cert is "
+          "withheld -- a caller cannot get a blanket all-n release from one "
+          "boundary admission",
+          all(partial_auth.share(i, cl_a) is not None for i in allowed)
+          and all(partial_auth.share(i, cl_a) is None for i in denied)
+          and partial_auth.recover_proof(
+              [(i, partial_auth.share(i, cl_a)) for i in allowed], cl_a) == proof_a)
+    # ROUND-1 PUBLICATION IS CONFIRM-GATED (Copilot round-15, thread 3929898704,
+    # High): an authority must NOT publish nonce commitments for an arbitrary
+    # candidate close before the lock -- if it did, a caller holding the
+    # authority could import t indices of ANY candidate close and expose the
+    # aggregate R / computable root pre-lock (a grinding oracle). `publish_nonce`
+    # returns None for a fresh (not-yet-released) close of the same epoch, and
+    # refuses a competing C_s for an already-locked slot (durable one-close-per-
+    # slot), while firing normally once the close reaches the CONFIRM boundary.
+    fresh = RandomnessSource(epoch)
+    fresh_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    fresh.bind(fresh_auth)
+    prelock_cl = cl_a        # same epoch; boundary never ran -> not released
+    prelock_pub = fresh_auth.publish_nonce(1, prelock_cl)   # CONFIRM-gated -> None
+    prelock_set = fresh_auth.round1_nonces(prelock_cl)      # nothing published
+    # Once the close reaches the CONFIRM boundary AND the release path runs,
+    # round-1 publication fires (proof() published the authenticated members'
+    # nonces). The key property: BEFORE the lock there is no commitment material
+    # at all, so no aggregate R / pre-computable root can be exposed by a caller
+    # that holds only the authority.
+    check("Round-1 publication is CONFIRM-gated (Copilot round-15 3929898704): a "
+          "pre-lock close yields NO nonce commitment (no aggregate R can be "
+          "exposed before the lock) and the round-1 registry stays empty -- "
+          "publication only ever fires behind the authenticated CONFIRM/release "
+          "boundary (observed by the fact that the ROUND-1 phase within proof() "
+          "is the same CONFIRM-gated op)",
+          prelock_pub is None and prelock_set == {})
+    # ROUND-2 PARTIAL BARRIER (Copilot round-15, thread 3929898725, High): a
+    # round-2 partial is refused until the close's AUTHENTICATED ROUND-1 set is
+    # complete (>= t committed nonces), so a partial can never predate the fixed
+    # signer set / aggregate R / challenge it commits to. We take a close that
+    # IS fully released, then wipe only the round-1 registry to test the barrier
+    # in isolation: a share request below t committed nonces is refused, and once
+    # t nonces are published the partial is emitted.
+    barrier_src = RandomnessSource(epoch)
+    barrier_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    barrier_src.bind(barrier_auth)
+    boundary_release(barrier_src, cl_a)                       # released (all n)
+    _ = barrier_src.proof(cl_a, barrier_auth)                 # sets _released/per-member
+    barrier_auth._per_member_released.clear()                 # isolate the member bit
+    barrier_auth._r1.pop(cl_a.hash, None)                     # isolate the round-1 set
+    barrier_auth._authorize_member_release(1, cl_a.hash)      # member 1's bit only
+    # Not enough round-1 nonces yet (< t): share() refuses.
+    before_r1 = barrier_auth.share(1, cl_a)
+    for i in range(1, epoch.threshold + 1):
+        barrier_auth.publish_nonce(i, cl_a)                   # now >= t nonces
+    after_r1 = barrier_auth.share(1, cl_a)
+    check("Round-2 partial barrier (Copilot round-15 3929898725): a partial is "
+          "refused until the authenticated round-1 set reaches threshold (the "
+          "signer set / R / challenge are publicly fixed first), then emitted",
+          before_r1 is None and after_r1 is not None)
     check("dnFVg an UNadmitted close is REJECTED, never ROOT",
           resolve(epoch, cl_b, source, pb_b)
           == {"event_hash": cl_b.hash.hex(), "outcome": "REJECTED"})
@@ -2349,6 +2505,12 @@ def main():
         auth._per_member_released.clear()
         for i in E:
             auth._authorize_member_release(i, cl_a.hash)
+        # FROST ROUND-1 FIRST (round-2 barrier): publish the round-1 nonce
+        # commitment for each released member (CONFIRM-gated) so the close's
+        # aggregate R / challenge are fixed BEFORE any round-2 partial; then
+        # collect the member's partial. This mirrors the two-round ordering.
+        for i in E:
+            auth.publish_nonce(i, cl_a)
         return [(i, c) for i in E for c in [auth.share(i, cl_a)]
                 if c is not None]
     # (a)-(b) model: SCP finality and per-member release are independent.
@@ -2547,19 +2709,29 @@ def main():
     # `event_mapping` is an EXECUTABLE application opt-out. When an epoch commits
     # a mapping that enables only SOME consumers, the opted-out consumers release
     # NOTHING (None) from the same root, so "consumer is mandatory" is a real,
-    # testable property -- not a prose claim. Here NOMINATION is kept mandatory
-    # while PRNG/APPLY opt out (a consumer that cannot tolerate the transient
-    # UNKNOWN window opts out rather than acting on UNKNOWN).
-    optout_map = b"PRNG,NOMINATION"    # APPLY explicitly opted out
-    consumer_optout_ok = (consumer_kdf(root_a, LABEL_PRN, optout_map) is not None
-                          and consumer_kdf(root_a, LABEL_APPLY, optout_map) is None
-                          and consumer_kdf(root_a, LABEL_NOM, optout_map) is not None)
-    check("Consumer-by-consumer committed opt-out (Noot round-15): event_mapping "
-          "is consumed to gate APPLY/PRNG/NOMINATION -- an opted-out consumer "
-          "releases None (no value from the pulse; safe-to-UNKNOWN/opt-out), an "
-          "enabled consumer still derives its distinct KDF label, so the "
-          "application opt-out is EXECUTABLE liveness escape, not a prose claim",
-          consumer_optout_ok)
+    # testable property -- not a prose claim. Copilot round-15 thread 3929943643
+    # tightened this: APPLY and PRNG are MANDATORY in every accepted epoch, so
+    # the single opt-outable consumer is NOMINATION, and a mapping that omits
+    # APPLY or PRNG is INVALID (epoch rejected at activation).
+    #
+    # --- Valid opt-out: NOMINATION disabled, APPLY/PRNG still mandatory. ---
+    optout_map = b"PRNG,APPLY"          # NOMINATION opted out; APPLY/PRNG kept
+    check("Valid event_mapping keeps both mandatory consumers (APPLY, PRNG) "
+          "and opts NOMINATION out (Copilot 3929943643): APPLY/PRNG still "
+          "derive their distinct KDF labels while NOMINATION releases None, "
+          "and the mapping passes is_valid_event_mapping",
+          is_valid_event_mapping(optout_map)
+          and consumer_kdf(root_a, LABEL_APPLY, optout_map) is not None
+          and consumer_kdf(root_a, LABEL_PRN, optout_map) is not None
+          and consumer_kdf(root_a, LABEL_NOM, optout_map) is None)
+    # --- Invalid mapping: omitting a MANDATORY consumer is rejected. ---
+    check("Mapping missing APPLY is INVALID and the epoch is rejected "
+          "(Copilot 3929943643): a committed epoch must not be able to opt out "
+          "of post-lock hidden entropy that unstalled apply requires",
+          not is_valid_event_mapping(b"PRNG,NOMINATION")
+          and not is_valid_event_mapping(b"NOMINATION")
+          and is_valid_event_mapping(b"PRNG,APPLY,NOMINATION")
+          and is_valid_event_mapping(b"single-pulse:LockedClose->C_s/v1"))
     source_b = RandomnessSource(epoch)
     b_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
     source_b.bind(b_auth)
@@ -3006,27 +3178,71 @@ def main():
           and all(attacker.public_root_guess(_c, public_candidates[k])
                   != root_a
                   for k, _c in enumerate(cand_closes)))
-    # (Copilot thread 3921067284, High) NON-MALLEABLE ROOT: the root is a
-    # function of the transcript-committed NONCE commitment `R = P_s[:32]`, NOT
-    # of the malleable scalar `s`. Two different proof byte-strings that share
-    # the same R (the only R the round-1 FROST transcript commits) therefore
-    # collapse to the SAME root -- so an alternate ENCODING/derivation of the
-    # already-committed nonce cannot split the pulse, even before the equation
-    # binds which s is valid. This is the VUF uniqueness property the reviewer
-    # asks for, made executable.
+    # I4/O2 NON-MALLEABILITY + SEALING of the root (Copilot 3921067284 round-14b
+    # AND 3929898690 / 3929943584 round-15, reconciled). The root now binds BOTH
+    # the transcript-committed nonce commitment `R` AND the unpredictable
+    # verified scalar `s` (`root = H(Root || Y || epoch || C_s || R || s)`).
+    #   * Uniqueness (3921067284): `R` is fixed by the authenticated round-1
+    #     broadcast; for that fixed R and the committed close the Schnorr
+    #     equation forces a SINGLE valid `s`, so at most ONE verified proof (one
+    #     root) per session -- the relation is a genuine function.
+    #   * Sealing (3929898690 / 3929943584): `s` exists only after the threshold
+    #     PRODUCED it (it needs the secret d), so the root is unpredictable before
+    #     a verified proof -- a public-R-only observer cannot pre-compute the root
+    #     (no pre-finality root oracle).
+    # The round-14b test's analogous claim is now STRONGER and honest: a tampered
+    # `s` (same R) does NOT verify and therefore yields NO root at all -- while
+    # the GENUINE proof (the unique (R, s) the equation admits for the committed
+    # session) yields exactly the canonical root.
     tampered_s = proof_a[:32] + sha256(b"malleated-s:" + proof_a[32:])[:32]
-    non_malleable_root = (canonical_root(c_e, epoch.authority_key, epoch.hash,
-                                         proof_a)
-                          == canonical_root(c_e, epoch.authority_key, epoch.hash,
-                                            tampered_s))
-    check("I4/O2 non-malleable root (Copilot thread 3921067284, High): the root "
-          "is pinned to the transcript-committed nonce commitment R = P_s[:32], "
-          "not to the malleable scalar s -- two proofs sharing that R (the only "
-          "R the round-1 FROST nonce broadcast commits) yield the SAME root, so "
-          "alternate encodings/valid-derivations of a fixed-commitment proof "
-          "cannot produce a second root (one-future holds of the RELATION, not "
-          "merely of honest behavior, matching the production VUF/BLS uniqueness)",
-          non_malleable_root)
+    tampered_rejected = (UniqueThresholdProof.verify(epoch, c_e, tampered_s) is None
+                         and UniqueThresholdProof.verify(epoch, c_e, proof_a)
+                         == canonical_root(c_e, epoch.authority_key, epoch.hash,
+                                           proof_a))
+    check("I4/O2 non-malleable + sealed root (Copilot 3921067284 + "
+          "3929898690/3929943584): the root binds BOTH the transcript-committed "
+          "nonce commitment R AND the unpredictable verified scalar s "
+          "(`H(Root||Y||epoch||C_s||R||s)`) -- a tampered-s proof with the same R "
+          "does NOT verify (no root; no alternate encoding can yield a second "
+          "root), and the single valid proof for the committed session yields "
+          "exactly the canonical root, so one-future + earliest-knowledge sealing "
+          "hold of the VERIFICATION RELATION (VUF/BLS uniqueness), not merely of "
+          "honest behavior",
+          tampered_rejected)
+    # S2 EARLIEST-KNOWLEDGE SEALING -- root NOT derivable from public round-1
+    # records (Copilot 3929898690 / 3929943584, High). The reviewer's exact
+    # objection: "The source root is already computable from public round-1
+    # traffic." Before this round the root was H(Root||Y||epoch||C_s||R) with R a
+    # PUBLIC round-1 aggregate, so an observer holding the round-1 transcript
+    # could compute the root before the proof scalar existed (a pre-finality root
+    # oracle). The fix binds the root to the UNPREDICTABLE VERIFIED scalar s as
+    # well: R_s = H(Root||Y||epoch||C_s||R||s). We now prove, against the PUBLIC
+    # round-1 transcription exactly as the reviewer requests, that a peer holding
+    # (authority_key, epoch_hash, C_s and the PUBLIC N_i -> aggregate R) but NO
+    # proof scalar can compute ONLY a stale R-only projection -- which is NOT the
+    # accepted root, because the root's second input s exists only once the
+    # threshold has ACTUALLY produced and verified it (it needs the group secret,
+    # which no actor below t shares ever holds). So "public round-1 records" are
+    # insufficient: the R-only guess differs from root_a, and every genuine proof
+    # candidate the attacker can public-construct is REJECTED by verify (no root).
+    r1_records = auth.round1_nonces(cl_a)          # public round-1 transcript
+    R_pub = auth._public_aggregate(cl_a.hash, r1_records)   # public aggregate R
+    stale_R_only = sha256(b"Root" + epoch.authority_key + epoch.hash
+                          + cl_a.hash + R_pub)     # the OLD (leaky) R-only formula
+    s2_sealed = (R_pub == proof_a[:32]             # R truly is public/derivable
+                 and stale_R_only is not None
+                 and stale_R_only != root_a        # R-only projection is NOT the root
+                 and all(UniqueThresholdProof.verify(epoch, _c.hash, pk) is None
+                         for _c, pk in zip(cand_closes, public_candidates)))
+    check("S2 earliest-knowledge sealing holds of the RELATION, not honest "
+          "behavior (Copilot 3929898690/3929943584): although the public round-1 "
+          "transcript DOES expose R (R_pub == P_s[:32]), the OLD R-only root "
+          "projection is NOT the accepted root -- the real root additionally "
+          "binds the unpredictable verified scalar s, so an observer with only "
+          "public round-1 records cannot compute the consumer root before a "
+          "verified proof exists, and every attacker-constructed proof is "
+          "REJECTED (no pre-finality root oracle)",
+          s2_sealed)
 
     # ---------- O3: permanent pulse ----------------------------------------------
     pulse_a = consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping)
@@ -3133,12 +3349,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "611e1e1ea92bfa5014bb3eeb595ebdf86d348f1c643f17a9fe4b3dc3958ba676",
-        "6283eff114a438b5654212448cddcb36d5ef370b69156f5f1cc11d4f67488736",
-        "2959b6f5ea4a8c97c39c6fb2f467a3b730f1340dfca390ee288606296220129c",
-        "18a5057bbfcfb3b977e37c981a8bd789c83eab4439bc1c131d82f590db978e80",
+        "0dbc6fcbaeae2519372972ecbee4f869c8012378c63093468e0f634709274b22",
+        "34bf0c36dabe3eb6537bfbe88c09bd223531e9398ffadd47b7e06239ae37a325",
+        "143f0f27e0af24f08edccf62e56f7c500a07f6c53af39bacf857533e7a53ad25",
+        "586c1fc57865a33be7eec7924da8433af0f087a4202bb1a52e2a65094cc6473b",
     )
-    EXP_COMP = "3357acbd8ad36c846e759c7b01e068ead66862b30e9fbe0298549d369fb353b7"
+    EXP_COMP = "bc18abcf7ca3bd3c42a8bddcecafc2da1e623bcc68cef6f91aa14cdca6f51b93"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),

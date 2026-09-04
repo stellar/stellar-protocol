@@ -150,11 +150,24 @@ def vrf_public_key(node_id: bytes) -> bytes:
     means it is NOT publicly inferable from the NodeID, so the CAP commits it in
     `VRFCommit` and has the NodeID signature bind it (this review: without the
     committed+authenticated mapping, `ECVRF_Verify(VKF, ...)` could not bind the
-    reveal's beta to the node that committed it). Here it is a deterministic
-    domain-separated value per node; the checker asserts the *binding* (the
-    NodeID signature covers exactly this key), not that the point is an ECVRF
-    key (Layer A is research evidence)."""
-    return sha256(NODE_KEY_LABEL + b"/vrf-public-key" + node_id)
+    reveal's beta to the node that committed it).
+
+    COPILOT round-15 (thread 3929898654, High): a RAW 32-byte digest is NOT a
+    valid ECVRF-Ed25519 public key -- roughly half of all 32-byte strings fail
+    Edwards25519 point decompression, so the fixtures could not be replayed
+    through the native VRF acceptance path. We therefore generate a GENUINE,
+    valid Edwards25519 public point deterministically from the node seed: the
+    domain-separated secret seed `s_v` is expanded (SHA-512) to 32 bytes, an
+    Ed25519 keypair is derived from that exact seed, and the COMPRESSED public
+    point (32 bytes, decomposable by the RFC 8032 point decoder) is returned.
+    This is the ECVRF-Ed25519 key-derivation shape: `VKF = s_v * B` with
+    `s_v = H(...)` clamped, and the compressed point is the valid ECVRF public
+    key the native `ECVRF_Verify` accepts. The value remains deterministic per
+    node (same node_id -> same seed -> same valid point) and still differs from
+    the NodeID, and the NodeID signature still binds this exact key."""
+    seed = sha512(NODE_KEY_LABEL + b"/vrf-public-key" + node_id)[:32]
+    vk = Ed25519PrivateKey.from_private_bytes(seed).public_key()
+    return vk.public_bytes(Encoding.Raw, PublicFormat.Raw)
 
 
 def commit_signature(sk: Ed25519PrivateKey, net: bytes, slot: int,
