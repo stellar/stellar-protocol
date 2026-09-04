@@ -1405,8 +1405,23 @@ class UniqueThresholdProof:
         return canonical_root(C_s, epoch.authority_key, epoch.hash, p)
 
 
-def consumer_kdf(root: bytes, label: bytes) -> bytes:
-    # KDF(R_s, label): three distinct labelled consumers of ONE root (dnFWi).
+def consumer_kdf(root: bytes, label: bytes, event_mapping: bytes = None) -> [bytes, None]:
+    # KDF(R_s, label): three distinct labelled consumers of ONE root (dnFWi;
+    # Noot round-15 / CAP "consumer-by-consumer requirement matrix").
+    # The committed `event_mapping` (a comma-separated set of ENABLED consumer
+    # labels in the epoch, e.g. b"PRNG,APPLY,NOMINATION") is now EXECUTABLE
+    # opt-out: a consumer whose label is NOT in the mapping releases NOTHING
+    # (returns None -- the application opted out of Layer-B randomness for that
+    # close rather than acting on UNKNOWN). Only an enabled consumer derives a
+    # value from the pulse, so "consumer is mandatory" is a real, testable
+    # property of the epoch, not a prose claim. The default full mapping enables
+    # all three.
+    if event_mapping is not None:
+        if event_mapping not in (b"", b"single-pulse:LockedClose->C_s/v1"):
+            enabled = set(p.strip() for p in
+                          event_mapping.decode("ascii", "replace").split(",") if p.strip())
+            if label.decode("ascii", "replace") not in enabled:
+                return None                     # opted-out consumer: no value
     return sha256(b"KDF" + root + label)
 
 
@@ -2520,14 +2535,31 @@ def main():
           post_crash_ok == s1 and post_crash_refused is None)
 
     # ---------- B2: C_s binds the EXACT value bytes --------------------------
-    prng_a, appl_a, nom_a = (consumer_kdf(root_a, LABEL_PRN),
-                             consumer_kdf(root_a, LABEL_APPLY),
-                             consumer_kdf(root_a, LABEL_NOM))
+    prng_a, appl_a, nom_a = (consumer_kdf(root_a, LABEL_PRN, epoch.event_mapping),
+                             consumer_kdf(root_a, LABEL_APPLY, epoch.event_mapping),
+                             consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping))
     check("dnFWi single pulse, three labelled consumers: PRNG/APPLY/(next) "
           "NOMINATION are distinct KDF labels over ONE root -- not three "
           "independent draws",
           len({prng_a, appl_a, nom_a}) == 3
-          and consumer_kdf(root_a, LABEL_PRN) == prng_a)
+          and consumer_kdf(root_a, LABEL_PRN, epoch.event_mapping) == prng_a)
+    # Noot round-15 "consumer-by-consumer requirement matrix": the committed
+    # `event_mapping` is an EXECUTABLE application opt-out. When an epoch commits
+    # a mapping that enables only SOME consumers, the opted-out consumers release
+    # NOTHING (None) from the same root, so "consumer is mandatory" is a real,
+    # testable property -- not a prose claim. Here NOMINATION is kept mandatory
+    # while PRNG/APPLY opt out (a consumer that cannot tolerate the transient
+    # UNKNOWN window opts out rather than acting on UNKNOWN).
+    optout_map = b"PRNG,NOMINATION"    # APPLY explicitly opted out
+    consumer_optout_ok = (consumer_kdf(root_a, LABEL_PRN, optout_map) is not None
+                          and consumer_kdf(root_a, LABEL_APPLY, optout_map) is None
+                          and consumer_kdf(root_a, LABEL_NOM, optout_map) is not None)
+    check("Consumer-by-consumer committed opt-out (Noot round-15): event_mapping "
+          "is consumed to gate APPLY/PRNG/NOMINATION -- an opted-out consumer "
+          "releases None (no value from the pulse; safe-to-UNKNOWN/opt-out), an "
+          "enabled consumer still derives its distinct KDF label, so the "
+          "application opt-out is EXECUTABLE liveness escape, not a prose claim",
+          consumer_optout_ok)
     source_b = RandomnessSource(epoch)
     b_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
     source_b.bind(b_auth)
@@ -2997,9 +3029,9 @@ def main():
           non_malleable_root)
 
     # ---------- O3: permanent pulse ----------------------------------------------
-    pulse_a = consumer_kdf(root_a, LABEL_NOM)
+    pulse_a = consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping)
     pulse_a2 = consumer_kdf(UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a),
-                            LABEL_NOM)
+                            LABEL_NOM, epoch.event_mapping)
     check("O3 permanent pulse: the next-ledger nomination draw is fixed by the "
           "canonical root and survives re-derivation (never a second historical "
           "pulse)", pulse_a == pulse_a2)
