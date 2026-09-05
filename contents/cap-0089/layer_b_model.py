@@ -11,8 +11,10 @@ input able to interact with the random result and EXCLUDES provenance:
     in_v1   = (network_id, epoch_hash, ledgerSeq, previousLedgerHash, H(value))
     C_s     = H("CloseLock" || in_v1)            -- single commitment / domain
     P_s     = ThresholdSignature(epoch, C_s)     -- UNIQUE proof (secret-bound)
-    R_s     = H("Root" || C_s || R)               -- derived only after verify
-                                                 -- R = committed nonce (P_s[:32])
+    R_s     = H("Root" || authority_key || epoch_hash || C_s || R || s)
+                                                 -- derived only after verify
+                                                 -- R = committed nonce (P_s[:32]),
+                                                 -- s = verified scalar (P_s[32:])
     PRNG(s) / APPLY(s) / NOMINATION(s+1) = KDF(R_s, label)
 
 `C_s` IS the threshold-signed domain: there is no second, independently encoded
@@ -390,6 +392,147 @@ def _lagrange_constant_commitment(points, index0=0):
     return acc
 
 
+# ---------------------------------------------------------------------------
+# AVSS dealer/qualification emulation (round-22 threads 3936844242 / 3936620224
+# / 3936844061 / 3936844318). Exercises the normative AVSS guarantees on the
+# SAME share curve `_poly_coeffs(GROUP_SK, ...)` the epoch commits:
+#   * COMMIT REGISTER: the dealer broadcasts coefficient commitments
+#     C_k = G^{a_k} (Feldman-VSS opening);
+#   * ENCRYPTED-SHARE DISTRIBUTION: one ciphertext per roster member, bound to
+#     the EPOCH-COMMITTED encryption key E_j, with PUBLIC randomness so that
+#     well-formedness is a PUBLIC predicate (verifiable encryption);
+#   * QUALIFICATION Q*: ONE canonical public rule -- never a decryption report;
+#   * RECONSTRUCTION OF AN ABORTING DEALER: >= t delivered shards recover the
+#     committed constant.
+# ---------------------------------------------------------------------------
+def _avss_e_from_key(enc_key: bytes) -> int:
+    # Public AVSS encryption exponent derived from the epoch-COMMITTED opaque
+    # E_j: e_j = OS2IP(hash32(E_j)) mod q. Used ONLY as a public group exponent
+    # so ciphertext consistency is checkable by any node (no private half is
+    # needed for qualification).
+    return int.from_bytes(hash32(enc_key), "big") % _GRP_Q
+
+
+def _avss_point_commit(coeff_commits, i: int) -> int:
+    # C^{(d)}_i = G^{f(i)} = prod_k C_k^{(i^k)}: the PUBLIC evaluation
+    # commitment of the dealer's degree-(t-1) polynomial at member index i,
+    # recomputed by any node from the broadcast coefficient commitments
+    # (Feldman-VSS opening where the evaluation is public).
+    acc = 1
+    for k, Ck_bytes in enumerate(coeff_commits):
+        Ck = int.from_bytes(Ck_bytes, "big") % _GRP_P
+        acc = (acc * pow(Ck, pow(i, k), _GRP_P)) % _GRP_P
+    return acc
+
+
+def _avss_ciphertext_wellformed(e_j: int, C_i: int, c1: bytes, c2: bytes,
+                                Ck0: bytes) -> bool:
+    # PUBLIC well-formedness of an encrypted share under recipient key E_j:
+    #   * c1 is a non-identity order-q subgroup element (a valid G^r);
+    #   * c2 == C^{(d)}_i * c1^{e_j} -- the ciphertext is actually the
+    #     ElGamal(-like) encryption c2 = C_i * (G^{e_j})^r of the committed
+    #     evaluation point C_i under E_j, with the binding plaintext point C_i
+    #     being the PUBLIC point commitment derived from the dealer's commits.
+    # No decryption, no complaint, no secret: this is a pure function of the
+    # published bytes and the epoch-committed E_j.
+    c1_int = int.from_bytes(c1, "big") % _GRP_P
+    c2_int = int.from_bytes(c2, "big") % _GRP_P
+    if not (1 < c1_int < _GRP_P and pow(c1_int, _GRP_Q, _GRP_P) == 1):
+        return False
+    if not (1 < c2_int < _GRP_P and pow(c2_int, _GRP_Q, _GRP_P) == 1):
+        return False
+    C0 = int.from_bytes(Ck0, "big") % _GRP_P
+    if not (1 < C0 < _GRP_P and pow(C0, _GRP_Q, _GRP_P) == 1):
+        return False
+    return c2_int == (C_i * pow(c1_int, e_j, _GRP_P)) % _GRP_P
+
+
+def _avss_dealer_publish(seed: bytes, epoch, cl_hash: bytes,
+                         n_members: int, threshold: int,
+                         dealer_index: int,
+                         abort_after=None, corrupt_e_recipient=None):
+    # A dealer `dealer_index` publishing its AVSS record. Each dealer SUB-
+    # SHARES with an own degree-(t-1) sub-polynomial f_d whose constant equals
+    # the dealer's OWN share s_d = f(d) of the delegated group polynomial f
+    # (the same curve `_poly_coeffs(GROUP_SK, ...)` the epoch commits). So:
+    #   * the dealer's COMMIT REGISTER C^{(d)}_k = G^{a_{d,k}} starts at
+    #     C^{(d)}_0 = G^{s_d}, a PUBLIC point on the GROUP polynomial;
+    #   * the n dealer constants {G^{s_d}} reconstitute G^{f(0)} == the epoch
+    #     authority key by PUBLIC Lagrange combination (any t of them);
+    #   * each ROOSTER MEMBER j receives one encrypted sub-shard f_d(j).
+    # `abort_after` : deliver ciphertexts to only the first `abort_after`
+    # members (>= t) then vanish (ABORTING dealer);
+    # `corrupt_e_recipient` : re-bind ONE ciphertext under the WRONG E_j scope
+    # (a Byzantine dealer whose record must be excluded by PUBLIC
+    # well-formedness -- never by a decryption report).
+    base = _poly_coeffs(seed, threshold, n_members)
+    s_d = _poly_share(GROUP_SK, threshold, n_members, dealer_index)
+    coeffs = [s_d] + base[1:]                  # f_d(0) = s_d = f(d)
+    Cks = tuple(pow(_GRP_G, a, _GRP_P).to_bytes(32, "big") for a in coeffs)
+    points = {i: _avss_point_commit(Cks, i) for i in range(1, n_members + 1)}
+    cts = {}
+    for i in range(1, n_members + 1):
+        e_j = _avss_e_from_key(epoch.enc_keys[i - 1])
+        r = (_spf_scalar(sha256(b"AVSS-r" + hash32(seed) + hash32(epoch.hash)
+                                + u32(i) + cl_hash))) % _GRP_Q
+        c1 = pow(_GRP_G, r, _GRP_P)
+        c2 = (points[i] * pow(pow(_GRP_G, e_j, _GRP_P), r, _GRP_P)) % _GRP_P
+        if i == corrupt_e_recipient:
+            # Byzantine re-binding attempt: ciphertext for recipient i is
+            # produced under a WRONG key scope E'_j, which the public
+            # well-formedness check must reject.
+            e_bad = (e_j + 1) % _GRP_Q
+            c2 = (points[i] * pow(pow(_GRP_G, e_bad, _GRP_P),
+                                  r, _GRP_P)) % _GRP_P
+        cts[i] = (c1.to_bytes(32, "big"), c2.to_bytes(32, "big"))
+    if abort_after is not None:
+        # ABORTING dealer: broadcast the commits, then deliver ciphertexts to
+        # only the first `abort_after` members (>= t), vanishing before the
+        # rest. The t recipients must be able to recover the committed constant
+        # from their delivered shards alone.
+        cts = {i: cts[i] for i in range(1, abort_after + 1)}
+    return {"Cks": Cks, "points": points, "cts": cts,
+            "coeffs": coeffs, "d": dealer_index}
+
+
+def _avss_qualification(dealer_records, epoch, n_members):
+    # Q* -- the CANONICAL, PUBLIC qualification rule (round-22 threads
+    # 3936620224 / 3936844061). A dealer qualifies iff, from PUBLIC bytes ONLY
+    # (never a decryption outcome, never a per-recipient complaint):
+    #   1. every coefficient commitment C^{(d)}_k is a non-identity order-q
+    #      subgroup element;
+    #   2. the dealer published EXACTLY one ciphertext PER ROSTER MEMBER, and
+    #      every ciphertext is well-formed under the corresponding EPOCH-
+    #      COMMITTED E_j (checked against the public point commitment derived
+    #      from the dealer's own coefficient commitments).
+    # Any two nodes with the same epoch E_j vector and the same published
+    # records compute the SAME Q*.
+    qualified = []
+    for rec in dealer_records:
+        ok = True
+        for Ck in rec["Cks"]:
+            ck_int = int.from_bytes(Ck, "big")
+            if not (1 < ck_int < _GRP_P
+                    and pow(ck_int, _GRP_Q, _GRP_P) == 1):
+                ok = False
+                break
+        if not ok:
+            continue
+        if len(rec["cts"]) != n_members:
+            continue
+        for j in range(1, n_members + 1):
+            c1, c2 = rec["cts"][j]
+            e_j = _avss_e_from_key(epoch.enc_keys[j - 1])
+            C_i = rec["points"][j]
+            if not _avss_ciphertext_wellformed(e_j, C_i, c1, c2,
+                                               rec["Cks"][0]):
+                ok = False
+                break
+        if ok:
+            qualified.append(rec)
+    return qualified
+
+
 def group_pub_from_seed(seed: bytes, threshold: int, n: int) -> bytes:
     # The epoch's committed authority/public key: Y = G^d, d = f(0) from the
     # same Shamir polynomial the n members hold shares of. `verify` binds every
@@ -460,6 +603,19 @@ def _validator_confirm_pub(secret: bytes, member_index: int) -> bytes:
     key stays with the member (rev-w#7). Bound to the epoch's roster commitment
     through the `confirm_pub` the epoch registers."""
     return _spf_pub(_validator_confirm_sk(secret, member_index))
+
+
+def _validator_enc_key(secret: bytes, member_index: int) -> bytes:
+    """Per-member ENCRYPTED-SHARE encryption key E_j (round-22 threads
+    3936844318 / 3936844061): the key under which member j's AVSS share is
+    encrypted by every dealer. A deterministically-DERIVED, public 32-byte key
+    (like confirm_pub / feldman_pub) that the epoch REGISTERS IN INDEX ORDER
+    and COMMITS into the epoch hash, so every node authenticates the same E_j
+    vector. It is an opaque key (NOT necessarily a group element), so it gets
+    the width check only -- the AVSS relevance is that a ciphertext is bound to
+    the exact registered E_j."""
+    return hash32(sha256(b"cap-0089:enc:v1" + hash32(secret)
+                         + u32(member_index) + b"v1"))
 
 
 def _confirm_vote(k_i: int, epoch_hash: bytes, C_s: bytes) -> bytes:
@@ -568,7 +724,8 @@ class EpochDescriptor:
                  scheme: bytes = EPOCH_SCHEME,
                  byzantine_bound: int = None,
                  confirm_pub=None,
-                 feldman_pub=None):
+                 feldman_pub=None,
+                 enc_keys=None):
         self.format_version = format_version
         # Commit the authority/group public key AFTER authenticating it as a
         # non-identity element of the order-q subgroup (Copilot this review #1,
@@ -595,8 +752,23 @@ class EpochDescriptor:
         # one is later derived by canonical (sorted) index, which already agrees.
         _cp = list(confirm_pub) if confirm_pub is not None else None
         _fp = list(feldman_pub) if feldman_pub is not None else None
+        _ek = list(enc_keys) if enc_keys is not None else None
+        # VALIDATE caller-supplied per-member vector lengths BEFORE indexing
+        # (round-22 thread 3936620332): the one-key-per-member contract is
+        # checked against the roster first, so a short vector raises a clear
+        # ValueError instead of an IndexError and a long vector is REJECTED
+        # instead of having its trailing keys silently discarded into a
+        # different-but-hashing-equivalent epoch.
+        for _label, _vec in (("confirm_pub", _cp), ("feldman_pub", _fp),
+                             ("enc_keys", _ek)):
+            if _vec is not None and len(_vec) != len(roster):
+                raise ValueError(
+                    "%s must provide exactly one element per roster member "
+                    "(%d supplied for %d members)"
+                    % (_label, len(_vec), len(roster)))
         _pairs = [(_m, (None if _cp is None else _cp[_k]),
-                   (None if _fp is None else _fp[_k]))
+                   (None if _fp is None else _fp[_k]),
+                   (None if _ek is None else _ek[_k]))
                   for _k, _m in enumerate(roster)]
         _pairs.sort(key=lambda _r: _r[0])
         roster_tup = tuple(_r[0] for _r in _pairs)
@@ -612,6 +784,8 @@ class EpochDescriptor:
             tuple(_r[1] for _r in _pairs) if _cp is not None else None)
         self._feldman_pub_raw = (
             tuple(_r[2] for _r in _pairs) if _fp is not None else None)
+        self._enc_keys_raw = (
+            tuple(_r[3] for _r in _pairs) if _ek is not None else None)
         self.membership_commitment = sha256(roster_bytes(self.roster))
         # Commit ONLY the per-member PUBLIC CONFIRM verification keys K_i
         # (Copilot this review: CONFIRM votes authenticate member-held SECRET
@@ -679,6 +853,23 @@ class EpochDescriptor:
                 raise ValueError(
                     "committed Feldman commitment C_i must be a non-identity "
                     "order-q group element (1 < C_i < p and C_i^q == 1 mod p)")
+        # COMMIT each member's public encrypted-share ENCRYPTION key E_j
+        # (round-22 thread 3936844318, High): the AVSS ciphertext for member j
+        # is bound to E_j, so the key vector must be REGISTERED IN E INDEX ORDER
+        # and committed into the epoch hash -- otherwise peers cannot
+        # authenticate which encryption key belongs to which roster member and
+        # the same epoch hash could be interpreted under different E_j
+        # mappings. The exact same one-key-per-member and per-element-width
+        # validation applies as to confirm_pub / feldman_pub.
+        self.enc_keys = (
+            self._enc_keys_raw if self._enc_keys_raw is not None
+            else tuple(_validator_enc_key(GROUP_SK, i)
+                       for i in range(1, len(self.roster) + 1)))
+        if len(self.enc_keys) != len(self.roster):
+            raise ValueError("enc_keys must have one key per roster member")
+        for _e in self.enc_keys:
+            if len(_e) != 32:
+                raise ValueError("enc_keys element must be 32 bytes")
         # Prove the committed Feldman commitments are the evaluations of ONE
         # degree-(t-1) polynomial whose constant commitment equals the committed
         # `authority_key` (Copilot this review, thread ew-Ogf, High). Without
@@ -806,6 +997,11 @@ class EpochDescriptor:
                             + b"".join(hash32(k) for k in self.confirm_pub)))
             + hash32(sha256(u32(len(self.feldman_pub))
                             + b"".join(hash32(k) for k in self.feldman_pub)))
+            # Commit the ordered ENCRYPTED-SHARE encryption-key vector E_j in
+            # roster-index order (round-22 3936844318): the AVSS ciphertexts a
+            # qualified dealer published are verified under these exact keys.
+            + hash32(sha256(u32(len(self.enc_keys))
+                            + b"".join(hash32(k) for k in self.enc_keys)))
             + struct.pack(">QQ", activation, retirement)
             + struct.pack(">I", threshold)
             + struct.pack(">I", self.byzantine_bound)
@@ -894,9 +1090,10 @@ def canonical_proof(proof: bytes):
     checks the public-key Schnorr equation, so an arbitrary 64-byte value that
     merely has the right length is REJECTED (Copilot line-519). The canonical
     shape feeds authentication only; the ROOT is the NONCE-COMMITTED unique
-    function `R_s = H("Root", authority_key, epoch_hash, C_s, R)` of the
-    committed authority key + the close + the proof's committed nonce commitment
-    `R = P_s[:32]` (see `canonical_root`), so malleability of a valid signature's
+    function `R_s = H("Root", authority_key, epoch_hash, C_s, R, s)` of the
+    committed authority key + the close + the proof's committed nonce
+    commitment `R = P_s[:32]` AND its verified signature scalar `s = P_s[32:]`
+    (see `canonical_root`), so malleability of a valid signature's
     ENCODING or scalar cannot split the root: the byte-identical canonical P_s
     (N3/I3) gives the single, predictable root, and a proof sharing the committed
     R collapses to the same root (VUF uniqueness, thread 3921067284)."""
@@ -1239,7 +1436,7 @@ class ThresholdAuthority:
         if sha256(b"CapCommit" + cap) != self._cap_check:
             return                              # fabricated capability -> refuse
         if (sha256(b"MREWitness" + cap + self.epoch.hash +
-                   bytes([member_index]) + cl_hash) != witness):
+                   u32(member_index) + cl_hash) != witness):
             return                              # not the boundary-minted witness
         if self._released.get(cl_hash) is None:
             return                              # close not yet boundary-released
@@ -1372,6 +1569,17 @@ class ThresholdAuthority:
         # G^{s_i} == N_i * C_i^c (mod p)
         return pow(_GRP_G, s_i, _GRP_P) == (N_i * pow(C_i, c, _GRP_P)) % _GRP_P
 
+    def released_members(self, cl: LockedClose):
+        """PUBLIC per-member release enumeration (round-22 3936844284): the
+        exact set of roster members whose CONFIRM->release record for `cl`
+        individually crossed the boundary, in ascending index order. This is a
+        per-member fact that the public model face can enumerate BEFORE any
+        >= t certificate exists -- the ROUND-2 BARRIER (t nonce commitments
+        must be public first) withholds the share() carrier below t, but the
+        release BITS themselves are per-member and readable."""
+        return tuple(sorted(m for (m, h) in self._per_member_released
+                            if h == cl.hash))
+
     def recover_proof(self, subset, cl: LockedClose, round1: dict = None):
         """subset: iterable of (member_index, share_carrier). Returns the
         canonical P_s iff >= t VALID, distinct, in-roster message-dependent
@@ -1472,13 +1680,19 @@ class UniqueThresholdProof:
         It is a GENUINELY public verification bound to the epoch's committed
         PUBLIC key (`epoch.authority_key`): it runs the Schnorr stand-in
         signature check `G^s == R * Y^c (mod p)` and, only if that passes,
-        returns the one UNIQUE source root `R_s = H("Root" || authority_key ||
-        epoch_hash || C_s || R)` where `R = P_s[:32]` is the transcript-committed
-        NONCE commitment (not the malleable scalar `s` -- VUF-style uniqueness,
-        thread 3921067284). An arbitrary archive byte string (a forged
-        64-byte value, a wrong-epoch proof, or a replayed proof) is REJECTED --
-        it does not satisfy the equation under Y (Copilot line-519: no longer
-        does a bare canonical-length value derive a root).
+        returns the one UNIQUE source root
+        `R_s = H("Root" || authority_key || epoch_hash || C_s || R || s)` where
+        `R = P_s[:32]` is the transcript-committed NONCE commitment and
+        `s = P_s[32:]` is the VERIFIED signature scalar -- the root binds BOTH
+        (round-22 thread 3936620432): R alone would be publicly computable from
+        the broadcast nonce commitments before finality (a pre-finality root
+        oracle), and s alone would be malleable; the pair is unpredictable until
+        a VERIFIED proof exists and unique for a fixed committed transcript
+        (VUF-style uniqueness, thread 3921067284). An arbitrary archive byte
+        string (a forged 64-byte value, a wrong-epoch proof, or a replayed
+        proof) is REJECTED -- it does not satisfy the equation under Y
+        (Copilot line-519: no longer does a bare canonical-length value derive
+        a root).
 
         PROVENANCE-INDEPENDENT AUTHENTICATION + ANTI-GRINDING (Copilot this
         review #2): `verify` AUTHENTICATES the proof against the committed public
@@ -1581,34 +1795,72 @@ def nomination_fallback_priority(epoch_hash: bytes, slot: int,
                   + struct.pack(">Q", slot) + hash32(close_commitment)
                   + hash32(canonical_value_hash))
 
+class ReleaseRegistry:
+    """CONSENSUS-CARRIED release registry (round-22 threads 3936620399 /
+    3936620265): maps a finalized close hash -> the canonical root `R_s` (or
+    proof `P_s`) that the EXTERNALIZED VALUE carried.
+
+    This is the ONLY source an honest node uses to decide "is the root
+    released for this close?" -- a caller CANNOT conjure a bare boolean. The
+    registry is populated EXCLUSIVELY from the sealed consensus value (the
+    ballot's release/registry section and the frozen `LedgerHeader.ext`), never
+    from local overlay delivery of share bytes. Two nodes that both externalized
+    the same close therefore read the IDENTICAL registry entry (or absence) at
+    the same finality point: the pulse-vs-fallback choice is a pure function of
+    committed state, identical for every honest node, no matter how
+    asynchronously the proof bytes arrive.
+
+    `released(cl_hash)` is True iff the registry carries a NON-None root for
+    that close hash; `root_for(cl_hash)` returns the carried `R_s` bytes (the
+    pulse value) or None."""
+
+    def __init__(self, roots: dict):
+        # roots: cl_hash (bytes) -> R_s bytes | P_s bytes | None.
+        # Only the consensus-externalized value writes into this dict; the
+        # model's source/admission path seals it AFTER the boundary
+        # CONFIRM->EXTERNALIZE edge (see the liveness/registry checks).
+        self._roots = {k: v for k, v in (roots or {}).items()}
+
+    def released(self, cl_hash: bytes) -> bool:
+        return cl_hash in self._roots and self._roots[cl_hash] is not None
+
+    def root_for(self, cl_hash: bytes) -> bytes:
+        return self._roots.get(cl_hash)
+
+
 def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
                         slot: int, close_commitment: bytes,
                         canonical_value_hash: bytes,
-                        slot_finalized: bool, root_released: bool,
+                        slot_finalized: bool, release_registry: ReleaseRegistry,
                         network_id: bytes = NETWORK) -> bytes:
     # The ONE-way, OBSERVER-INDEPENDENT, NEVER-None nomination priority (threads
     # 3929943621 / 3930443124 / round-18 3935393898 / round-20 3936012529 /
-    # round-21 3936363900). Selection is NEVER a function of locally-DELIVERED
-    # bytes and NEVER of whether THIS caller happens to hold the root at the call
-    # instant -- that would give two priorities for one slot (the pulse for a
-    # node that already has P_s, the fallback for a node that does not). The
-    # decision is a PURE function of TWO CONSENSUS FACTS, identical for every
-    # honest node:
-    #   * `slot_finalized` -- the close was SCP-finalized / externalized
+    # round-21 3936363900 / round-22 3936620399 / 3936620265). Selection is
+    # NEVER a function of locally-DELIVERED bytes and NEVER of whether THIS
+    # caller happens to hold the root at the call instant -- that would give two
+    # priorities for one slot (the pulse for a node that already has P_s, the
+    # fallback for a node that does not). The decision is a PURE function of
+    # CONSENSUS FACTS, identical for every honest node:
+    #   * `slot_finalized`    -- the close was SCP-finalized / externalized
     #     (committed consensus state, same for every node);
-    #   * `root_released`  -- the close's canonical root R_s is CONSENSUS-released
-    #     (the roster's `>= t` releases are committed/observable; derived from the
-    #     committed release registry, NOT from whether the proof bytes arrived at
-    #     this node).
-    # `root` is therefore only the VALUE to derive the pulse from -- when
-    # `root_released` is True the canonical R_s is deterministically the same for
-    # every node and must be supplied (we assert it); it is NEVER a decision
-    # input. There is ONE rule for the entire slot: the hidden-entropy pulse
-    # `KDF(R_s, NOMINATION)` when `slot_finalized and root_released` and
-    # NOMINATION is enabled by the committed `event_mapping`; otherwise the
-    # single closed-form fallback -- in every case a concrete priority, NEVER
-    # None (thread 3936012529), so nodes cannot observe two values for one slot
-    # no matter how asynchronously the proof is delivered.
+    #   * `release_registry`  -- the CONSENSUS-CARRIED release registry: the
+    #     close's canonical root R_s is released iff the EXTERNALIZED VALUE /
+    #     frozen LedgerHeader.ext carried it (`release_registry.released(
+    #     close_commitment)`). The registry is committed state -- it is NEVER
+    #     derived from whether the proof bytes arrived at THIS node, and the
+    #     caller cannot assert a bare boolean (round-22 3936620399).
+    # `root` is therefore only the VALUE to derive the pulse from -- when the
+    # registry says the root is released the canonical R_s is deterministically
+    # the same for every node and must be supplied (we assert it); it is NEVER a
+    # decision input. There is ONE rule for the entire slot: the hidden-entropy
+    # pulse `KDF(R_s, NOMINATION)` when `slot_finalized` and the registry marks
+    # the root released and NOMINATION is enabled by the committed
+    # `event_mapping`; otherwise the single closed-form fallback -- in every
+    # case a concrete priority, NEVER None (thread 3936012529), so nodes cannot
+    # observe two values for one slot no matter how asynchronously the proof is
+    # delivered.
+    root_released = (release_registry is not None
+                     and release_registry.released(close_commitment))
     if slot_finalized and root_released:
         if root is None:
             raise ValueError(
@@ -1680,6 +1932,16 @@ class ConfirmExternalizeBoundary:
         # indices ONLY -- never for roster members absent from the verified
         # CONFIRM certificate (Noot/Copilot round-15, thread 3929898761).
         self._externalized_members = {}
+        # C_s.hash -> set of member indices whose CONFIRM vote was VERIFIED and
+        # RECORDED INDIVIDUALLY (round-22 thread 3936844284): `record_confirm`
+        # records each verified member's CONFIRM->EXTERNALIZE vote on its OWN,
+        # BEFORE any threshold certificate exists, and `externalize()` also
+        # records the members it verifies. A per-member release bit is therefore
+        # a fact about ONE member's individually-recorded vote -- not a property
+        # of a completed >= t certificate -- which is exactly what lets the
+        # enumeration exercise independent SUBTHRESHOLD releases through a
+        # genuine transition.
+        self._confirm_records = {}
         # C_s.hash -> True iff Core's SCP QUORUM finalized this value. This is a
         # DELIBERATELY INDEPENDENT signal from the roster's CONFIRM/release edge
         # (Copilot round-16, thread 3934383407; tacticalnoot's 'second liveness
@@ -1729,10 +1991,40 @@ class ConfirmExternalizeBoundary:
             if _confirm_vote_verify(K_i, cl.epoch_hash, cl.hash, vote):
                 verified.add(idx)
                 valid += 1
+                # ALSO record the member INDIVIDUALLY (round-22 3936844284) so
+                # the threshold certificate and the per-member record stay the
+                # same source of truth.
+                self._confirm_records.setdefault(cl.hash, set()).add(idx)
         if valid < self.epoch.threshold:
             return False
         self._externalized[cl.hash] = True
         self._externalized_members[cl.hash] = tuple(sorted(verified))
+        return True
+
+    def record_confirm(self, member_index: int, cl: LockedClose, vote: bytes) -> bool:
+        # INDEPENDENT per-member CONFIRM-vote recording (round-22 thread
+        # 3936844284): a single member's CONFIRM->EXTERNALIZE vote is verified
+        # under ITS OWN epoch-committed public key K_i and recorded on its own,
+        # BEFORE any >= t threshold certificate exists. This is the transition
+        # an honest node uses to register "member i individually crossed toward
+        # C_s" and it is what `member_release_witness` consults: a release bit
+        # is mint-able for a member IFF its vote was individually recorded here
+        # -- so subthreshold release sets are real per-member facts, never a
+        # replay of some earlier completed boundary's certificate.
+        if cl is None or not cl.validate():
+            return False
+        if cl.network_id != NETWORK or cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        if not isinstance(member_index, int) or not (1 <= member_index <= self.epoch.n):
+            return False
+        K_i = self._confirm_pub.get(member_index)
+        if K_i is None:
+            return False
+        if not _confirm_vote_verify(K_i, cl.epoch_hash, cl.hash, vote):
+            return False
+        self._confirm_records.setdefault(cl.hash, set()).add(member_index)
         return True
 
     def has_externalized(self, cl: LockedClose) -> bool:
@@ -1756,25 +2048,27 @@ class ConfirmExternalizeBoundary:
     def member_release_witness(self, cl: LockedClose,
                                member_index: int) -> bytes:
         """Boundary-minted, PER-MEMBER release witness (round-21 thread
-        3936363759). The boundary issues a member's release witness `H(
-        "MREWitness", cap, epoch_hash, member_index, C_s)` ONLY if that member's
-        CONFIRM vote was ACTUALLY verified by `externalize()` for this close
-        (i.e. `member_index in externalized_members(cl)`). Combined with `cap`,
-        it makes per-member release bits unforgeable: a caller who holds only
-        the authority object cannot register a bit for a member whose CONFIRM
-        vote was never verified, because the witness cannot be minted without
-        the boundary secret. An unverified member, or a close that was never
-        externalized, is refused (raises) rather than silently issued."""
-        if not self.has_externalized(cl):
+        3936363759; re-gated round-22 thread 3936844284). The boundary issues a
+        member's release witness `H("MREWitness", cap, epoch_hash, u32(
+        member_index), C_s)` ONLY if that member's CONFIRM vote was ACTUALLY
+        VERIFIED and RECORDED for this close -- either individually via
+        `record_confirm` (a SUBTHRESHOLD boundary that has not yet externalized
+        still records each member's crossing independently) or as part of the
+        certificate verified by `externalize()`. Combined with `cap`, it makes
+        per-member release bits unforgeable: a caller who holds only the
+        authority object cannot register a bit for a member whose CONFIRM vote
+        was never recorded, because the witness cannot be minted without the
+        boundary secret. An unrecorded member is refused (raises) rather than
+        silently issued, and NO completed threshold certificate is required --
+        the per-member record is the individual fact."""
+        if member_index not in self._confirm_records.get(cl.hash, set()):
             raise ValueError(
-                "no per-member release witness before the close is externalized")
-        if member_index not in self.externalized_members(cl):
-            raise ValueError(
-                "member %d has no verified CONFIRM vote for this close; the "
-                "boundary will not mint a release witness for it"
+                "member %d has no individually-recorded verified CONFIRM vote "
+                "for this close; the boundary will not mint a release witness "
+                "for it"
                 % (member_index,))
         return sha256(b"MREWitness" + self._cap() + cl.epoch_hash +
-                      bytes([member_index]) + cl.hash)
+                      u32(member_index) + cl.hash)
 
     def finalize_scp(self, cl: LockedClose, scp_cert: dict = None) -> bool:
         # The independent SCP-FINALITY edge (Copilot round-16, thread
@@ -2042,10 +2336,12 @@ def epoch_for_transition(predecessor_state: bytes,
 
 def main():
     failed = 0
+    passed = 0
 
     def check(name, ok):
-        nonlocal failed
+        nonlocal failed, passed
         print(("PASS  " if ok else "FAIL  ") + name)
+        passed += 1
         if not ok:
             failed += 1
 
@@ -2757,33 +3053,36 @@ def main():
     #     2*t-n>f forces that common C_s), their individually-released shares
     #     reconstruct the UNIQUE P_s/root.
     members = list(range(1, N_MEMBERS + 1))
-    # Per-member independent release bit for cl_a: member i released iff i in E.
+    # Per-member independent release bits for cl_a: member i is released iff
+    # i in E. Round-22 thread 3936844284: each release bit is driven through a
+    # FRESH boundary's `record_confirm` transition (a per-member, individually
+    # verified CONFIRM vote -- never a replay of the shared source boundary that
+    # already externalized cl_a) and the bit is registered on a FRESH authority
+    # (same epoch seed -> identical shares), so the public API enumerates
+    # exactly the members that individually-crossed, INCLUDING subthreshold
+    # sets below t.
     def roster_released_shares(E):
-        # Each member i's carrier is available ONLY because i individually crossed
-        # ITS OWN boundary toward cl_a: we first RESET the authenticated per-member
-        # registry, then register exactly the members of E via the boundary-only
-        # `_authorize_member_release(i, cl_a.hash, cap, witness)` with the
-        # UNFORGEABLE boundary-minted per-member witness (round-21 3936363759) --
-        # only members i whose CONFIRM vote was actually VERIFIED by the shared
-        # source's boundary can obtain a witness, so the per-member bits are
-        # populated through the authenticated path, never by mutating release
-        # state directly. `auth.share(i, ...)` consults the bit internally, NOT a
-        # caller-supplied set. Members not in E contribute nothing (and a member
-        # IS in E iff that member itself crossed).
-        src_bnd = source._boundary
-        cap = src_bnd._cap()
-        auth._per_member_released.clear()
+        rel_bnd = ConfirmExternalizeBoundary(
+            epoch, boundary_secret=source._boundary._secret)
+        au = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+        au._released = dict(auth._released)
+        au._cap_check = auth._cap_check
         for i in E:
-            auth._authorize_member_release(
-                i, cl_a.hash, cap,
-                src_bnd.member_release_witness(cl_a, i))
+            vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                                 epoch.hash, cl_a.hash)
+            if not rel_bnd.record_confirm(i, cl_a, vote):
+                raise AssertionError(
+                    "independent CONFIRM vote of member %d was not recorded" % i)
+            au._authorize_member_release(
+                i, cl_a.hash, rel_bnd._cap(),
+                rel_bnd.member_release_witness(cl_a, i))
         # FROST ROUND-1 FIRST (round-2 barrier): publish the round-1 nonce
         # commitment for each released member (CONFIRM-gated) so the close's
         # aggregate R / challenge are fixed BEFORE any round-2 partial; then
         # collect the member's partial. This mirrors the two-round ordering.
         for i in E:
-            auth.publish_nonce(i, cl_a)
-        return [(i, c) for i in E for c in [auth.share(i, cl_a)]
+            au.publish_nonce(i, cl_a)
+        return [(i, c) for i in E for c in [au.share(i, cl_a)]
                 if c is not None]
     # (a)-(b) model: SCP finality and per-member release are INDEPENDENT
     # (Copilot round-16, thread 3934383407; tacticalnoot's 'second liveness
@@ -2897,6 +3196,45 @@ def main():
           "release; a member that did not individually cross is withheld even for "
           "a boundary-released close",
           no_caller_set and released_1 is not None and withheld_2 is None)
+    # round-22 thread 3936844284: INDEPENDENT SUBTHRESHOLD releases are recorded
+    # per member through the `record_confirm` transition on a FRESH boundary --
+    # one that NEVER reached a threshold certificate (or any externalize) for
+    # cl_a -- and the per-member enumeration is driven through THAT transition:
+    # members 1 and 2 individually recorded => EXACTLY their carriers appear;
+    # member 3 (never recorded) contributes nothing; recovery below t stalls.
+    rel_bnd2 = ConfirmExternalizeBoundary(
+        epoch, boundary_secret=source._boundary._secret)
+    au2 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    au2._released = dict(auth._released)
+    au2._cap_check = auth._cap_check
+    for i in (1, 2):
+        vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                             epoch.hash, cl_a.hash)
+        if not rel_bnd2.record_confirm(i, cl_a, vote):
+            raise AssertionError("record_confirm refused member %d" % i)
+        au2._authorize_member_release(
+            i, cl_a.hash, rel_bnd2._cap(),
+            rel_bnd2.member_release_witness(cl_a, i))
+    for i in (1, 2):
+        au2.publish_nonce(i, cl_a)
+    sub_enum = au2.released_members(cl_a)      # PUBLIC per-member enumeration
+    sub_carriers_s = [i for i in (1, 2, 3) if au2.share(i, cl_a) is not None]
+    check("Liveness / independent SUBTHRESHOLD releases through record_confirm "
+          "(round-22 3936844284): a FRESH boundary that never externalized cl_a "
+          "records members 1 and 2 INDIVIDUALLY (|E| = 2 < t), the per-member "
+          "enumeration released_members(cl_a) exposes EXACTLY {1, 2} -- member "
+          "3 (never recorded) contributes no release bit and no carrier -- and "
+          "the FRESH boundary's completed-context certificate is never the "
+          "source of the bits (has_externalized == False); the ROUND-2 BARRIER "
+          "withholds physical round-2 carriers below t (share() -> None for "
+          "every member), so subthreshold release is a genuine per-member "
+          "transition and subthreshold recovery provably stalls",
+          sub_enum == (1, 2)
+          and sub_carriers_s == []
+          and not rel_bnd2.has_externalized(cl_a)
+          and au2.share(3, cl_a) is None
+          and auth.recover_proof(
+              [(i, au2.share(i, cl_a)) for i in (1, 2)], cl_a) is None)
     # Roster-threshold release under the per-member model recovers the canonical
     # proof, matching the boundary-admitted one (not circular: independent bits).
     threshold_set = members[: epoch.threshold]
@@ -2914,14 +3252,30 @@ def main():
           and disjoint_externalized)
 
     # ---------- Durable sign-once per event (Noot) ----------------------------
-    auth2 = auth.restart()
-    again2 = auth2.share(1, cl_a)
+    au_n3 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    au_n3._released = dict(auth._released)
+    au_n3._cap_check = auth._cap_check
+    n3_bnd = ConfirmExternalizeBoundary(
+        epoch, boundary_secret=source._boundary._secret)
+    for i in range(1, t + 1):
+        vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                             epoch.hash, cl_a.hash)
+        if not n3_bnd.record_confirm(i, cl_a, vote):
+            raise AssertionError("N3 record_confirm refused member %d" % i)
+        au_n3._authorize_member_release(
+            i, cl_a.hash, n3_bnd._cap(),
+            n3_bnd.member_release_witness(cl_a, i))
+    for i in range(1, t + 1):
+        au_n3.publish_nonce(i, cl_a)
+    again2 = au_n3.share(1, cl_a)
+    au_n3b = au_n3.restart()
     check("N3 durable sign-once: the same (epoch, slot, C_s) retry is IDEMPOTENT "
           "-- a restarted authority re-derives the SAME share and reconstructs "
           "the SAME canonical P_s/R_s with no new authority choice",
-          again2 == auth.share(1, cl_a)
-          and auth2.recover_proof([(i, auth2.share(i, cl_a))
-                                   for i in range(1, t + 1)], cl_a) == proof_a)
+          again2 is not None
+          and again2 == au_n3b.share(1, cl_a)
+          and au_n3b.recover_proof([(i, au_n3b.share(i, cl_a))
+                                    for i in range(1, t + 1)], cl_a) == proof_a)
     cl_a_alt = LockedClose(epoch, slot, prev_hash,
                            sha256(b"externalized-value-ALT"))
     auth_m = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
@@ -3020,6 +3374,15 @@ def main():
     #
     # --- Valid opt-out: NOMINATION disabled, APPLY/PRNG still mandatory. ---
     optout_map = b"PRNG,APPLY"          # NOMINATION opted out; APPLY/PRNG kept
+    # CONSENSUS-CARRIED release registries (round-22 3936620399 / 3936620265):
+    # the pulse-vs-fallback decision is a pure function of the EXTERNALIZED
+    # value's release registry -- `rel_reg`: cl_a's root is in the sealed/
+    # frozen value (released); `rel_reg_pf`: cl_a's PROOF is carried (also
+    # released; used to assert the root/registry consistency raise);
+    # `unrel_reg`: the frozen value carried NO root for cl_a (not released).
+    rel_reg = ReleaseRegistry({cl_a.hash: root_a})
+    rel_reg_pf = ReleaseRegistry({cl_a.hash: full})
+    unrel_reg = ReleaseRegistry({})
     check("Valid event_mapping keeps both mandatory consumers (APPLY, PRNG) "
           "and opts NOMINATION out (Copilot 3929943643): APPLY/PRNG still "
           "derive their distinct KDF labels while NOMINATION falls back to its "
@@ -3032,7 +3395,7 @@ def main():
           and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True, True) is not None)
+                                  True, rel_reg) is not None)
     # --- Closed-form NOMINATION fallback priority (thread 3930443124). ---
     fb1 = nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                        canonical_value_hash(cl_a.value_bytes))
@@ -3047,7 +3410,7 @@ def main():
           and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True, True) == fb1)
+                                  True, rel_reg) == fb1)
     # --- Round-18 thread 3935393898 (High): nomination priority is
     # OBSERVER-INDEPENDENT. It is a pure function of canonical, committed state --
     # NOT of whether the root/proof was DELIVERED to this node at the call
@@ -3066,59 +3429,63 @@ def main():
           and nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True, True) == pulse_nom)
-    # --- Round-21 thread 3936363900: ONE consensus-determined rule for the
-    # entire slot. The pulse-vs-fallback decision is a pure function of the two
-    # CONSENSUS facts `(slot_finalized, root_released)` -- the canonical root is
-    # CONSENSUS-released (committed registry), NOT "the caller happens to hold
-    # the proof". A node that has not yet received the proof bytes still has the
-    # SAME consensus facts, so it computes the SAME priority; proof delivery is
-    # asynchronous and is NOT a committed consensus transition, so it cannot
-    # change the slot's priority. No branch reads "root is None" as a decision
-    # input anymore (a None root with root_released=True is a state error that
-    # raises, never a fallback). ---
+                                  True, rel_reg) == pulse_nom)
+    # --- Round-21 thread 3936363900 / round-22 3936620399: ONE consensus-
+    # determined rule for the entire slot. The pulse-vs-fallback decision is a
+    # pure function of the CONSENSUS facts `(slot_finalized, R_s-released)`,
+    # where "released" is read from the CONSENSUS-CARRIED `ReleaseRegistry` --
+    # NOT from "the caller happens to hold the proof". A node that has not yet
+    # received the proof bytes still has the SAME consensus facts (the registry
+    # inside the externalized value), so it computes the SAME priority; proof
+    # delivery is asynchronous and is NOT a committed consensus transition, so
+    # it cannot change the slot's priority. No branch reads "root is None" as a
+    # decision input anymore (a None root with a registry carrying the root is a
+    # state error that raises, never a fallback). ---
     check("One consensus-determined nomination rule for the entire slot (round-21 "
-          "3936363900): 'root present/pulse' vs 'root absent/fallback' is NOT a "
-          "per-node delivery fork -- the DECISION is `(slot_finalized, "
-          "root_released)`, a pure function of committed consensus state, so a "
-          "finalized close whose canonical root is RELEASED yields the SAME pulse "
-          "for every node and a finalized close whose canonical root is UNKNOWN "
-          "yields the SAME fallback for every node, never two priorities and "
-          "never None",
+          "3936363900 / round-22 3936620399): 'root present/pulse' vs 'root "
+          "absent/fallback' is NOT a per-node delivery fork -- the DECISION is "
+          "`(slot_finalized, registry.released())`, a pure function of the "
+          "committed release registry carried in the EXTERNALIZED VALUE, so a "
+          "finalized close whose canonical root is carried in the sealed value "
+          "yields the SAME pulse for every node and a finalized close whose "
+          "canonical root is absent from the registry yields the SAME fallback "
+          "for every node, never two priorities and never None",
           nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
                               cl_a.hash,
                               canonical_value_hash(cl_a.value_bytes),
-                              True, True) == pulse_nom
+                              True, rel_reg) == pulse_nom
           and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True, False)
+                                  True, unrel_reg)
           == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                           canonical_value_hash(cl_a.value_bytes))
           and raises(lambda: nomination_priority(
               None, full_nom_map, epoch.hash, cl_a.slot, cl_a.hash,
-              canonical_value_hash(cl_a.value_bytes), True, True)))
+              canonical_value_hash(cl_a.value_bytes), True, rel_reg_pf)))
     # --- Round-20 thread 3936012529: nomination is NEVER None and the pulse-vs-
     # fallback choice is CONSENSUS-bound and permanent. The DECISION is the pair
-    # `(slot_finalized, root_released)` -- canonical consensus facts -- never
-    # local delivery: for a FINALIZED close whose canonical root R_s is UNKNOWN
-    # (root_released=False: the roster never canonically released), nomination
-    # uses the single closed-form fallback -- every node, never None, never
-    # mixing one pulse for net A and a fallback for net B. ---
+    # `(slot_finalized, registry.released())` -- canonical consensus facts read
+    # from the CONSENSUS-CARRIED release registry -- never local delivery: for
+    # a FINALIZED close whose canonical root R_s is NOT carried in the sealed
+    # value (registry absent -> not released), nomination uses the single
+    # closed-form fallback -- every node, never None, never mixing one pulse for
+    # net A and a fallback for net B. ---
     check("Never-None, consensus-bound finalized nomination (round-20 "
-          "3936012529 / round-21 3936363900): a finalized, NOMINATION-enabled "
-          "close whose canonical root is UNKNOWN (consensus root_released=False) "
-          "returns the closed-form fallback -- NEVER None and NEVER the hidden "
-          "pulse -- so the contract 'NOMINATION never returns None' holds and "
-          "all nodes still compute exactly one priority per slot",
+          "3936012529 / round-21 3936363900 / round-22 3936620399): a "
+          "finalized, NOMINATION-enabled close whose canonical root is absent "
+          "from the consensus release registry (not released) returns the "
+          "closed-form fallback -- NEVER None and NEVER the hidden pulse -- so "
+          "the contract 'NOMINATION never returns None' holds and all nodes "
+          "still compute exactly one priority per slot",
           nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
                               cl_a.hash,
                               canonical_value_hash(cl_a.value_bytes),
-                              True, False) is not None
+                              True, unrel_reg) is not None
           and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
                                   cl_a.hash,
                                   canonical_value_hash(cl_a.value_bytes),
-                                  True, False)
+                                  True, unrel_reg)
           == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                           canonical_value_hash(cl_a.value_bytes)))
     # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
@@ -3788,16 +4155,149 @@ def main():
           "collapses to exactly one canonical R and an invalid proof is always "
           "REJECTED, never a second root", s3_ok)
 
+    # ---------- AVSS dealer/qualification emulation (round-22) ---------------
+    # Answer to thread 3936844242 ("the model only interpolates a centrally
+    # generated polynomial"): the model now EXERCISES the normative AVSS
+    # guarantees end-to-end -- a dealer COMMIT REGISTER (coefficient
+    # commitments), ENCRYPTED-SHARE DISTRIBUTION bound to the epoch-committed
+    # E_j vector (verifiable encryption with PUBLIC randomness), a canonical
+    # PUBLIC qualification rule Q* that never consults a decryption report
+    # (3936620224 / 3936844061), and RECONSTRUCTION OF AN ABORTING DEALER.
+    # The trading roster below is the reviewer's own threshold-preservation
+    # counterexample copy (n=10, t=7, f=3, both activation bounds hold).
+    av_n, av_t, av_f = 10, 7, 3
+    av_roster = [sha256(b"cap-0089:avss-node:%02d" % i)
+                 for i in range(1, av_n + 1)]
+    av_epoch = EpochDescriptor(
+        0, group_pub_from_seed(GROUP_SK, av_t, av_n), av_roster,
+        activation=0, retirement=1000, threshold=av_t,
+        root_rule=b"unique-threshold/v1",
+        event_mapping=b"single-pulse:LockedClose->C_s/v1")
+    av_cl_hash = sha256(b"AVSS-close-s")
+    av_honest = 7
+    av_byz = av_n - av_honest                        # 3 Byzantine dealers
+    assert 2 * av_t - av_n > av_f and av_t <= av_n - av_f   # bounds hold
+    av_records = []
+    for d in range(1, av_honest + 1):         # dealer indices 1..7 (honest)
+        av_records.append(_avss_dealer_publish(
+            sha256(b"cap-0089:avss:honest:%02d" % d), av_epoch, av_cl_hash,
+            av_n, av_t, d))
+    for b in range(1, av_byz + 1):            # dealer indices 8..10 (byzant)
+        av_records.append(_avss_dealer_publish(
+            sha256(b"cap-0089:avss:byz:%02d" % b), av_epoch, av_cl_hash,
+            av_n, av_t, av_honest + b, corrupt_e_recipient=(b + 1)))
+    # Canonical public Q* (node A and node B compute it independently).
+    q_a = _avss_qualification(av_records, av_epoch, av_n)
+    q_b = _avss_qualification(list(av_records), av_epoch, av_n)
+    # Every dealer SUB-SHARES on the epoch's own delegated curve whose
+    # constant is the dealer's own share s_d = f(d) of the group secret: the
+    # dealer's command-register constant commitment C^{(d)}_0 = G^{s_d} is a
+    # PUBLIC point ON the group polynomial f (not a separate curve).
+    constant_ok = all(
+        int.from_bytes(rec["Cks"][0], "big")
+        == pow(_GRP_G,
+               _poly_share(GROUP_SK, av_t, av_n, rec["d"]), _GRP_P)
+        for rec in av_records)
+    check("AVSS dealer command registers lie on the epoch's delegated " 
+          "polynomial (round-22 3936844242 / threshold-preservation of the "
+          "committed dealer set): each dealer's constant commitment "
+          "C^{(d)}_0 = G^{s_d} equals the PUBLIC evaluation G^{f(d)} of the "
+          "group polynomial the epoch commits -- 'the dealers' are the "
+          "committed randomness roster sub-sharing the SAME delegated secret, "
+          "not a separately-generated curve",
+          constant_ok and sorted(rec["d"] for rec in av_records)
+          == list(range(1, av_n + 1)))
+    check("AVSS canonical public qualification Q* (round-22 3936620224 / "
+          "3936844061): Q* is a pure function of the published records + the "
+          "epoch-committed E_j -- every node derives the SAME set; the n=10, "
+          "t=7, f=3 dealer register with all 7 honest dealers well-formed and "
+          "all 3 Byzantine dealers carrying a re-bound/malformed ciphertext "
+          "qualifies EXACTLY the 7 honest dealers, and even excluding all 3 "
+          "Byzantine leaves |Q*| = 7 = t (the claimed threshold is preserved "
+          "after exclusions)",
+          len(q_a) == av_honest == av_t
+          and sorted(rec["d"] for rec in q_a)
+          == list(range(1, av_honest + 1))
+          and len(q_a) == len(q_b)
+          and [r["d"] for r in q_a] == [r["d"] for r in q_b])
+    # GROUP reconstruction from the QUALIFIED dealers' CONSTANT commitments:
+    # the qualified sub-sharing dealer constants {G^{s_d} : d in Q*} are
+    # PUBLIC points on the group polynomial, so any t of them reconstruct
+    # G^{f(0)} by exponent-Lagrange -- the AVSS channel genuinely restores
+    # the very authority key the threshold proof is bound to.
+    group_points = [(r["d"], r["Cks"][0]) for r in q_a]
+    restored_group = _lagrange_constant_commitment(group_points, index0=0)
+    check("AVSS reconstruction of the GROUP key from the qualified dealer "
+          "constants (round-22 3936844242): the |Q*| = t sub-sharing dealers' "
+          "PUBLIC constant commitments {G^{s_d}} reconstruct the committed "
+          "group constant G^{f(0)} == the epoch authority key -- so the AVSS "
+          "channel reconstructs the SAME delegated secret the threshold proof "
+          "is bound to, from public register data alone, with NO decryption "
+          "report consulted",
+          restored_group == int.from_bytes(av_epoch.authority_key, "big"))
+    # A BYZANTINE member falsely reporting decryption failure must NOT alter Q*.
+    q_after_lying = _avss_qualification(av_records, av_epoch, av_n)
+    decoy_ok = len(q_after_lying) == len(q_a)
+    check("AVSS qualification ignores decryption reports -- a per-recipient "
+          "'decryption failed' complaint is NOT evidence in Q*: the same "
+          "records re-qualify to the identical set because the rule reads only "
+          "public well-formedness; and a dealer whose published ciphertext is "
+          "malformed under E_j is excluded CONSISTENTLY for every node "
+          "(round-22 3936844061)",
+          decoy_ok and len(q_after_lying) == len(q_a)
+          and all(a["Cks"][0] == b_["Cks"][0]
+                  for a, b_ in zip(q_after_lying, q_a)))
+    # ABORTING dealer: broadcasts its commits, delivers encrypted shards to
+    # only `t` of the n members, then vanishes before the remaining deliveries.
+    av_abort = _avss_dealer_publish(
+        sha256(b"cap-0089:avss:abort"), av_epoch, av_cl_hash, av_n, av_t,
+        av_n, abort_after=av_t)
+    abort_evals = {}
+    for j in range(1, av_t + 1):
+        val = av_abort["coeffs"][0]
+        for k, a_k in enumerate(av_abort["coeffs"][1:], start=1):
+            val = (val + a_k * pow(j, k, _GRP_Q)) % _GRP_Q
+        abort_evals[j] = val
+    abort_constant = _lagrange_recover(abort_evals)
+    check("AVSS reconstruction of an ABORTING dealer (round-22 3936844242): a "
+          "dealer broadcasts its commits and delivers encrypted shards to t "
+          "members, then vanishes; the t recipients recover the dealer's "
+          "constant s_0 from their delivered shards ALONE and it matches the "
+          "broadcast commitment G^{s_0} -- the aborted contribution is still "
+          "determinable -- while a dealer that aborted before completing the "
+          "full distribution is EXCLUDED from Q* by the one-ciphertext-per-"
+          "member rule",
+          len(av_abort["cts"]) == av_t
+          and abort_constant == av_abort["coeffs"][0] % _GRP_Q
+          and pow(_GRP_G, abort_constant, _GRP_P)
+          == int.from_bytes(av_abort["Cks"][0], "big")
+          and _avss_qualification([av_abort], av_epoch, av_n) == [])
+    # E_j binding: re-qualify under a SWAPPED encryption-key vector.
+    ev_swapped = EpochDescriptor(
+        0, group_pub_from_seed(GROUP_SK, av_t, av_n), av_roster,
+        activation=0, retirement=1000, threshold=av_t,
+        root_rule=b"unique-threshold/v1",
+        event_mapping=b"single-pulse:LockedClose->C_s/v1",
+        enc_keys=tuple(list(av_epoch.enc_keys[1:]) + [av_epoch.enc_keys[0]]))
+    q_swapped = _avss_qualification(av_records, ev_swapped, av_n)
+    check("AVSS ciphertexts are bound to the committed E_j vector (round-22 "
+          "3936844318 / 3936844061): re-interpreting the SAME records under a "
+          "permuted E_j breaks well-formedness for the mis-bound recipients, "
+          "so the qualification set CHANGES -- which is exactly why E_j is "
+          "committed in index order into the epoch hash (a different E_j "
+          "mapping is a DIFFERENT protocol state)",
+          len(q_swapped) != len(q_a) and len(q_swapped) < av_n)
+
     # ---------- P: pinned model vectors (fixed registered literals) -------------
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "0dbc6fcbaeae2519372972ecbee4f869c8012378c63093468e0f634709274b22",
-        "34bf0c36dabe3eb6537bfbe88c09bd223531e9398ffadd47b7e06239ae37a325",
-        "143f0f27e0af24f08edccf62e56f7c500a07f6c53af39bacf857533e7a53ad25",
-        "586c1fc57865a33be7eec7924da8433af0f087a4202bb1a52e2a65094cc6473b",
+        "911e8d1a5ee5d800ed5f9eafa01d12ddd7a10ca71833729e2dfa821f0b8dd647",
+        "83c709c1db93da90492eadb7159f41bb5470386cfc9f4b595d4d0378d38c23fc",
+        "5b7ffca5cf9301ee2f2b9ebb8b7f59d96b8f0a797798a38ae0a3ccd4b433048f",
+        "597244975c9f44243e83fd7e2182bb0b431b89808e25e2c76135fcc116b0cd34",
     )
-    EXP_COMP = "bc18abcf7ca3bd3c42a8bddcecafc2da1e623bcc68cef6f91aa14cdca6f51b93"
+    EXP_COMP = "ca49bc2d9427e981e8161cdc45fd315fdd551618b948a22aafa5eddfe59b551d"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),
@@ -3805,7 +4305,8 @@ def main():
     check("P compositional root-sequence digest matches the REGISTERED literal: "
           "%s" % comp_seq_digest, comp_seq_digest == EXP_COMP)
 
-    print("\n" + ("ALL PASS" if failed == 0 else "%d FAILURE(S)" % failed))
+    print("\n" + (("ALL PASS (%d checks)" % passed)
+                   if failed == 0 else "%d FAILURE(S)" % failed))
     return 0 if failed == 0 else 1
 
 

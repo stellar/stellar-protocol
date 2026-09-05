@@ -179,39 +179,180 @@ def _ed_pt_mul(P, s):
     return R
 
 
-def _ed_strict_decompress(b32) -> "bool":
-    """Full RFC 8032 decompression + prime-order subgroup validation of a
-    32-byte compressed Edwards25519 point. Returns True only for a point the
-    native ECVRF-Ed25519 verifier accepts."""
+def _ed_decode_point(b32):
+    """Full RFC 8032 decompression returning the extended-coordinate point
+    (X, Y, Z, T), or None for any input the native decoder rejects (wrong
+    width, y >= p, non-square x^2, sign mismatch)."""
     if not isinstance(b32, (bytes, bytearray)) or len(b32) != 32:
-        return False
+        return None
     xsign = (b32[31] >> 7) & 1
     y = int.from_bytes(b32, "little") & ((1 << 255) - 1)
     if y >= _ED_P:
-        return False
+        return None
     try:
         x2 = (y * y - 1) * pow(_ED_D * y * y + 1, _ED_P - 2, _ED_P) % _ED_P
         if not _ed_is_square(x2):
-            return False
+            return None
         x = pow(x2, (_ED_P + 3) // 8, _ED_P)
         if (x * x - x2) % _ED_P != 0:
             x = x * _ED_I % _ED_P
         if (x * x - x2) % _ED_P != 0:
-            return False
+            return None
         if x == 0 and xsign == 1:
-            return False
+            return None
         if xsign != (x & 1):
             x = (_ED_P - x) % _ED_P
-        T = x * y % _ED_P
-        # Round-18 thread 3935393823: RFC 9381 ECVRF public-key validation also
-        # REJECTS the identity point (encoding '{01 00...00}' -> (x,y)=(0,1)),
-        # which otherwise trivially satisfies [L]P == identity. Exclude it here.
-        if x == 0 and y == 1:
-            return False
-        xL, yL, zL, tL = _ed_pt_mul((x, y, 1, T), _ED_L)
-        return _ed_affine_is_identity(xL, yL, zL, tL)
+        return (x, y, 1, x * y % _ED_P)
     except Exception:
+        return None
+
+
+def _ed_pt_is_identity(P):
+    return P[0] == 0 and P[1] == 1 and P[2] == 1
+
+
+def _ed_strict_decompress(b32) -> "bool":
+    """Full RFC 8032 decompression + prime-order subgroup validation of a
+    32-byte compressed Edwards25519 point. Returns True only for a point the
+    native ECVRF-Ed25519 verifier accepts."""
+    P = _ed_decode_point(b32)
+    if P is None or _ed_pt_is_identity(P):
         return False
+    xL, yL, zL, tL = _ed_pt_mul(P, _ED_L)
+    return _ed_affine_is_identity(xL, yL, zL, tL)
+
+
+def _ed_pt_neg(P):
+    X, Y, Z, T = P
+    return ((-X) % _ED_P, Y, Z, (-T) % _ED_P)
+
+
+def _ed_pt_sub(P, Q):
+    return _ed_pt_add(P, _ed_pt_neg(Q))
+
+
+def _ed_compress(P):
+    X, Y, Z, T = P
+    zi = pow(Z, _ED_P - 2, _ED_P)
+    a_x = X * zi % _ED_P
+    a_y = Y * zi % _ED_P
+    return (a_y | ((a_x & 1) << 255)).to_bytes(32, "little")
+
+
+_ED_B = (15112221349535400772501151409588531511454012693041857206046113283949847762202,
+         46316835694926478169428394003475163141307993866256225615783033603165251855960,
+         1, 15112221349535400772501151409588531511454012693041857206046113283949847762202
+         * 46316835694926478169428394003475163141307993866256225615783033603165251855960
+         % _ED_P)
+
+
+# ---------------------------------------------------------------------------
+# REAL RFC 9381 ECVRF-EDWARDS25519-SHA512-TAI (suite_string = 0x03)
+# ---------------------------------------------------------------------------
+# Reviewers (round-22 threads 3936620296 / 3936844169): V4/V5 must be a REAL
+# ECVRF_verify over context-specific (proof, beta, commit) tuples -- NOT an
+# expected-byte lookup. This is the complete RFC 9381 ciphersuite built on the
+# strict Edwards25519 group ops above:
+#   * secret scalar x = clamp(SHA-512(SK)[0:32])   (RFC 8032 5.1.5)
+#   * H = encode_to_curve_try_and_increment(PK, alpha)  (RFC 9381 5.4.1.1),
+#     cofactor 8 (identicate dimensions: suite 0x03, TAI)
+#   * k  = nonce_generation_RFC8032(SK, H)          (RFC 9381 5.4.2.2)
+#   * c  = challenge_generation(Y, H, Gamma, U, V)  (RFC 9381 5.4.3, cLen 16)
+#   * pi = Gamma || c || s   (32 + 16 + 32 == the CAP's 80-byte vrfProof)
+#   * beta = SHA-512(0x03 || 0x03 || enc(8*Gamma) || 0x00)   (5.2, hLen 64)
+# ECVRF_verify recomputes H, U = s*B - c*Y, V = s*H - c*Gamma and re-derives
+# the challenge; the proof is accepted ONLY if the recomputed challenge equals
+# the proof's c (a real Schnorr-equation check -- no proof-bytes table).
+_ECVRF_SUITE = 0x03
+
+
+def _ecvrf_sk_to_x(sk: bytes) -> int:
+    # RFC 9381 §5.5 EDWARDS25519-SHA512-TAI: SK is the RFC 8032 32-byte seed,
+    # the secret scalar is the clamped SHA-512 prefix.
+    s = bytearray(sha512(sk)[0:32])
+    s[0] &= 248
+    s[31] &= 63
+    s[31] |= 64
+    return int.from_bytes(bytes(s), "little")
+
+
+def _ecvrf_h2c_tai(pk_string: bytes, alpha: bytes):
+    # ECVRF_encode_to_curve_try_and_increment (RFC 9381 5.4.1.1) with
+    # interpret_hash_value_as_a_point(s) = string_to_point(s[0]...s[31]) and
+    # cofactor = 8. H is in the prime-order subgroup after cofactor scaling;
+    # the loop continues while the candidate is invalid or identity.
+    ctr = 0
+    while True:
+        h = sha512(bytes([_ECVRF_SUITE, 0x01]) + pk_string + alpha
+                   + bytes([ctr]) + b"\x00")
+        P = _ed_decode_point(h[0:32])
+        if P is not None:
+            P8 = _ed_pt_mul(P, 8)
+            if not _ed_pt_is_identity(P8):
+                return P8
+        ctr += 1
+
+
+def _ecvrf_challenge(Y, H, Gamma, U, V) -> int:
+    cstr = (bytes([_ECVRF_SUITE, 0x02])
+            + b"".join(_ed_compress(p) for p in (Y, H, Gamma, U, V))
+            + b"\x00")
+    c_string = sha512(cstr)
+    return int.from_bytes(c_string[0:16], "little")
+
+
+def _ecvrf_prove(sk: bytes, alpha: bytes) -> bytes:
+    x = _ecvrf_sk_to_x(sk)
+    Y = _ed_pt_mul(_ED_B, x)
+    pk = _ed_compress(Y)
+    H = _ecvrf_h2c_tai(pk, alpha)
+    h_string = _ed_compress(H)
+    # nonce_generation_RFC8032: k = OS2IP(SHA-512(SHA-512(SK)[32..63] || H)) mod q
+    k_string = sha512(sha512(sk)[32:64] + h_string)
+    k = int.from_bytes(k_string, "little") % _ED_L
+    Gamma = _ed_pt_mul(H, x)
+    U = _ed_pt_mul(_ED_B, k)
+    V = _ed_pt_mul(H, k)
+    c = _ecvrf_challenge(Y, H, Gamma, U, V)
+    s = (k + c * x) % _ED_L
+    return (_ed_compress(Gamma) + c.to_bytes(16, "little")
+            + s.to_bytes(32, "little"))
+
+
+def _ecvrf_proof_to_hash(pi: bytes):
+    if len(pi) != 80:
+        return None
+    Gamma = _ed_decode_point(pi[0:32])
+    if Gamma is None:
+        return None
+    return sha512(bytes([_ECVRF_SUITE, 0x03])
+                  + _ed_compress(_ed_pt_mul(Gamma, 8)) + b"\x00")
+
+
+def _ecvrf_verify(pk_string: bytes, alpha: bytes, pi: bytes):
+    """RFC 9381 ECVRF_verify. Returns (True, beta) iff pi is a genuine proof
+    under pk_string for alpha (c' == c over the recomputed U/V), else
+    (False, None). Public-key validation (cofactor trick) is applied."""
+    Y = _ed_decode_point(pk_string)
+    if Y is None or _ed_pt_is_identity(Y):
+        return (False, None)
+    if _ed_pt_is_identity(_ed_pt_mul(Y, 8)):
+        return (False, None)                    # ECVRF_validate_key
+    if len(pi) != 80:
+        return (False, None)
+    Gamma = _ed_decode_point(pi[0:32])
+    if Gamma is None:
+        return (False, None)
+    c = int.from_bytes(pi[32:48], "little")
+    s = int.from_bytes(pi[48:80], "little")
+    if s >= _ED_L:
+        return (False, None)
+    H = _ecvrf_h2c_tai(pk_string, alpha)
+    U = _ed_pt_sub(_ed_pt_mul(_ED_B, s), _ed_pt_mul(Y, c))
+    V = _ed_pt_sub(_ed_pt_mul(H, s), _ed_pt_mul(Gamma, c))
+    if _ecvrf_challenge(Y, H, Gamma, U, V) != c:
+        return (False, None)
+    return (True, _ecvrf_proof_to_hash(pi))
 
 
 DOMAIN = b"stellar-vrf"
@@ -362,6 +503,25 @@ def _node_sk_for(pub: bytes) -> Ed25519PrivateKey:
     raise ValueError("no recoverable private seed for this contributor NodeID")
 
 
+def _node_vrf_seed_for(pub: bytes, net: bytes) -> bytes:
+    # Deterministic recovery of a contributor's ECVRF private seed from its
+    # committed vrf_public_key, using the SAME canonical derivation as
+    # gen_vectors / _clone_vrf_pub: vrf_seed = SHA-512("stellar-vrf/v1/derive"
+    # | net_id | node_key_seed)[0:32]. Under RFC 9381 ECVRF-EDWARDS25519-TAI
+    # this seed IS the secret key SK and x*B == the committed public key, so
+    # the checker can run REAL proofs/verification for the fixture's own keys.
+    # Only the fixture's deterministic validator set is recoverable -- an
+    # unknown public key has no derivable private seed here (correct: proofs
+    # for a foreign key cannot be synthesized by the checker).
+    for name in _NODE_NAMES:
+        n_seed = sha512(NODE_KEY_LABEL + name)[0:32]
+        vrf = sha512(b"stellar-vrf/v1/derive" + net + n_seed)[0:32]
+        if (Ed25519PrivateKey.from_private_bytes(vrf)
+                .public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)) == pub:
+            return vrf
+    raise ValueError("no recoverable VRF private seed for this VRF public key")
+
+
 def subseed(net: bytes, slot: int, purpose: int, bcn: bytes) -> bytes:
     return sha512(SUB_DOMAIN + bytes([0x01]) + net
                   + slot.to_bytes(4, "big") + bytes([purpose]) + bcn)[0:32]
@@ -404,10 +564,12 @@ def run():
     pinned_beacon = bytes.fromhex(t["beacon"])
 
     failed = 0
+    passed = 0
 
     def check(name, ok):
-        nonlocal failed
+        nonlocal failed, passed
         print(("PASS  " if ok else "FAIL  ") + name)
+        passed += 1
         if not ok:
             failed += 1
 
@@ -648,13 +810,20 @@ def run():
     # `make_verifier`), and the reveal's own `sha256(beta)` is compared directly
     # against that nid's committed hash -- never routed through a hash->nid table.
 
-    def make_verifier(network, slot_ctx, proofs, commits):
+    def make_verifier(network, slot_ctx, proofs, commits, real_vrf=False,
+                      alpha_string=None):
         # commits maps nid -> (commit_hash_bytes, sig_bytes, vrf_pub_bytes) for
         # that context. Everything is compared in BYTES (commit_hash _bytes, and
         # the reveal's own sha256(beta) _bytes) -- never a hex string -- so this
         # accepter genuinely exercises the real cross-context rejection instead of
         # failing any given commit (bytes-vs-hex) and passing the wrong-network /
         # wrong-slot tests for the wrong reason (Copilot this review, Medium).
+        # `real_vrf=True` replaces the byte-equality proof gate with a REAL RFC
+        # 9381 ECVRF_verify (round-22 threads 3936620296 / 3936844169): the
+        # reveal's proof + beta must cryptographically verify under the reveal's
+        # COMMITTED vrf_public_key against the CONTEXT transcript alpha_string,
+        # and beta must equal the ECVRF output -- there is no expected-bytes
+        # table to match.
         context_commit_map = {nid: chb for nid, (chb, _, _)
                               in commits.items()}
         vrf_map = {nid: vp for nid, (_, _, vp) in commits.items()}
@@ -677,12 +846,19 @@ def run():
             ch, sg, _vp = commits[nid]               # full 3-tuple unpack
             if not verify_commit(nid, ch, sg):
                 return False  # unauthenticated / scoped-mismatched commit
-            if proof != proofs[nid]:
-                # FIELD-INTEGRITY / transport gate (NOT a cryptographic
-                # VRF_verify): proof must byte-match the authoritative pinned
-                # proof for (pk=nid, T_b(s)) UNDER THIS CONTEXT. Real RFC 9381
-                # ECVRF verification is the PR #5409 harness's job.
-                return False
+            if real_vrf:
+                ok_v, beta_v = _ecvrf_verify(vrf_map[nid], alpha_string,
+                                             proof)
+                if not ok_v or beta_v != beta:
+                    # REAL proof gate: the Schnorr-equation check failed or the
+                    # carried beta is not the ECVRF output for this context.
+                    return False
+            else:
+                if proof != proofs[nid]:
+                    # FIELD-INTEGRITY / transport gate for the FIXTURE paths
+                    # (V3/V7...): proof must byte-match the authoritative pinned
+                    # proof for (pk=nid, T_b(s)) UNDER THIS CONTEXT.
+                    return False
             if prev_node_bytes is not None and nid <= prev_node_bytes:
                 return False  # strict ascending (duplicates / out-of-order)
             return True
@@ -804,66 +980,117 @@ def run():
               (row[0], row[1], th_leader_b, expected_proof[row[0]])
               for row in contribs], sha256(bytes(t_mut))))
 
-    # --- V4/V5: CROSS-CONTEXT PROOF-CONTEXT BINDING (this audit) ---------------
-    # The reviewer's round-16 point (thread 3934384644 / d7OZI): the previous
-    # cross-context tests rejected at the COMMIT-SIGNATURE gate -- the raw
-    # testnet VRFCommit.sig does not verify under the mainnet key scope, so they
-    # never exercised the property they claimed: PROOF binding to (network,
-    # slot). Security-boundary isolation can be shown only by a test whose sole
-    # divergent field is the PROOF bytes while every other field -- commit,
-    # signature, transcript hash, roster -- is internally valid for the TARGET
-    # context.
+    # --- V4/V5: CROSS-CONTEXT PROOF-CONTEXT BINDING (round-22 rework) ----------
+    # Reviewers round-22 (threads 3936620296 / 3936844169): V4/V5 must be a REAL
+    # RFC 9381-style ECVRF_verify over context-specific (proof, beta, commit)
+    # triples -- NOT an expected-byte lookup. The block below therefore:
+    #   1. self-conformances the checker against RFC 9381 Appendix B.3
+    #      (ECVRF-EDWARDS25519-SHA512-TAI, suite_string 0x03, Example 16) so the
+    #      ECVRF implementation is pinned to the OFFICIAL published vector;
+    #   2. recovers each contributor's REAL ECVRF private seed from its committed
+    #      vrf_public_key and asserts x*B == that committed key;
+    #   3. builds per target context C in {mainnet-s, testnet-(s+1)} a fully
+    #      C-scoped reveal set whose beta = ECVRF output, commit = sha256(beta)
+    #      RE-SIGNED under scope C, and proof = ECVRF_prove(sk_v, T_C) -- then
+    #      ACCEPTS it through a verifier whose proof gate IS
+    #      ECVRF_verify(Y, T_C, pi) (a Schnorr-equation check, no byte table);
+    #   4. substitutes a WRONG-context proof pi (derived for the other context)
+    #      into those same internally-valid rows and shows the REAL verify
+    #      rejects at the proof/VRF gate -- the signature, commit binding,
+    #      transcript and roster all remain valid for C.
     #
-    # Per target context C in {mainnet-s, testnet-(s+1)} we build:
-    #   C-commits : the SAME committed beta/commitHash, RE-SIGNED by the node's
-    #               canonical private key under scope (C.net, C.slot) -> every
-    #               VRFCommit.sig is cryptographically valid IN C.
-    #   C-proofs  : placeholder_proof(node_id, C.net, C.slot, anchor) -- proof
-    #               bytes DERIVED FOR C (a native RFC 9381 ECVRF proof is
-    #               deterministic in secret key + transcript, hence network/slot
-    #               scoped exactly the same way).
-    #   C-transcript: transcript_hash(C.net, C.slot, 0x01, anchor).
-    # Positive control: rows carrying C-proofs are ACCEPTED in C (so C is
-    # internally consistent -- the rejection below is not a context-wide
-    # catch-all). Negative test: the IDENTICAL rows with only the proof derived
-    # for the WRONG context substituted are REJECTED; because the sole differing
-    # field is the proof bytes, the failure is specifically PROOF-context
-    # binding -- never a signature-scope failure.
-    def _resigned_commits(net_c, slot_c):
-        return {nid: (ch, _node_sk_for(nid).sign(
-                    commit_message(net_c, slot_c, ch, vp)), vp)
-                for nid, _, ch, _sg, vp in contribs}
+    # RFC 9381 B.3 Example 16 (the checker pins its own ECVRF to the RFC):
+    _RFC_SK = bytes.fromhex(
+        "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+    _RFC_PK = bytes.fromhex(
+        "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+    _RFC_PI = bytes.fromhex(
+        "8657106690b5526245a92b003bb079ccd1a92130477671f6fc01ad16f26f723f"
+        "26f8a57ccaed74ee1b190bed1f479d9727d2d0f9b005a6e456a35d4fb0daab1"
+        "268a1b0db10836d9826a528ca76567805")
+    _RFC_BETA = bytes.fromhex(
+        "90cf1df3b703cce59e2a35b925d411164068269d7b2d29f3301c03dd757876f"
+        "f66b71dda49d2de59d03450451af026798e8f81cd2e333de5cdf4f3e140fdd8ae")
+    _rfc_pi = _ecvrf_prove(_RFC_SK, b"")
+    _rfc_ok, _rfc_beta = _ecvrf_verify(_RFC_PK, b"", _rfc_pi)
+    _rfc_wrong = _ecvrf_verify(_RFC_PK, b"the-dl-policy-forcing-alpha", _rfc_pi)
+    check("V4  REAL RFC 9381 ECVRF conformance (B.3, EDWARDS25519-SHA512-TAI "
+          "suite 0x03, Example 16): ECVRF_prove reproduces the OFFICIAL "
+          "published pi, ECVRF_verify(PK, \"\", pi) reproduces the OFFICIAL "
+          "beta, and verify with a DIFFERENT alpha is INVALID -- the proof "
+          "gate is a real Schnorr-equation check, not a byte-equality lookup",
+          _rfc_pi == _RFC_PI and _rfc_ok and _rfc_beta == _RFC_BETA
+          and not _rfc_wrong[0])
 
-    def _context_reveal_set(net_c, slot_c, proof_of):
+    # Recover the REAL ECVRF private seeds and pin the key pairing to the
+    # committed public keys (RFC 9381: x = clamp(SHA-512(SK)) and Y = x*B).
+    vrf_seeds = {nid: _node_vrf_seed_for(vp, net_id)
+                 for nid, (_ch, _sg, vp) in commit_auth.items()}
+    check("V4  fixture VRF keys are REAL ECVRF keys (round-22 3936844169): each "
+          "contributor's committed vrf_public_key equals x*B under RFC 9381 "
+          "key derivation from its canonical private seed -- so the checker "
+          "can run genuine proofs/verification for the fixture's own keys "
+          "instead of an expected-bytes table",
+          all(_ed_compress(_ed_pt_mul(_ED_B, _ecvrf_sk_to_x(vrf_seeds[nid])))
+              == commit_auth[nid][2] for nid in commit_auth))
+
+    def _real_context(net_c, slot_c):
+        # A reveal set internally valid in context C: beta = REAL ECVRF output,
+        # commit = sha256(beta) re-signed under scope (C.net, C.slot), proof =
+        # REAL ECVRF_prove(sk_v, T_C). Returns (rows, commits, alpha_C, th_C).
+        alpha_c = transcript(net_c, slot_c, 1, anchor)
         th_c = transcript_hash(net_c, slot_c, 1, anchor)
-        return ([(nid, beta, th_c, proof_of(nid))
-                 for nid, beta, _ch, _sg, _vp in contribs], th_c)
+        commit_map = {}
+        rows = []
+        for nid in sorted(commit_auth):
+            pi_c = _ecvrf_prove(vrf_seeds[nid], alpha_c)
+            ch_c = sha256(_ecvrf_proof_to_hash(pi_c))
+            sig_c = _node_sk_for(nid).sign(
+                commit_message(net_c, slot_c, ch_c, commit_auth[nid][2]))
+            commit_map[nid] = (ch_c, sig_c, commit_auth[nid][2])
+            rows.append((nid, _ecvrf_proof_to_hash(pi_c), th_c, pi_c))
+        return rows, commit_map, alpha_c, th_c
 
     # -- V4: mainnet context (same slot s) --
-    beta_a_test = contribs[0][1]
+    beta_a_test = placeholder_beta(contribs[0][0], net_id, slot, anchor)
     beta_a_main = placeholder_beta(contribs[0][0], net_main, slot, anchor)
-    main_commits = _resigned_commits(net_main, slot)
-    main_proofs = {nid: placeholder_proof(nid, net_main, slot, anchor)
+    main_rows, main_commits, alpha_main, th_main = \
+        _real_context(net_main, slot)
+    _m_verify, _m_accept, _m_set = make_verifier(net_main, slot, {}, main_commits,
+                                         real_vrf=True, alpha_string=alpha_main)
+    # The WRONG-context substitution: identical mainnet-valid rows whose ONLY
+    # divergent field is the proof -- replaced by the REAL proof derived for
+    # the testnet-s transcript.
+    test_proofs = {nid: _ecvrf_prove(vrf_seeds[nid],
+                                     transcript(net_id, slot, 1, anchor))
                    for nid in commit_auth}
-    _, _m_accept, _m_set = make_verifier(net_main, slot, main_proofs, main_commits)
-    main_good, th_main = _context_reveal_set(
-        net_main, slot, lambda nid: main_proofs[nid])
-    main_bad, _ = _context_reveal_set(
-        net_main, slot, lambda nid: expected_proof[nid])  # testnet-s proof bytes
-    check("V4  mainnet-derived proofs differ from testnet-derived proofs "
-          "(the isolation is non-vacuous)",
-          all(main_proofs[nid] != expected_proof[nid] for nid in commit_auth))
-    check("V4  cross-network PROOF-context binding (positive control): a reveal "
-          "set fully scoped to mainnet -- mainnet-re-signed VRFCommit.sig, "
-          "mainnet transcript, mainnet-derived proofs -- is ACCEPTED by the "
-          "mainnet verifier",
-          _m_set(main_good, th_main))
-    check("V4  cross-network PROOF-context binding (isolated): the SAME "
-          "mainnet-scoped set with ONLY the proof bytes swapped for the "
-          "testnet-derived proof is REJECTED -- valid signature, valid commit, "
-          "valid transcript, correct roster, wrong-context proof fails at the "
-          "PROOF gate, not the signature gate",
-          not _m_set(main_bad, th_main))
+    main_bad = [(nid, beta, th, test_proofs[nid])
+                for nid, beta, th, _pi in main_rows]
+    check("V4  REAL mainnet ECVRF proofs differ from REAL testnet proofs "
+          "(the isolation is non-vacuous): pi_mainnet != pi_testnet for every "
+          "contributor because T(s)-scope enters encode_to_curve and the "
+          "challenge",
+          all(main_rows[i][3] != test_proofs[nid]
+              for i, nid in enumerate(sorted(commit_auth))))
+    check("V4  cross-network REAL proof-context binding (positive control): a "
+          "reveal set fully scoped to mainnet -- REAL beta (ECVRF output), "
+          "commit sha256(beta) re-signed under mainnet, REAL mainnet proof -- "
+          "is ACCEPTED by the mainnet verifier whose proof gate is "
+          "ECVRF_verify(Y, T_mainnet, pi)",
+          _m_set(main_rows, th_main))
+    _main_sig_ok = all(
+        _m_verify(nid, ch, sg)
+        for nid, (ch, sg, _vp) in main_commits.items())
+    _main_beta_binds = all(sha256(row[1]) == main_commits[nid][0]
+                           for row, nid in zip(main_rows, sorted(commit_auth)))
+    check("V4  cross-network REAL proof-context binding (isolated): the SAME "
+          "mainnet-valid rows -- signature valid under mainnet scope, beta "
+          "binding to the committed hash, correct roster, transcript == "
+          "mainnet -- with ONLY the proof swapped for the REAL testnet-s "
+          "derivation are REJECTED by the REAL ECVRF gate; the divergence is "
+          "specifically PROOF-context binding, never a signature/commit gate",
+          not _m_set(main_bad, th_main)
+          and _main_sig_ok and _main_beta_binds)
     check("V4  cross-network replay detected (byte-level): a testnet "
           "contribution does not match the mainnet transcript",
           beta_a_main.hex() == t["V4_beta_under_mainnet"]
@@ -871,30 +1098,38 @@ def run():
           and th_main != th_leader_b)
 
     # -- V5: slot-(s+1) context (same testnet network) --
-    next_slot_commits = _resigned_commits(net_id, slot + 1)
-    next_slot_proofs = {nid: placeholder_proof(nid, net_id, slot + 1, anchor)
-                        for nid in commit_auth}
-    _, _s_accept, _s_set = make_verifier(net_id, slot + 1, next_slot_proofs,
-                                         next_slot_commits)
-    ns_good, th_next_slot = _context_reveal_set(
-        net_id, slot + 1, lambda nid: next_slot_proofs[nid])
-    ns_bad, _ = _context_reveal_set(
-        net_id, slot + 1, lambda nid: expected_proof[nid])  # slot-s proof bytes
-    check("V5  slot-(s+1)-derived proofs differ from slot-s proofs "
-          "(the isolation is non-vacuous)",
-          all(next_slot_proofs[nid] != expected_proof[nid]
-              for nid in commit_auth))
-    check("V5  cross-slot PROOF-context binding (positive control): a reveal "
-          "set fully scoped to slot-(s+1) -- VRFCommit.sig re-signed for s+1, "
-          "s+1 transcript, s+1-derived proofs -- is ACCEPTED by the "
-          "slot-(s+1) verifier",
-          _s_set(ns_good, th_next_slot))
-    check("V5  cross-slot PROOF-context binding (isolated): the SAME "
-          "slot-(s+1)-scoped set with ONLY the proof bytes swapped for the "
-          "slot-s derived proof is REJECTED -- valid signature, valid commit, "
-          "valid transcript, correct roster, wrong-slot proof fails at the "
-          "PROOF gate, not the signature gate",
-          not _s_set(ns_bad, th_next_slot))
+    next_rows, next_commits, alpha_next, th_next_slot = \
+        _real_context(net_id, slot + 1)
+    _s_verify, _s_accept, _s_set = make_verifier(net_id, slot + 1, {}, next_commits,
+                                         real_vrf=True, alpha_string=alpha_next)
+    slot_s_proofs = {nid: _ecvrf_prove(vrf_seeds[nid],
+                                       transcript(net_id, slot, 1, anchor))
+                     for nid in commit_auth}
+    ns_bad = [(nid, beta, th, slot_s_proofs[nid])
+              for nid, beta, th, _pi in next_rows]
+    check("V5  REAL slot-(s+1) ECVRF proofs differ from REAL slot-s proofs "
+          "(the isolation is non-vacuous): pi_{s+1} != pi_s for every "
+          "contributor because the slot enters the transcript alpha",
+          all(next_rows[i][3] != slot_s_proofs[nid]
+              for i, nid in enumerate(sorted(commit_auth))))
+    check("V5  cross-slot REAL proof-context binding (positive control): a "
+          "reveal set fully scoped to slot-(s+1) -- REAL beta, commit "
+          "sha256(beta) re-signed for s+1, REAL slot-(s+1) proof -- is "
+          "ACCEPTED by the slot-(s+1) verifier's REAL ECVRF gate",
+          _s_set(next_rows, th_next_slot))
+    _next_sig_ok = all(
+        _s_verify(nid, ch, sg)
+        for nid, (ch, sg, _vp) in next_commits.items())
+    _next_beta_binds = all(sha256(row[1]) == next_commits[nid][0]
+                           for row, nid in zip(next_rows,
+                                               sorted(commit_auth)))
+    check("V5  cross-slot REAL proof-context binding (isolated): the SAME "
+          "slot-(s+1)-valid rows with ONLY the proof swapped for the REAL "
+          "slot-s derivation are REJECTED by the REAL ECVRF gate -- valid "
+          "signature, valid commit, valid transcript, correct roster, "
+          "wrong-slot proof fails at the proof gate, not the signature gate",
+          not _s_set(ns_bad, th_next_slot)
+          and _next_sig_ok and _next_beta_binds)
     check("V5  cross-slot replay detected (byte-level)",
           th_next_slot.hex() == t["V5_transcript_hash_cross_slot"]
           and th_next_slot.hex() != th_leader.hex())
@@ -1082,7 +1317,8 @@ def run():
           "not satisfied by -- and not asserted for -- the Layer A aggregate",
           True)
 
-    print("\n" + ("ALL PASS" if failed == 0 else f"{failed} FAILURE(S)"))
+    print("\n" + (("ALL PASS (%d checks)" % passed)
+                 if failed == 0 else f"{failed} FAILURE(S)"))
     return 0 if failed == 0 else 1
 
 
