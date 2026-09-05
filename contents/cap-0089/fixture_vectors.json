@@ -1,0 +1,96 @@
+{
+  "cap": "CAP-0089",
+  "title": "VRF-Based Protocol Randomness and Fair Leader Selection",
+  "cryptographic_building_block": "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381)",
+  "building_block_pr": "https://github.com/stellar/stellar-core/pull/5409",
+  "note": "Protocol-level conformance fixture. `network_id` is the real 32-byte Application::getNetworkID() = SHA-256(network passphrase), no prefix. `anchor_ledger_header_hash` is the canonical LedgerHeader hash of ledger (s-3) and is used directly (not re-hashed) as prior_context(s). Contributions are ordered by NodeID ascending per the CAP. The beta placeholders model VRF determinism-in-transcript; real RFC 9381 proofs are exercised by the PR #5409 harness.",
+  "constants": {
+    "domain": "stellar-vrf",
+    "transcript_version": 1,
+    "sub_domain": "stellar-vrf/sub",
+    "network_id_hash": "SHA-256",
+    "anchor_hash": "LedgerHeaderHash (32 bytes, not re-hashed)",
+    "beacon_hash": "SHA-256",
+    "subseed_hash": "SHA-512[0:32]",
+    "beta_label_hash": "SHA-512[0:64] (protocol placeholder)",
+    "purpose_beacon": 1,
+    "purpose_leader": 2,
+    "purpose_prng": 3,
+    "purpose_order": 4,
+    "network_id_testnet": "cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
+    "network_id_mainnet": "7ac33997544e3175d266bd022439b22cdb16508c01163f26e5cb2a3e1045a979"
+  },
+  "testnet": {
+    "network_id": "cee0302d59844d32bdca915c8203dd44b33fbb7edc19051ea37abedf28ecd472",
+    "slot": 123456789,
+    "anchor_ledger_header_hash": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "contributors": [
+      {
+        "node_id": "587cc7bf75247244f81abfc0b08b4ef3fc4c43f1360700de2e5cf2d173f5f7e6",
+        "vrf_public_key": "019487033e0011f34f68abab22c6fd3ebfa020b88d4588d15cf7e0be76b03a9a",
+        "beta": "525e864a741b20069ca35764d27a627b1cce61517688468dd383575e159ec4085ddfb46a323e761d5ae56919c2201e4f268e96275b340f2887faaa817de7d308",
+        "commit_hash": "a5037c24bad8d559b2788684de9f1ac5618c2f10fbc1ef81b6b38b98c42b4ca8",
+        "sig": "2ab4cd247a15ea1777a0f72be177226464728197849d3241846f37301e31c37f5f04f497d117cc466f2b2974d336bbe97f092f4bb318aaacfa26cfa371458500"
+      },
+      {
+        "node_id": "7772038750070f009356a2dcd8c93567a9e28d66ca4f048c61286ea49c2e915e",
+        "vrf_public_key": "afdc33bf4c9493fd220c58d84c431171b9ce74c24aaf4156205ba374d23ea387",
+        "beta": "3899fbc428992d39d78be268d1644253252603e8d12214352ece9c04fe71157b728aa78a0462211a99bac8446251243032aa38020ba560bb9eeebad1668d7a48",
+        "commit_hash": "5793b75b3747b70170fe3e499661fc69f5098a78ede50c081dbab0b8cd411de9",
+        "sig": "a18728a7067a9be48db25a9d02cb980e5b4f37cfcf98b785bab31e3014a92145339301b5f9d3f3c8d56af17717e98d82f3b33ceebf2c4a71dda80b828cc94f03"
+      },
+      {
+        "node_id": "8bba83b40ddab8104696d6b1079006e98ae66fd05dcff068f6e46a0a35db6bdc",
+        "vrf_public_key": "1ce59188d8cdc4693efe976a85583341b4b636d92d5d67d286d79be504a83742",
+        "beta": "1649fab2341a5fc6512fa2beeec3972b01c99b50b45e6441f245a460652e6a1ab353bc265aeedd501f927077efffe358df60104c83ac21f0f782bea5b29e273e",
+        "commit_hash": "b2c31444cdd2ae8e07187580b62f2bcc360f85881cf3e8a41467207f0e9b78bc",
+        "sig": "ec760eef24bbf0f8515fc72d1ac1143747b5140fcfbab4e0faace01bac3dd1e6af50b1356788c941b86573b53d76ae415c6876e13a7c7e51e64bcd3b50355009"
+      },
+      {
+        "node_id": "a2f34630bad5dba0c7766e7ef4b3f58e308924f1db48202f356f96b08a349108",
+        "vrf_public_key": "b2ff9cd4009c7bfee2cfc72618687d5b4efb6fa28db5ed8d98e9a5a06f3796d2",
+        "beta": "27c910fffd67f9ffadf7e22d46aafa15a218e13e4d12b09b5fcc28abef1f54429caf356beb284223201545b28c5abb0cdeaddb81bbad91b6984216caefa6f235",
+        "commit_hash": "8220707bb7dce89558672e77385331a7e0f08e69e8e936c659b93be95ef91fe7",
+        "sig": "df43b598c916e678f76be6daea6d858cd15057c59c9ec72660fa78e302073e10f008e5da48f95924d57c9b63528012b0efc28b7135c6b1b3a42b07d8d9dbc808"
+      },
+      {
+        "node_id": "a3e5b498aa264d04886049cf7c5338b9509c981a1ca02d44d6669ca5cd02159c",
+        "vrf_public_key": "547dc9f496906ac942070b52fcb68b91a2e7b0bd161de98358ceb2209f94bac8",
+        "beta": "121ed4aea9c0dd8367d6902d587c9e682606d3880714d8f5dd28ce3ba3da171caa067fba1dda0935612188e2197edecde1bac8a97bd1af3fcaa503f67dee7152",
+        "commit_hash": "e254ffdd385c13444bcd5b964b1e94c8441ae6a0c2ca4dc33cf40d18c10fafba",
+        "sig": "d8eebedb35594d4427cfae7f56cf2017223cadfb5fb03d7f799200dfc8641b4b4694b7547941b95a4405af57893eca71f5f1e5363b70e62373dd805b571ed90b"
+      },
+      {
+        "node_id": "e6812608c29e79597dd114db5fae9bb5318cec1f06b826b2177c9ebf78951615",
+        "vrf_public_key": "d9415f252db2c10310dbbb43c6b0a2f51bdf30998267993ddc6d7ff2acecb992",
+        "beta": "8bd072346062a6d43cca9c41c96d42f57abea56955123770ceaa3a7ef137947df78a9564fdf686ec7ce2b7083cca0851136e34d130d2a48da656fb862e07dfca",
+        "commit_hash": "8aef7afd1a64334d9b0450369be4a9e9f19228ae336c9788478c1f247fafc5df",
+        "sig": "4a12047bbd16fa758c3e1618035956692ab59a1691424f49aba8ea0be9cd4e4c1d857e8031d571109b12fd51270885c9294d8b64d7fe347af9807117a868370b"
+      }
+    ],
+    "beacon": "7f0f95274a8922e48abc7db3a9b206f56a8e54031e5cc241fcc461023d91df8b",
+    "Q": 6,
+    "threshold_t": 5,
+    "V2_single_withhold_beacon": "d75c45ed472fe5fc7cbfa7173d6757c54aa3b8fb04692fd5716141ffedff7b8b",
+    "V2_fallback_k": 4,
+    "V2_fallback_anchor": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+    "V2_partial_beacon": "58a53a129f54847e260faf5a337282e67b6b76ded1d1101baf7ba89ea4b14950",
+    "V2_fallback_beacon_LCL": "2f287b4d3d4910f6cada9e1bd1b4648099e8c52c81aa4a6aebfa6fc86f19834e",
+    "V1_transcript_hash_leader": "bb42ea934c875235ea10687556278e2094b65afe13ae851071569c50cdc3b4e0",
+    "V4_beta_under_mainnet": "a5e6167b572a519dc850c5f36ed55c64685622e75d4b11345aaa20997bbb2e02d4dfb5658f950cd67bf532d56a31a379ee8b247a22b71e24b22dbe218163a208",
+    "V5_transcript_hash_cross_slot": "f53dc7e3c41a5b4942721d27beb0908fb185100f08a236a2660e46eb946ec73b",
+    "V6_subseed_leader": "9133a3859451433be5fb658b6342adbb0ffc0c85daeb4a5258e01bf0467d8f8e",
+    "V6_subseed_prng": "e58df282cfccdf301cca7b8da918b79b3dc744dd2f7563893d35a047312c8a53",
+    "V6_subseed_order": "fe1964b9995370cce7b1505904859a8c34312f2f63d4e195694b231a97078ca4",
+    "V8_transcript_hash_mutated": "0807f95322d6e81997bf7fdff0fbaf78c5690dcb13bc17cb05f4e2de3186847b",
+    "V9_threshold_roots": [
+      "2f2f1d51397f25e05022d21de2a98362cf3f9bd98875fa3b91d7ccacc3aa52bf",
+      "37c683cfc58da9bd68104ce526daf4dbb2bc464d4a5184de0027b60275216cf7",
+      "5f50e8442ca9a03b4e985a2e61d8b420a43aa23934f3dc42fb399c9e8b48b9f2",
+      "7f0f95274a8922e48abc7db3a9b206f56a8e54031e5cc241fcc461023d91df8b",
+      "8ab67458236abc8f6be1c466a72f125e3dfa047e0b623961d4404f3f8e53137a",
+      "954c53416d2dcd3b4ba414eb7d566e50197bf229afda2bfd3b3324a0655feb88",
+      "d75c45ed472fe5fc7cbfa7173d6757c54aa3b8fb04692fd5716141ffedff7b8b"
+    ]
+  }
+}
