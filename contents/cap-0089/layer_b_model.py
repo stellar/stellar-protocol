@@ -393,17 +393,41 @@ def _lagrange_constant_commitment(points, index0=0):
 
 
 # ---------------------------------------------------------------------------
-# AVSS dealer/qualification emulation (round-22 threads 3936844242 / 3936620224
-# / 3936844061 / 3936844318). Exercises the normative AVSS guarantees on the
-# SAME share curve `_poly_coeffs(GROUP_SK, ...)` the epoch commits:
+# AVSS dealer/qualification emulation + DISTRIBUTED FROST FEEDING (round-22
+# threads 3936844242 / 3936620224 / 3936844061 / 3936844318; round-23
+# 3939109855; round-24 3939264478 / 3939264509 / 3939264532). Exercises the
+# normative AVSS guarantees on the SAME share curve
+# `_poly_coeffs(GROUP_SK, ...)` the epoch commits:
 #   * COMMIT REGISTER: the dealer broadcasts coefficient commitments
 #     C_k = G^{a_k} (Feldman-VSS opening);
-#   * ENCRYPTED-SHARE DISTRIBUTION: one ciphertext per roster member, bound to
-#     the EPOCH-COMMITTED encryption key E_j, with PUBLIC randomness so that
-#     well-formedness is a PUBLIC predicate (verifiable encryption);
-#   * QUALIFICATION Q*: ONE canonical public rule -- never a decryption report;
-#   * RECONSTRUCTION OF AN ABORTING DEALER: >= t delivered shards recover the
-#     committed constant.
+#   * ENCRYPTED-SCALAR-SHARE DISTRIBUTION: each roster member receives the
+#     SCALAR sub-share f_d(i) (NOT its group image -- round-24 3939264478),
+#     in a two-part envelope per recipient i:
+#       - a PUBLIC multiplicative tag (A1 = G^{r1}, B = C_i * E_j^{r1}) with a
+#         PUBLIC Schnorr NIZK proving knowledge of (r1, B/C_i = E_j^{r1}), the
+#         verifiable-encryption witness tying the record to the published point
+#         commitment C_i (no secret, no decryption);
+#       - a PRIVATE KEM channel (A2 = G^{r2}, env = scalar XOR
+#         H("AVSSEnv"|epoch|d|i|A2|E_j^{r2})) that ONLY recipient j -- with its
+#         PRIVATE e_j -- can open to the actual SCALAR sub-share. r2 never
+#         appears in the public tag, so E_j^{r2} is NOT a published value
+#         (unlike the tag's E_j^{r1}, which IS public); the scalar stays
+#         confidential while the point tag's well-formedness stays a pure
+#         PUBLIC predicate. Recipients FELDMAN-VERIFY the opened scalar
+#         G^m == C_i -- the proof tying each plaintext to the published point.
+#   * QUALIFICATION Q*: ONE canonical public rule -- never a decryption
+#     report; STRUCTURALLY FAIL-CLOSED (round-24 3939264509): every record's
+#     key set, element widths and proof shapes are validated BEFORE indexing,
+#     and any anomaly EXCLUDES the record instead of raising -- invariant I13
+#     "malformed proofs never crash" holds by construction;
+#   * RECONSTRUCTION OF AN ABORTING DEALER: >= t delivered SCALAR sub-shares
+#     interpolate the committed constant s_d (checked G^{s_d} == C_0), the
+#     exact material a FROST partial s_i = n_i + c*f(i) consumes;
+#   * AVSS-FED PROOF ASSEMBLY (`_avss_reshare`, `_avss_proof_from_dealers`):
+#     the qualified dealers' reconstructed per-member SCALAR sub-shares -- for
+#     BOTH the share polynomial f AND the slot's nonce polynomial g_v --
+#     assemble the byte-identical canonical P_s with no process able to derive
+#     the full coefficient vector (round-24 3939264478 / 3939264532).
 # ---------------------------------------------------------------------------
 def _avss_recv_sk(j: int) -> int:
     """PRIVATE AVSS decryption exponent e_j for roster member j -- the discrete
@@ -419,17 +443,61 @@ def _avss_recv_sk(j: int) -> int:
                               + u32(j) + b"v1"))
 
 
-def _avss_recipient_decrypt(j: int, c1_bytes: bytes, c2_bytes: bytes) -> int:
-    """Recipient j strips the mask of (c1, c2) with its PRIVATE e_j:
-    P = c2 * c1^{-e_j} = C^{(d)}_i * E_j^r * G^{-e_j*r} = C^{(d)}_i.
-    This is the ONLY consumer of the private half; the returned point is then
-    commitment-verified by comparing with the PUBLIC point commitment derived
-    from the dealer's broadcasts -- so reconstruction reads decrypted,
-    commitment-verified points, never secret coefficients."""
-    e_j = _avss_recv_sk(j) % _GRP_Q
-    c1 = int.from_bytes(c1_bytes, "big") % _GRP_P
-    c2 = int.from_bytes(c2_bytes, "big") % _GRP_P
-    return (c2 * pow(c1, (_GRP_Q - e_j) % _GRP_Q, _GRP_P)) % _GRP_P
+def _avss_scalar_eval(coeffs, x: int) -> int:
+    """f_d(x) mod q -- Horner evaluation of a dealer's degree-(t-1) sub-
+    polynomial at member index x. Public structural mirror of `_poly_share` /
+    `_frost_share` for the AVSS-DISTRIBUTED polynomial (share or nonce)."""
+    xm = x % _GRP_Q
+    acc = 0
+    for a in reversed(coeffs):
+        acc = (acc * xm + (a % _GRP_Q)) % _GRP_Q
+    return acc % _GRP_Q
+
+
+def _avss_env_mask(epoch_hash: bytes, dealer_index: int, j: int,
+                   A2_bytes: bytes, S2_bytes: bytes) -> bytes:
+    """KEM mask of the PRIVATE scalar channel:
+    H("AVSSEnv", epoch_hash, dealer_index, j, A_2, E_j^{r2}). The dealer
+    computes E_j^{r2} from its own ephemeral r2 and the PUBLIC E_j; recipient
+    j recomputes the SAME value as A_2^{e_j} = G^{e_j*r2} from its PRIVATE e_j.
+    r2 never appears in (and is independent of) the public point tag / NIZK,
+    so E_j^{r2} is NOT derivable from the public record -- the scalar
+    sub-share stays confidential while the tag's well-formedness stays a
+    public predicate."""
+    return sha256(b"AVSSEnv" + epoch_hash + u32(dealer_index) + u32(j)
+                  + A2_bytes + S2_bytes)
+
+
+def _avss_recv_scalar(j: int, enc_entry, dealer_index: int, epoch_hash: bytes,
+                      C_i: int) -> [int, None]:
+    """Recipient j opens the PRIVATE KEM envelope of `enc_entry` with its
+    epoch PRIVATE e_j and FELDMAN-VERIFIES the plaintext against the PUBLIC
+    point commitment C_i -- the proof tying the scalar plaintext to the
+    published point (exactly the check a real FROST signer performs before
+    using its share). Returns the SCALAR sub-share f_d(j) mod q, or None for a
+    malformed/forged envelope -- fail-closed, never raises."""
+    try:
+        if not (isinstance(enc_entry, tuple) and len(enc_entry) == 4):
+            return None
+        _A1_b, _B_b, A2_b, env_b = enc_entry
+        for _part in (A2_b, env_b):
+            if not (isinstance(_part, bytes) and len(_part) == 32):
+                return None
+        e_j = _avss_recv_sk(j) % _GRP_Q
+        A2 = int.from_bytes(A2_b, "big") % _GRP_P
+        if not (1 < A2 < _GRP_P and pow(A2, _GRP_Q, _GRP_P) == 1):
+            return None
+        S2 = pow(A2, e_j, _GRP_P)          # G^{e_j*r2} == E_j^{r2}
+        mask = _avss_env_mask(epoch_hash, dealer_index, j, A2_b,
+                              S2.to_bytes(32, "big"))
+        m = int.from_bytes(bytes(a ^ b for a, b in zip(env_b, mask)), "big")
+        if not (0 <= m < _GRP_Q):
+            return None
+        if pow(_GRP_G, m, _GRP_P) != (C_i % _GRP_P):
+            return None                   # Feldman tie to the public point FAILED
+        return m
+    except Exception:
+        return None
 
 
 def _avss_point_commit(coeff_commits, i: int) -> int:
@@ -444,164 +512,374 @@ def _avss_point_commit(coeff_commits, i: int) -> int:
     return acc
 
 
-def _avss_ciphertext_wellformed(Ej_bytes: bytes, C_i: int, c1: bytes, c2: bytes,
-                                Ck0: bytes, dealer_index: int, j: int,
-                                epoch_hash: bytes, proof) -> bool:
-    # PUBLIC well-formedness of an encrypted share under the EPOCH-COMMITTED
-    # recipient key E_j (round-23 rework). A verifiable-encryption check that
-    # needs NO secret, NO decryption and NO complaint:
-    #   * c1, c2 and the constant commitment C^{(d)}_0 are non-identity order-q
-    #     subgroup elements;
-    #   * the Schnorr NIZK proof (e, z) demonstrates knowledge of r such that
-    #     c1 = G^r AND c2 = C^{(d)}_i * E_j^r -- an equality-of-discrete-logs
-    #     proof under the bases (G, E_j), where C^{(d)}_i is the PUBLIC point
-    #     commitment RECOMPUTED from the dealer's broadcast commitments.
-    # The private exponent e_j never appears and can never be inferred from the
-    # public bytes, so the encrypted sub-shard is confidential while its
-    # well-formedness is a pure public predicate of (published bytes,
+def _avss_entry_wellformed(Ej_bytes: bytes, C_i: int, Ck0: bytes,
+                           dealer_index: int, j: int, epoch_hash: bytes,
+                           enc_entry, proof) -> bool:
+    # PUBLIC well-formedness of ONE encrypted-scalar ENTRY under the
+    # EPOCH-COMMITTED recipient key E_j (round-24 3939264478 / 3939264509).
+    # STRUCTURALLY FAIL-CLOSED: entry/proof shapes are validated BEFORE any
+    # indexing, and every anomaly returns False (never raises) -- the caller
+    # (Q*) simply EXCLUDES the record, exercising invariant I13 'malformed
+    # proofs never crash' by construction. The public check needs NO secret,
+    # NO decryption and NO complaint:
+    #   * the entry is a 4-tuple of 32-byte elements (A1, B, A2, env), the
+    #     proof a 2-tuple of 32-byte elements (e, z);
+    #   * A1, B, C_i and the constant commitment C^{(d)}_0 are non-identity
+    #     order-q subgroup elements;
+    #   * the Schnorr NIZK (e, z) demonstrates knowledge of r1 with
+    #     A1 = G^{r1} AND B = C^{(d)}_i * E_j^{r1} -- an
+    #     equality-of-discrete-logs proof under the bases (G, E_j), where
+    #     C^{(d)}_i is the PUBLIC point commitment RECOMPUTED from the
+    #     dealer's broadcast commitments.
+    # The private exponent e_j and the envelope randomness r2 never appear and
+    # can never be inferred from the public bytes (r2 is independent of the tag
+    # randomness r1), so the scalar sub-shard is confidential while its point
+    # tag's well-formedness is a pure public predicate of (published bytes,
     # epoch-committed E_j).
-    c1_int = int.from_bytes(c1, "big") % _GRP_P
-    c2_int = int.from_bytes(c2, "big") % _GRP_P
-    if not (1 < c1_int < _GRP_P and pow(c1_int, _GRP_Q, _GRP_P) == 1):
+    try:
+        if not (isinstance(enc_entry, tuple) and len(enc_entry) == 4) \
+                or not (isinstance(proof, tuple) and len(proof) == 2):
+            return False
+        A1_b, B_b, _A2_b, _env_b = enc_entry
+        for _part in (A1_b, B_b):
+            if not (isinstance(_part, bytes) and len(_part) == 32):
+                return False
+        for _part in proof:
+            if not (isinstance(_part, bytes) and len(_part) == 32):
+                return False
+        A1_int = int.from_bytes(A1_b, "big") % _GRP_P
+        B_int = int.from_bytes(B_b, "big") % _GRP_P
+        if not (1 < A1_int < _GRP_P and pow(A1_int, _GRP_Q, _GRP_P) == 1):
+            return False
+        if not (1 < B_int < _GRP_P and pow(B_int, _GRP_Q, _GRP_P) == 1):
+            return False
+        C0 = int.from_bytes(Ck0, "big") % _GRP_P
+        if not (1 < C0 < _GRP_P and pow(C0, _GRP_Q, _GRP_P) == 1):
+            return False
+        Ej_int = int.from_bytes(Ej_bytes, "big") % _GRP_P
+        if not (1 < Ej_int < _GRP_P and pow(Ej_int, _GRP_Q, _GRP_P) == 1):
+            return False
+        if not (1 < C_i < _GRP_P and pow(C_i, _GRP_Q, _GRP_P) == 1):
+            return False
+        e_int = int.from_bytes(proof[0], "big") % _GRP_Q
+        z_int = int.from_bytes(proof[1], "big") % _GRP_Q
+        # Recover the commitments t1 = G^k and t2 = E_j^k from (e, z):
+        t1_calc = ((pow(_GRP_G, z_int, _GRP_P)
+                    * pow(A1_int, e_int, _GRP_P)) % _GRP_P)
+        inv_Ci = pow(C_i, _GRP_Q - 1, _GRP_P)
+        t2_calc = ((pow(Ej_int, z_int, _GRP_P)
+                    * pow((B_int * inv_Ci) % _GRP_P, e_int, _GRP_P)) % _GRP_P)
+        # Recompute the Fiat-Shamir challenge over the exact published bytes:
+        e_calc = int.from_bytes(sha256(
+            b"AVSSProof" + epoch_hash + u32(dealer_index) + u32(j)
+            + A1_b + B_b + C_i.to_bytes(32, "big") + Ej_bytes
+            + t1_calc.to_bytes(32, "big")
+            + t2_calc.to_bytes(32, "big")), "big") % _GRP_Q
+        return e_calc == e_int and t1_calc > 1 and t2_calc > 1
+    except Exception:
         return False
-    if not (1 < c2_int < _GRP_P and pow(c2_int, _GRP_Q, _GRP_P) == 1):
-        return False
-    C0 = int.from_bytes(Ck0, "big") % _GRP_P
-    if not (1 < C0 < _GRP_P and pow(C0, _GRP_Q, _GRP_P) == 1):
-        return False
-    Ej_int = int.from_bytes(Ej_bytes, "big") % _GRP_P
-    if not (1 < Ej_int < _GRP_P and pow(Ej_int, _GRP_Q, _GRP_P) == 1):
-        return False
-    if not (1 < C_i < _GRP_P and pow(C_i, _GRP_Q, _GRP_P) == 1):
-        return False
-    e_int = int.from_bytes(proof[0], "big") % _GRP_Q
-    z_int = int.from_bytes(proof[1], "big") % _GRP_Q
-    # Recover the commitments t1 = G^k and t2 = E_j^k from (e, z):
-    t1_calc = ((pow(_GRP_G, z_int, _GRP_P)
-                * pow(c1_int, e_int, _GRP_P)) % _GRP_P)
-    inv_Ci = pow(C_i, _GRP_Q - 1, _GRP_P)
-    t2_calc = ((pow(Ej_int, z_int, _GRP_P)
-                * pow((c2_int * inv_Ci) % _GRP_P, e_int, _GRP_P)) % _GRP_P)
-    # Recompute the Fiat-Shamir challenge over the exact published bytes:
-    e_calc = int.from_bytes(sha256(
-        b"AVSSProof" + epoch_hash + u32(dealer_index) + u32(j)
-        + c1 + c2 + C_i.to_bytes(32, "big") + Ej_bytes
-        + t1_calc.to_bytes(32, "big")
-        + t2_calc.to_bytes(32, "big")), "big") % _GRP_Q
-    return e_calc == e_int and t1_calc > 1 and t2_calc > 1
 
 
-def _avss_dealer_publish(seed: bytes, epoch, cl_hash: bytes,
-                         n_members: int, threshold: int,
-                         dealer_index: int,
-                         abort_after=None, corrupt_e_recipient=None):
-    # A dealer `dealer_index` publishing its AVSS record. Each dealer SUB-
-    # SHARES with an own degree-(t-1) sub-polynomial f_d whose constant equals
-    # the dealer's OWN share s_d = f(d) of the delegated group polynomial f
-    # (the same curve `_poly_coeffs(GROUP_SK, ...)` the epoch commits). So:
-    #   * the dealer's COMMIT REGISTER C^{(d)}_k = G^{a_{d,k}} starts at
-    #     C^{(d)}_0 = G^{s_d}, a PUBLIC point on the GROUP polynomial;
-    #   * the n dealer constants {G^{s_d}} reconstitute G^{f(0)} == the epoch
-    #     authority key by PUBLIC Lagrange combination (any t of them);
-    #   * each ROOSTER MEMBER j receives one encrypted sub-shard f_d(j).
-    # `abort_after` : deliver ciphertexts to only the first `abort_after`
-    # members (>= t) then vanish (ABORTING dealer);
-    # `corrupt_e_recipient` : re-bind ONE ciphertext under the WRONG E_j scope
-    # (a Byzantine dealer whose record must be excluded by PUBLIC
-    # well-formedness -- never by a decryption report).
-    base = _poly_coeffs(seed, threshold, n_members)
-    s_d = _poly_share(GROUP_SK, threshold, n_members, dealer_index)
-    coeffs = [s_d] + base[1:]                  # f_d(0) = s_d = f(d)
+def _avss_distribute(base_coeffs, dealer_index: int, epoch, cl_hash: bytes,
+                     n_members: int, threshold: int, d_constant: int,
+                     seed: bytes, abort_after=None, corrupt_e_recipient=None):
+    # Core AVSS distribution over a SUPPLIED degree-(t-1) polynomial
+    # `base_coeffs`. A dealer `dealer_index` sub-shares with an own sub-
+    # polynomial f_d whose CONSTANT is `d_constant`:
+    #   * GROUP curve: d_constant = s_d = f(d), the dealer's OWN share of the
+    #     delegated group polynomial f (the curve `_poly_coeffs(GROUP_SK, ...)`
+    #     the epoch commits), so C^{(d)}_0 = G^{s_d} is a PUBLIC point on f;
+    #   * NONCE curve: d_constant = g_v(d), the dealer's share of the slot's
+    #     nonce polynomial g_v, so the n constants reconstitute G^{g_v(0)}.
+    # The record is FULLY PUBLIC {"Cks", "points", "enc", "proofs", "d"} --
+    # NO secret coefficient travels in it. Each roster member i receives its
+    # SCALAR sub-share f_d(i) (NOT the group image, round-24 3939264478):
+    #   * PUBLIC point tag: A1 = G^{r1}, B = C^{(d)}_i * E_j^{r1}, with the
+    #     PUBLIC Schnorr NIZK (e, z) proving equality of the discrete logs
+    #     (r1 under G) and (r1 under E_j) -- the verifiable-encryption witness
+    #     that the record masks EXACTLY the published point commitment;
+    #   * PRIVATE KEM channel: A2 = G^{r2}, env = f_d(i) XOR
+    #     H("AVSSEnv"|epoch|d|i|A2|E_j^{r2}), openable ONLY by recipient i with
+    #     its PRIVATE e_j. r1 and r2 are independent, so E_j^{r2} is never
+    #     derivable from the public tag (E_j^{r1} IS public) -- the scalar
+    #     stays confidential while the tag's well-formedness stays public.
+    # `abort_after`: deliver envelopes to only the first `abort_after` members
+    # (>= t) then vanish (ABORTING dealer -- reconstructable from the delivered
+    # SCALAR shards alone). `corrupt_e_recipient`: re-bind ONE point tag under
+    # the WRONG key scope E'_j = G^{e_j+1} (a Byzantine dealer whose record
+    # must be excluded by PUBLIC well-formedness -- never by a decryption
+    # report).
+    s_d = d_constant % _GRP_Q
+    coeffs = [s_d] + list(base_coeffs[1:])       # f_d(0) = d_constant
     Cks = tuple(pow(_GRP_G, a, _GRP_P).to_bytes(32, "big") for a in coeffs)
     points = {i: _avss_point_commit(Cks, i) for i in range(1, n_members + 1)}
-    cts = {}
+    enc = {}
     proofs = {}
     for i in range(1, n_members + 1):
         Ej = int.from_bytes(epoch.enc_keys[i - 1], "big") % _GRP_P
-        r = (_spf_scalar(sha256(b"AVSS-r" + hash32(seed) + hash32(epoch.hash)
-                                + u32(i) + cl_hash))) % _GRP_Q
-        c1 = pow(_GRP_G, r, _GRP_P)
-        c2 = (points[i] * pow(Ej, r, _GRP_P)) % _GRP_P
+        m_i = _avss_scalar_eval(coeffs, i)       # SCALAR sub-share f_d(i)
+        r1 = (_spf_scalar(sha256(b"AVSS-r1" + hash32(seed) + hash32(epoch.hash)
+                                 + u32(i) + cl_hash))) % _GRP_Q
+        A1 = pow(_GRP_G, r1, _GRP_P)
+        B = (points[i] * pow(Ej, r1, _GRP_P)) % _GRP_P
         if i == corrupt_e_recipient:
-            # Byzantine re-binding attempt: ciphertext for recipient i is
+            # Byzantine re-binding attempt: the point tag for recipient i is
             # produced under a WRONG key scope E'_j = G^{e_j+1}, which the
             # public well-formedness NIZK (validated against the EPOCH-COMMITTED
-            # E_j) must reject.
+            # E_j) must reject. The private envelope stays under the real e_j;
+            # the record is excluded by the PUBLIC rule alone.
             e_bad = (_avss_recv_sk(i) + 1) % _GRP_Q
-            c2 = (points[i] * pow(pow(_GRP_G, e_bad, _GRP_P),
-                                  r, _GRP_P)) % _GRP_P
-        c1b = c1.to_bytes(32, "big")
-        c2b = c2.to_bytes(32, "big")
-        # PUBLIC Schnorr NIZK that (c1, c2) is a well-formed mask under the
-        # EPOCH-COMMITTED E_j: a proof of knowledge of r with c1 = G^r and
-        # c2/C^{(d)}_i = E_j^r (equality of discrete logs under bases G, E_j).
+            B = (points[i] * pow(pow(_GRP_G, e_bad, _GRP_P),
+                                 r1, _GRP_P)) % _GRP_P
+        A1b = A1.to_bytes(32, "big")
+        Bb = B.to_bytes(32, "big")
+        # PUBLIC Schnorr NIZK that (A1, B) is a well-formed mask under the
+        # EPOCH-COMMITTED E_j: knowledge of r1 with A1 = G^{r1} and
+        # B/C^{(d)}_i = E_j^{r1} (equality of discrete logs under bases G, E_j).
         # Built from the published bytes + epoch hash + indices, so any node
-        # re-verifies it with NO secret (see `_avss_ciphertext_wellformed`).
+        # re-verifies it with NO secret (see `_avss_entry_wellformed`).
         k = (_spf_scalar(sha256(b"AVSS-k" + hash32(seed) + hash32(epoch.hash)
                                 + u32(i) + cl_hash))) % _GRP_Q
         t1 = pow(_GRP_G, k, _GRP_P)
         t2 = pow(Ej, k, _GRP_P)
         e = int.from_bytes(sha256(
             b"AVSSProof" + epoch.hash + u32(dealer_index) + u32(i)
-            + c1b + c2b + points[i].to_bytes(32, "big")
+            + A1b + Bb + points[i].to_bytes(32, "big")
             + epoch.enc_keys[i - 1]
             + t1.to_bytes(32, "big")
             + t2.to_bytes(32, "big")), "big") % _GRP_Q
-        z = (k - r * e) % _GRP_Q
+        z = (k - r1 * e) % _GRP_Q
         proofs[i] = (e.to_bytes(32, "big"), z.to_bytes(32, "big"))
-        cts[i] = (c1b, c2b)
+        # PRIVATE KEM channel for the SCALAR sub-share:
+        r2 = (_spf_scalar(sha256(b"AVSS-r2" + hash32(seed) + hash32(epoch.hash)
+                                 + u32(i) + cl_hash))) % _GRP_Q
+        A2 = pow(_GRP_G, r2, _GRP_P)
+        S2 = pow(Ej, r2, _GRP_P)                 # recipient: A2^{e_j}
+        A2b = A2.to_bytes(32, "big")
+        mask = _avss_env_mask(epoch.hash, dealer_index, i, A2b,
+                              S2.to_bytes(32, "big"))
+        env = bytes(a ^ b for a, b in zip(m_i.to_bytes(32, "big"), mask))
+        enc[i] = (A1b, Bb, A2b, env)
     if abort_after is not None:
-        # ABORTING dealer: broadcast the commits, then deliver ciphertexts to
+        # ABORTING dealer: broadcast the commits, then deliver envelopes to
         # only the first `abort_after` members (>= t), vanishing before the
         # rest. The t recipients must be able to recover the committed constant
-        # from their delivered shards alone. The record carries NO secret
-        # coefficients -- only commits, points, ciphertexts and proofs.
-        cts = {i: cts[i] for i in range(1, abort_after + 1)}
+        # from their delivered SCALAR shards alone. The record carries NO
+        # secret coefficients -- only commits, points, envelopes and proofs.
+        enc = {i: enc[i] for i in range(1, abort_after + 1)}
         proofs = {i: proofs[i] for i in range(1, abort_after + 1)}
-    return {"Cks": Cks, "points": points, "cts": cts,
+    return {"Cks": Cks, "points": points, "enc": enc,
             "proofs": proofs, "d": dealer_index}
+
+
+def _avss_dealer_publish(seed: bytes, epoch, cl_hash: bytes,
+                         n_members: int, threshold: int,
+                         dealer_index: int,
+                         abort_after=None, corrupt_e_recipient=None):
+    # GROUP-curve AVSS dealer: sub-shares the epoch's OWN delegated polynomial
+    # f (same curve `_poly_coeffs(GROUP_SK, ...)` the epoch commits) with
+    # constant s_d = f(d) -- so the n dealer constants {G^{s_d}} reconstitute
+    # G^{f(0)} == the epoch authority key by PUBLIC Lagrange combination (any
+    # t of them). See `_avss_distribute` for the record shape / two-channel
+    # confidentiality / fail-closed behaviour.
+    base = _poly_coeffs(seed, threshold, n_members)
+    s_d = _poly_share(GROUP_SK, threshold, n_members, dealer_index)
+    return _avss_distribute(base, dealer_index, epoch, cl_hash, n_members,
+                            threshold, s_d, seed, abort_after,
+                            corrupt_e_recipient)
 
 
 def _avss_qualification(dealer_records, epoch, n_members):
     # Q* -- the CANONICAL, PUBLIC qualification rule (round-22 threads
-    # 3936620224 / 3936844061). A dealer qualifies iff, from PUBLIC bytes ONLY
-    # (never a decryption outcome, never a per-recipient complaint):
+    # 3936620224 / 3936844061; round-24 3939264509). A dealer qualifies iff,
+    # from PUBLIC bytes ONLY (never a decryption outcome, never a per-recipient
+    # complaint):
     #   1. every coefficient commitment C^{(d)}_k is a non-identity order-q
     #      subgroup element;
-    #   2. the dealer published EXACTLY one ciphertext PER ROSTER MEMBER, and
-    #      every ciphertext is well-formed under the corresponding EPOCH-
-    #      COMMITTED E_j (checked against the public point commitment derived
-    #      from the dealer's own coefficient commitments).
-    # Any two nodes with the same epoch E_j vector and the same published
-    # records compute the SAME Q*.
+    #   2. the dealer published EXACTLY one well-formed entry PER ROSTER MEMBER,
+    #      every entry well-formed under the corresponding EPOCH-COMMITTED E_j
+    #      (checked against the public point commitment RECOMPUTED from the
+    #      dealer's own coefficient commitments).
+    # STRUCTURALLY FAIL-CLOSED (3939264509): the record's FIELD SET, exact
+    # key set {1..n}, element widths (32 bytes) and proof shapes (2 x 32
+    # bytes) are validated BEFORE any indexing, and any anomaly EXCLUDES the
+    # record instead of raising -- invariant I13 'malformed proofs never
+    # crash' holds by construction and is exercised below. Any two nodes with
+    # the same epoch E_j vector and the same published records compute the
+    # SAME Q*.
     qualified = []
     for rec in dealer_records:
-        ok = True
-        for Ck in rec["Cks"]:
-            ck_int = int.from_bytes(Ck, "big")
-            if not (1 < ck_int < _GRP_P
-                    and pow(ck_int, _GRP_Q, _GRP_P) == 1):
-                ok = False
-                break
-        if not ok:
+        try:
+            if not (isinstance(rec, dict) and all(
+                    k in rec for k in ("Cks", "points", "enc", "proofs", "d"))):
+                continue
+            Cks = rec["Cks"]
+            if not (isinstance(Cks, (tuple, list)) and len(Cks) == epoch.threshold
+                    and all(isinstance(Ck, bytes) and len(Ck) == 32
+                            for Ck in Cks)):
+                continue
+            enc_ = rec["enc"]
+            proofs_ = rec["proofs"]
+            if not (isinstance(enc_, dict) and isinstance(proofs_, dict)):
+                continue
+            want = set(range(1, n_members + 1))
+            if set(enc_.keys()) != want or set(proofs_.keys()) != want:
+                continue                     # missing key j / extra key: excluded
+            ok = True
+            for Ck in Cks:
+                ck_int = int.from_bytes(Ck, "big")
+                if not (1 < ck_int < _GRP_P
+                        and pow(ck_int, _GRP_Q, _GRP_P) == 1):
+                    ok = False
+                    break
+            if not ok:
+                continue
+            for j in range(1, n_members + 1):
+                # The plaintext point is RECOMPUTED from the broadcast
+                # commitments (never trusted from an auxiliary field), so a
+                # record whose published points disagree with its own commits
+                # fails here too.
+                C_i = _avss_point_commit(Cks, j)
+                if not _avss_entry_wellformed(
+                        epoch.enc_keys[j - 1], C_i, Cks[0], rec["d"],
+                        j, epoch.hash, enc_[j], proofs_[j]):
+                    ok = False
+                    break
+            if ok:
+                qualified.append(rec)
+        except Exception:
+            # Fail-closed: an unparsable record is EXCLUDED, never a crash.
             continue
-        if len(rec["cts"]) != n_members or len(rec["proofs"]) != n_members:
-            continue
-        for j in range(1, n_members + 1):
-            c1, c2 = rec["cts"][j]
-            proof = rec["proofs"][j]
-            # The plaintext point is RECOMPUTED from the broadcast commitments
-            # (never trusted from an auxiliary field), so a record whose
-            # published points disagree with its own commits fails here too.
-            C_i = _avss_point_commit(rec["Cks"], j)
-            if not _avss_ciphertext_wellformed(
-                    epoch.enc_keys[j - 1], C_i, c1, c2,
-                    rec["Cks"][0], rec["d"], j, epoch.hash, proof):
-                ok = False
-                break
-        if ok:
-            qualified.append(rec)
     return qualified
+
+
+def _avss_lagrange_coeff(xs, x, at=0):
+    """L_x^{(xs)}(at) mod q -- the Lagrange coefficient of the evaluation at
+    index x over the PUBLIC index set `xs`, interpolated at `at` (default 0).
+    Pure scalar arithmetic over GF(q) on public member/dealer indices; used for
+    the RESHARING coefficient lambda_d = L_d^{(Q*)}(0) and for the member-side
+    Lagrange combination in the FROST assembly."""
+    num = 1
+    den = 1
+    x_i = x % _GRP_Q
+    for j in xs:
+        x_j = j % _GRP_Q
+        if x_j == x_i:
+            continue
+        num = (num * ((at - x_j) % _GRP_Q)) % _GRP_Q
+        den = (den * ((x_i - x_j) % _GRP_Q)) % _GRP_Q
+    return (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+
+
+def _avss_member_share(share_records, i: int, epoch) -> [int, None]:
+    """Member i's SCALAR share of the RESHARED group polynomial
+    h(x) = sum_d L_d^{(Q*)}(0) * f_d(x), reconstructed from the QUALIFIED
+    dealers' records: member i decrypts each dealer d's SCALAR sub-share
+    f_d(i) (Feldman-verified against the PUBLIC point commitments) and combines
+    with the PUBLIC coefficients L_d^{(Q*)}(0). h(0) == f(0) -- the SAME
+    delegated secret -- yet NO process ever holds the full coefficient vectors
+    of h or f: member i knows only its own scalar h(i). Returns the scalar h_i
+    and its public image G^{h_i} (or None if any envelope is malformed --
+    fail-closed)."""
+    D = [rec["d"] for rec in share_records]
+    lam = {d: _avss_lagrange_coeff(D, d) for d in D}
+    acc = 0
+    comm = 1
+    for rec in share_records:
+        d = rec["d"]
+        C_j = _avss_point_commit(rec["Cks"], i)
+        m = _avss_recv_scalar(i, rec["enc"][i], d, epoch.hash, C_j)
+        if m is None:
+            return None                   # forged/malformed envelope: fail closed
+        acc = (acc + lam[d] * m) % _GRP_Q
+        comm = (comm * pow(rec["points"][i], lam[d], _GRP_P)) % _GRP_P
+    if pow(_GRP_G, acc, _GRP_P) != comm:
+        return None                       # public commitment tie failed
+    return acc
+
+
+def _avss_member_nonce(nonce_records, i: int, epoch) -> [int, None]:
+    """Member i's SCALAR NONCE share g_v(i), reconstructed the same double-
+    Lagrange way from the distributed NONCE polynomial's dealers (each nonce
+    dealer d sub-shares with constant g_v(d)). Round-24 3939264532: the slot's
+    nonce polynomial goes through the SAME AVSS distribution as the share
+    polynomial -- no single process derives the whole g_v, only each member's
+    own g_v(i)."""
+    N = [rec["d"] for rec in nonce_records]
+    mu = {d: _avss_lagrange_coeff(N, d) for d in N}
+    acc = 0
+    for rec in nonce_records:
+        d = rec["d"]
+        C_j = _avss_point_commit(rec["Cks"], i)
+        m = _avss_recv_scalar(i, rec["enc"][i], d, epoch.hash, C_j)
+        if m is None:
+            return None                   # forged/malformed envelope: fail closed
+        acc = (acc + mu[d] * m) % _GRP_Q
+    return acc % _GRP_Q
+
+
+def _avss_aggregate_nonce(nonce_records) -> bytes:
+    """PUBLIC aggregate nonce commitment R = G^{g_v(0)} from the nonce dealers'
+    CONSTANT commitments {G^{g_v(d)}: d in the nonce-dealer set} -- the
+    exponent-Lagrange over the dealer set, computable from the published
+    registers alone, exactly like `_public_aggregate` but over the AVSS nonce
+    distribution."""
+    N = [rec["d"] for rec in nonce_records]
+    mu = {d: _avss_lagrange_coeff(N, d) for d in N}
+    R = 1
+    for rec in nonce_records:
+        c0 = int.from_bytes(rec["Cks"][0], "big") % _GRP_P
+        R = (R * pow(c0, mu[rec["d"]], _GRP_P)) % _GRP_P
+    return R.to_bytes(32, "big")
+
+
+def _avss_challenge(epoch, cl_hash: bytes, R_bytes: bytes) -> int:
+    """The public Fiat-Shamir challenge c = H("SpfChal", epoch_hash, C_s, R, Y,
+    tag) mod q -- byte-identical to `_public_challenge`/`UniqueThresholdProof`'s
+    verification, computed here from AVSS-assembled state without the master
+    seed."""
+    return int.from_bytes(sha256(b"SpfChal" + epoch.hash + cl_hash + R_bytes
+                                 + epoch.authority_key + b"cap-0089-v1"),
+                          "big") % _GRP_Q
+
+
+def _avss_proof_from_dealers(share_records, nonce_records, subset, epoch,
+                             cl_hash: bytes) -> [bytes, None]:
+    """Feed the qualified dealers' reconstructed SCALAR shares into the real
+    proof path (round-24 3939264478 / 3939264532): assemble the canonical P_s
+    from the AVSS-DISTRIBUTED share polynomial AND the AVSS-DISTRIBUTED nonce
+    polynomial for `cl_hash`, with NO process able to derive the full
+    coefficient vector of either.
+
+    * each member i in `subset` holds its OWN scalar share h(i) (from
+      `_avss_member_share`, verified against the public resharings) and its OWN
+      scalar nonce n_i = g_v(i) (from `_avss_member_nonce`);
+    * the aggregate nonce commitment R = G^{g_v(0)} and the challenge c are
+      PUBLIC (derived from the nonce dealers' constant commitments);
+    * the t partials sigma_i = n_i + c*h(i) are Lagrange-combined over the
+      member subset to s = g_v(0) + c*f(0) -- exactly `recover_proof`'s scalar
+      combination -- giving the byte-identical canonical P_s = (R || s).
+
+    The assembler receives ONLY (records, per-member decrypted scalars, public
+    commitments); it never owns, is never handed, and never computes the
+    coefficient vectors of f or g_v. Subsets below `t` return None."""
+    if len(subset) < epoch.threshold:
+        return None
+    R_b = _avss_aggregate_nonce(nonce_records)
+    c = _avss_challenge(epoch, cl_hash, R_b)
+    partials = {}
+    for i in subset:
+        h_i = _avss_member_share(share_records, i, epoch)
+        n_i = _avss_member_nonce(nonce_records, i, epoch)
+        if h_i is None or n_i is None:
+            return None                   # fail-closed on any envelope
+        partials[i] = (n_i + c * h_i) % _GRP_Q
+    xs = list(partials.keys())
+    s = 0
+    for i in xs:
+        s = (s + partials[i]
+             * _avss_lagrange_coeff(xs, i)) % _GRP_Q
+    return R_b + (s % _GRP_Q).to_bytes(32, "big")
 
 
 def group_pub_from_seed(seed: bytes, threshold: int, n: int) -> bytes:
@@ -1884,6 +2162,67 @@ def nomination_fallback_priority(epoch_hash: bytes, slot: int,
                   + struct.pack(">Q", slot) + hash32(close_commitment)
                   + hash32(canonical_value_hash))
 
+def encode_release_carrier(entries: dict) -> bytes:
+    """Serialize a release registry to the SPECIFIED COMMITTED CARRIER (round-24
+    3939264494 / 3939264557): a self-describing byte string with canonical
+    ordering, carried in committed consensus state and re-read by EVERY honest
+    node. Format:
+        magic "cap-0089:release-registry/v1" || u32 count || for each entry:
+          cl_hash (32) || u16 len || payload  (0 = None / NOT released,
+                                              32 = R_s, 64 = P_s)."""
+    items = sorted((cl_hash, payload)
+                   for cl_hash, payload in (entries or {}).items())
+    body = bytearray(b"cap-0089:release-registry/v1")
+    body += struct.pack(">I", len(items))
+    for cl_hash, payload in items:
+        body += cl_hash
+        if payload is None:
+            body += struct.pack(">H", 0)
+        elif len(payload) == 32:
+            body += struct.pack(">H", 32) + payload
+        elif len(payload) == 64:
+            body += struct.pack(">H", 64) + payload
+        else:
+            raise ValueError("registry payload must be None, R_s (32B) or "
+                             "P_s (64B)")
+    return bytes(body)
+
+
+def decode_release_carrier(carrier: bytes) -> list:
+    """STRICT decoding of the committed carrier: a wrong magic, a truncated
+    header/entry/payload, an invalid length code, or TRAILING bytes all raise
+    ValueError -- a node NEVER invents registry entries from a corrupt carrier
+    (fail closed; the carrier is consensus state and must parse exactly)."""
+    if carrier is None or not isinstance(carrier, bytes):
+        raise ValueError("release-registry carrier must be bytes")
+    magic = b"cap-0089:release-registry/v1"
+    if not carrier.startswith(magic):
+        raise ValueError("not a cap-0089 release-registry carrier")
+    off = len(magic)
+    if len(carrier) < off + 4:
+        raise ValueError("truncated release-registry header")
+    n = struct.unpack(">I", carrier[off:off + 4])[0]
+    off += 4
+    entries = []
+    for _ in range(n):
+        if len(carrier) < off + 32 + 2:
+            raise ValueError("truncated release-registry entry")
+        cl_hash = carrier[off:off + 32]
+        off += 32
+        ln = struct.unpack(">H", carrier[off:off + 2])[0]
+        off += 2
+        if ln not in (0, 32, 64):
+            raise ValueError("invalid release-registry payload length")
+        if len(carrier) < off + ln:
+            raise ValueError("truncated release-registry payload")
+        payload = carrier[off:off + ln] if ln else None
+        off += ln
+        entries.append((cl_hash, payload))
+    if off != len(carrier):
+        raise ValueError("trailing bytes in release-registry carrier")
+    return entries
+
+
 class ReleaseRegistry:
     """CONSENSUS-CARRIED release registry (round-22 threads 3936620399 /
     3936620265): maps a finalized close hash -> the canonical root `R_s` (or
@@ -1903,12 +2242,45 @@ class ReleaseRegistry:
     that close hash; `root_for(cl_hash)` returns the carried `R_s` bytes (the
     pulse value) or None."""
 
-    def __init__(self, roots: dict):
-        # roots: cl_hash (bytes) -> R_s bytes | P_s bytes | None.
-        # Only the consensus-externalized value writes into this dict; the
-        # model's source/admission path seals it AFTER the boundary
-        # CONFIRM->EXTERNALIZE edge (see the liveness/registry checks).
-        self._roots = {k: v for k, v in (roots or {}).items()}
+    def __init__(self, carrier, epoch=None, authenticator=None):
+        """Build the registry ONLY by decoding the SPECIFIED COMMITTED CARRIER
+        (round-24 3939264494 / 3939264557) and verifying every entry against
+        (epoch, C_s):
+
+          1. `decode_release_carrier(carrier)` parses the bytes STRICTLY (a
+             malformed carrier raises -- it is consensus state, not caller
+             input);
+          2. each entry is ADMITTED iff `authenticator(cl_hash)` -- the
+             epoch-committed verification rule -- returns the canonical root
+             R_s for that close, AND the carried payload is CONSISTENT with
+             that root: either the payload IS the root, or (a full P_s
+             relocation) `UniqueThresholdProof.verify(epoch, cl_hash, payload)
+             == root`;
+          3. an entry whose payload ties to NEITHER the authenticator's root
+             NOR a verified proof is a FABRICATED consensus fact and is
+             rejected -- `released()` can only become True through admitted
+             consensus-derived entries.
+
+        A caller therefore cannot conjure a release: it must present the
+        actual committed carrier and prove each entry ties to (epoch, C_s).
+        With `authenticator=None` NOTHING is admitted (fail closed)."""
+        entries = decode_release_carrier(carrier)
+        self._roots = {}
+        for cl_hash, payload in entries:
+            if payload is None:
+                continue                      # explicit non-release, never a root
+            root = None
+            if authenticator is not None:
+                root = authenticator(cl_hash)
+            if root is None:
+                continue                      # no canonical root: not admitted
+            if payload == root:
+                self._roots[cl_hash] = root
+            elif (len(payload) == 64 and epoch is not None
+                  and UniqueThresholdProof.verify(epoch, cl_hash, payload)
+                  == root):
+                self._roots[cl_hash] = root   # carried P_s verifies -> root
+            # else: fabricated entry -> rejected, no release.
 
     def released(self, cl_hash: bytes) -> bool:
         return cl_hash in self._roots and self._roots[cl_hash] is not None
@@ -3486,9 +3858,15 @@ def main():
     # frozen value (released); `rel_reg_pf`: cl_a's PROOF is carried (also
     # released; used to assert the root/registry consistency raise);
     # `unrel_reg`: the frozen value carried NO root for cl_a (not released).
-    rel_reg = ReleaseRegistry({cl_a.hash: root_a})
-    rel_reg_pf = ReleaseRegistry({cl_a.hash: full})
-    unrel_reg = ReleaseRegistry({})
+    rel_reg = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: root_a}), epoch=epoch,
+        authenticator=(lambda h: root_a if h == cl_a.hash else None))
+    rel_reg_pf = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: full}), epoch=epoch,
+        authenticator=(lambda h: root_a if h == cl_a.hash else None))
+    unrel_reg = ReleaseRegistry(
+        encode_release_carrier({}), epoch=epoch,
+        authenticator=(lambda h: root_a if h == cl_a.hash else None))
     check("Valid event_mapping keeps both mandatory consumers (APPLY, PRNG) "
           "and opts NOMINATION out (Copilot 3929943643): APPLY/PRNG still "
           "derive their distinct KDF labels while NOMINATION falls back to its "
@@ -3569,6 +3947,68 @@ def main():
           and raises(lambda: nomination_priority(
               None, full_nom_map, epoch.hash, cl_a.slot, cl_a.hash,
               canonical_value_hash(cl_a.value_bytes), True, rel_reg_pf)))
+    # --- Round-24 3939264494: the registry is ADMITTED ONLY from the SPECIFIED
+    # COMMITTED CARRIER, every entry tied to (epoch, C_s). ---
+    authen = (lambda h: root_a if h == cl_a.hash else None)
+    good_carrier = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: root_a}), epoch=epoch,
+        authenticator=authen)
+    fabricated = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: sha256(b"fabricated-root")}),
+        epoch=epoch, authenticator=authen)
+    adversarial_epoch = EpochDescriptor(
+        format_version=epoch.format_version,
+        authority_key=group_pub_from_seed(sha256(b"cap-0089:rogue"),
+                                          epoch.threshold, N_MEMBERS),
+        roster=epoch.roster,
+        activation=epoch.activation, retirement=epoch.retirement,
+        threshold=epoch.threshold, root_rule=epoch.root_rule,
+        event_mapping=epoch.event_mapping, enc_keys=epoch.enc_keys,
+        feldman_pub=tuple(_feldman_commit(sha256(b"cap-0089:rogue"),
+                                          epoch.threshold, N_MEMBERS, i)
+                          for i in range(1, N_MEMBERS + 1)))
+    rogue_epoch = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: full}),
+        epoch=adversarial_epoch, authenticator=authen)
+    no_auth = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: root_a}), epoch=epoch,
+        authenticator=None)
+    check("ReleaseRegistry admits ONLY carrier-decoded entries tied to "
+          "(epoch, C_s) (round-24 3939264494): a registry cannot be conjured "
+          "from a bare caller-supplied dict -- it is built by DECODING the "
+          "specified committed carrier, and an entry is admitted iff the "
+          "epoch-committed authenticator returns the canonical root for that "
+          "close hash AND the carried payload matches that root (or verifies "
+          "as its P_s); a FABRICATED payload (hash of nothing), a rogue "
+          "threshold that cannot prove the payload, or an absent authenticator "
+          "yields NOTHING released",
+          good_carrier.released(cl_a.hash)
+          and good_carrier.root_for(cl_a.hash) == root_a
+          and not fabricated.released(cl_a.hash)
+          and fabricated.root_for(cl_a.hash) is None
+          and not rogue_epoch.released(cl_a.hash)
+          and not no_auth.released(cl_a.hash))
+    bad_carriers = [
+        b"\x00" * 8,                                        # wrong magic
+        b"cap-0089:release-registry/v1" + b"\x00\x00\x00\x01",  # truncated entry
+        encode_release_carrier({cl_a.hash: root_a}) + b"X",    # trailing bytes
+        b"cap-0089:release-registry/v1" + b"\x00\x00\x00\x01"
+        + sha256(b"c") + b"\x00\xc8" + b"\x00" * 32,        # invalid length code
+    ]
+    strict_decode = all(raises(lambda c=c: decode_release_carrier(c))
+                        for c in bad_carriers)
+    check("Release registry carrier decoding is STRICT (round-24 3939264494): "
+          "a wrong magic, a truncated entry, trailing bytes, or an invalid "
+          "payload-length code all RAISE -- a node never invents registry "
+          "entries from a corrupt committed carrier (fail closed; the carrier "
+          "is consensus state and parses exactly)",
+          strict_decode
+          and decode_release_carrier(
+              encode_release_carrier({})) == []
+          and decode_release_carrier(
+              encode_release_carrier({cl_a.hash: root_a, cl_b.hash: None}))
+          == sorted([(cl_a.hash, root_a), (cl_b.hash, None)],
+                    key=lambda kv: kv[0]))
     # --- Round-20 thread 3936012529: nomination is NEVER None and the pulse-vs-
     # fallback choice is CONSENSUS-bound and permanent. The DECISION is the pair
     # `(slot_finalized, registry.released())` -- canonical consensus facts read
@@ -4353,40 +4793,54 @@ def main():
           decoy_ok and len(q_after_lying) == len(q_a)
           and all(a["Cks"][0] == b_["Cks"][0]
                   for a, b_ in zip(q_after_lying, q_a)))
-    # ABORTING dealer: broadcasts its commits, delivers encrypted shards to
+    # ABORTING dealer: broadcasts its commits, delivers encrypted envelopes to
     # only `t` of the n members, then vanishes before the remaining deliveries.
     av_abort = _avss_dealer_publish(
         sha256(b"cap-0089:avss:abort"), av_epoch, av_cl_hash, av_n, av_t,
         av_n, abort_after=av_t)
-    # The t recipients strip the mask of their DELIVERED ciphertext with their
-    # PRIVATE e_j; each decoded point is commitment-verified against the PUBLIC
-    # point commitment, and exponent-Lagrange over those points recovers the
-    # committed constant. The public record itself carries NO secret
-    # coefficients (round-23 3939109855).
-    decrypted = {}
+    # The t recipients OPEN the PRIVATE KEM envelope of their DELIVERED entry
+    # with their PRIVATE e_j (_avss_recv_scalar) and FELDMAN-VERIFY the SCALAR
+    # sub-share against the PUBLIC point commitment (G^m == C_i); scalar-
+    # Lagrange over those SCALAR sub-shares (member indices as x) recovers the
+    # committed constant s_0, checked G^{s_0} == C^{(d)}_0. This is the EXACT
+    # material a FROST partial s_i = n_i + c*f(i) consumes -- round-24
+    # 3939264478: the aborted dealer's recovery determinably yields the SCALAR
+    # (not merely its group image), so it genuinely feeds the threshold-sign
+    # path. The public record carries NO secret coefficient and NO plaintext
+    # (round-23 3939109855).
+    decrypted_scalars = {}
+    decrypt_ok = True
     for j in range(1, av_t + 1):
-        c1b, c2b = av_abort["cts"][j]
-        decrypted[j] = _avss_recipient_decrypt(j, c1b, c2b).to_bytes(32, "big")
-    abort_shard_ok = all(
-        int.from_bytes(decrypted[j], "big") == av_abort["points"][j]
-        for j in range(1, av_t + 1))
-    abort_constant = _lagrange_constant_commitment(
-        [(j, decrypted[j]) for j in range(1, av_t + 1)], index0=0)
+        C_j = _avss_point_commit(av_abort["Cks"], j)
+        m = _avss_recv_scalar(j, av_abort["enc"][j], av_abort["d"],
+                              av_epoch.hash, C_j)
+        if m is None:
+            decrypt_ok = False
+        decrypted_scalars[j] = m
+    abort_shard_ok = decrypt_ok and all(
+        m is not None and pow(_GRP_G, m, _GRP_P) == av_abort["points"][j]
+        for j, m in decrypted_scalars.items())
+    abort_scalars = {j: m for j, m in decrypted_scalars.items()
+                     if m is not None}
+    abort_constant = _lagrange_recover(abort_scalars)     # s_0 = f_d(0) SCALAR
     check("AVSS reconstruction of an ABORTING dealer (round-22 3936844242, "
-          "round-23 3939109855): a dealer broadcasts its commits and delivers "
-          "encrypted shards to t members, then vanishes; the t recipients strip "
-          "the mask with their PRIVATE e_j (_avss_recipient_decrypt), each "
-          "decoded point is commitment-verified against the published point "
-          "commitment (the PUBLIC record carries no secret coefficients), and "
-          "exponent-Lagrange over the decrypted points recovers the committed "
-          "constant G^{s_0} == the broadcast commitment -- the aborted "
-          "contribution is still determinable -- while a dealer that aborted "
+          "round-23 3939109855, round-24 3939264478): a dealer broadcasts its "
+          "commits and delivers encrypted SCALAR envelopes to t members, then "
+          "vanishes; the t recipients open the PRIVATE KEM channel with their "
+          "PRIVATE e_j (_avss_recv_scalar), FELDMAN-VERIFY each decoded SCALAR "
+          "against the published point commitment (G^m == C_i; the PUBLIC "
+          "record carries no secret coefficient and no plaintext), and "
+          "scalar-Lagrange over those SCALAR sub-shares recovers the committed "
+          "constant s_0 with G^{s_0} == the broadcast commitment -- the aborted "
+          "contribution is determinable AS A SCALAR, the exact input a FROST "
+          "partial s_i = n_i + c*f(i) needs -- while a dealer that aborted "
           "before completing the full distribution is EXCLUDED from Q* by the "
-          "one-ciphertext-per-member rule",
-          len(av_abort["cts"]) == av_t
+          "one-entry-per-member rule",
+          len(av_abort["enc"]) == av_t
           and len(av_abort.get("coeffs", ())) == 0
           and abort_shard_ok
-          and abort_constant == int.from_bytes(av_abort["Cks"][0], "big")
+          and pow(_GRP_G, abort_constant, _GRP_P)
+          == int.from_bytes(av_abort["Cks"][0], "big")
           and _avss_qualification([av_abort], av_epoch, av_n) == [])
     # E_j binding: re-qualify under a SWAPPED encryption-key vector.
     ev_swapped = EpochDescriptor(
@@ -4403,6 +4857,110 @@ def main():
           "committed in index order into the epoch hash (a different E_j "
           "mapping is a DIFFERENT protocol state)",
           len(q_swapped) != len(q_a) and len(q_swapped) < av_n)
+    # FAIL-CLOSED PUBLIC PARSING (round-24 3939264509): malformed dealer
+    # records are EXCLUDED, never raised on -- invariant I13 by construction.
+    base_honest = av_records[0]                   # a KEEN honest record
+    malformed_recs = {}
+    malformed_recs["missing_key"] = dict(
+        base_honest, enc=dict(list(base_honest["enc"].items())[:-1]))
+    bad_proofs = dict(base_honest["proofs"])
+    bad_proofs[1] = (b"\x00" * 32,)
+    malformed_recs["proof_shape"] = dict(base_honest, proofs=bad_proofs)
+    malformed_recs["element_width"] = dict(
+        base_honest, enc={
+            k: (v[0], b"\x00" * 31, v[2], v[3])
+            for k, v in base_honest["enc"].items()})
+    malformed_recs["truncated_Cks"] = dict(
+        base_honest, Cks=base_honest["Cks"][:-1])
+    malformed_recs["non_dict"] = b"not-a-record"
+    q_missing = _avss_qualification([malformed_recs["missing_key"]],
+                                    av_epoch, av_n)
+    q_proof_shape = _avss_qualification([malformed_recs["proof_shape"]],
+                                        av_epoch, av_n)
+    q_elem_width = _avss_qualification([malformed_recs["element_width"]],
+                                       av_epoch, av_n)
+    q_truncated = _avss_qualification([malformed_recs["truncated_Cks"]],
+                                      av_epoch, av_n)
+    q_non_dict = _avss_qualification([malformed_recs["non_dict"]],
+                                     av_epoch, av_n)
+    q_mixed = _avss_qualification(
+        [base_honest, malformed_recs["proof_shape"],
+         malformed_recs["missing_key"]], av_epoch, av_n)
+    check("AVSS Q* FAILS CLOSED on malformed public dealer records (round-24 "
+          "3939264509): a record missing ciphertext key j, a short/malformed "
+          "NIZK proof (1-tuple, 32 bytes), a wrong ciphertext element width "
+          "(31 bytes), a truncated coefficient-commit register or a non-dict "
+          "record is s-l-e-n-t-l-y EXCLUDED -- never raised on -- and a "
+          "HEALTHY record in the same batch still qualifies in isolation "
+          "(I13: malformed proofs never crash, and Q* depends on the VALID "
+          "records only)",
+          q_missing == [] and q_proof_shape == [] and q_elem_width == []
+          and q_truncated == [] and q_non_dict == []
+          and q_mixed == [base_honest])
+    # Forged private KEM envelope: public bytes look well-formed, but the
+    # recipient's private-channel material fails Feldman -- fail-closed.
+    forged_env = dict(
+        base_honest, enc={
+            k: (v[0], v[1], v[2], bytes([b ^ 0x01 for b in v[3]]))
+            for k, v in base_honest["enc"].items()})
+    forged_scalar = _avss_recv_scalar(
+        1, forged_env["enc"][1], forged_env["d"], av_epoch.hash,
+        _avss_point_commit(forged_env["Cks"], 1))
+    check("AVSS fail-closed SCALAR channel (round-24 3939264478): a forged "
+          "private envelope (well-formed PUBLIC tag/proof, corrupted KEM "
+          "material) is excluded from reconstruction -- the recipient "
+          "recovers NO scalar (_avss_recv_scalar -> None), so the forged "
+          "dealer contributes nothing to the assembled FROST material",
+          forged_scalar is None)
+    # AVSS-FED PROOF ASSEMBLY (round-24 3939264478 / 3939264532): the slot's
+    # NONCE polynomial g_v is distributed through the SAME AVSS machinery
+    # (nonce dealers sub-share with constants g_v(d)), and the qualified
+    # dealers' reconstructed per-member SCALAR shares feed the REAL proof
+    # path: PUBLIC R = G^{g_v(0)} from the nonce registers, the public
+    # challenge c, and the t partials sigma_i = n_i + c*h(i) assemble the
+    # byte-identical canonical P_s == R || (g_v(0) + c*f(0)) -- no process
+    # derives the full coefficient vector of f or of g_v.
+    av_cl2_hash = sha256(b"AVSS-proof-close-s")
+    av_nonce_seed = sha256(b"FrostNonce" + GROUP_SK + av_epoch.hash
+                           + av_cl2_hash)
+    av_nonce_coeffs = _frost_nonce_poly(av_nonce_seed, av_t, av_n)
+    nonce_records = []
+    for d in range(1, av_t + 1):
+        nonce_records.append(_avss_distribute(
+            av_nonce_coeffs, d, av_epoch, av_cl2_hash, av_n, av_t,
+            _frost_share(av_nonce_coeffs, d), av_nonce_seed))
+    P_avss = _avss_proof_from_dealers(q_a, nonce_records,
+                                      list(range(1, av_t + 1)),
+                                      av_epoch, av_cl2_hash)
+    R_ref = pow(_GRP_G, av_nonce_coeffs[0], _GRP_P).to_bytes(32, "big")
+    s_ref = (av_nonce_coeffs[0]
+             + _avss_challenge(av_epoch, av_cl2_hash, R_ref)
+             * _group_secret(GROUP_SK, av_t, av_n)) % _GRP_Q
+    P_ref = R_ref + s_ref.to_bytes(32, "big")
+    check("AVSS-FED canonical proof assembly (round-24 3939264478 / "
+          "3939264532): the dealer-recovered per-member SCALAR sub-shares of "
+          "f AND the AVSS-DISTRIBUTED nonce polynomial g_v (same machinery, "
+          "constants {G^{g_v(d)}}) feed the real two-round path -- PUBLIC "
+          "R = G^{g_v(0)} == _avss_aggregate_nonce from the nonce registers, "
+          "public c, t partials sigma_i = n_i + c*h(i) over each member's own "
+          "decrypted scalars -- and assemble the byte-identical canonical "
+          "P_s; no process in the assembly ever derives the full coefficient "
+          "vector of f or g_v, only each member's own decrypted scalar",
+          P_avss == P_ref
+          and _avss_aggregate_nonce(nonce_records) == R_ref
+          and UniqueThresholdProof.verify(av_epoch, av_cl2_hash, P_avss)
+          is not None)
+    # Threshold preservation INSIDE the AVSS-fed path (<t stalls here too).
+    P_avss_short = _avss_proof_from_dealers(
+        q_a, nonce_records, list(range(1, av_t)), av_epoch, av_cl2_hash)
+    check("AVSS-FED threshold preservation (round-24 3939264532 / "
+          "3939264478): the distributed path INHERITS the <t rule -- assembling "
+          "from only t-1 members' recovered scalars yields NO canonical proof "
+          "(_avss_proof_from_dealers -> None and verify rejects), i.e. the AVSS-"
+          "fed path is exactly threshold-exact like the authority path",
+          P_avss_short is None
+          and UniqueThresholdProof.verify(av_epoch, av_cl2_hash, P_avss_short)
+          is None)
 
     # ---------- P: pinned model vectors (fixed registered literals) -------------
     pinned_b3 = flushed_digest
