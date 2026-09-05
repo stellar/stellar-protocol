@@ -208,7 +208,11 @@ def _ed_decode_point(b32):
 
 
 def _ed_pt_is_identity(P):
-    return P[0] == 0 and P[1] == 1 and P[2] == 1
+    # Projective-coordinate identity test (round-23): extended-coordinate
+    # operations (_ed_pt_add/_ed_pt_mul) produce identity with SCALED Z (e.g.
+    # (0, Z, Z, 0)), so comparing against the affine tuple (0,1,1,0) misses
+    # low-order results. Delegate to the affine predicate which normalizes Z.
+    return _ed_affine_is_identity(P[0], P[1], P[2])
 
 
 def _ed_strict_decompress(b32) -> "bool":

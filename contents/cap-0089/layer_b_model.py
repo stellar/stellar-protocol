@@ -405,12 +405,31 @@ def _lagrange_constant_commitment(points, index0=0):
 #   * RECONSTRUCTION OF AN ABORTING DEALER: >= t delivered shards recover the
 #     committed constant.
 # ---------------------------------------------------------------------------
-def _avss_e_from_key(enc_key: bytes) -> int:
-    # Public AVSS encryption exponent derived from the epoch-COMMITTED opaque
-    # E_j: e_j = OS2IP(hash32(E_j)) mod q. Used ONLY as a public group exponent
-    # so ciphertext consistency is checkable by any node (no private half is
-    # needed for qualification).
-    return int.from_bytes(hash32(enc_key), "big") % _GRP_Q
+def _avss_recv_sk(j: int) -> int:
+    """PRIVATE AVSS decryption exponent e_j for roster member j -- the discrete
+    log of the EPOCH-COMMITTED public key E_j = G^{e_j} (the same derivation
+    `_validator_enc_key(GROUP_SK, j)` makes public, mirrored here as the private
+    half). Like the CONFIRM signing material (`_validator_confirm_sk` /
+    GROUP_SK), this is PRIMITIVE-path information held only by the recipient:
+    it is NEVER stored in a public record and is NOT a public function of the
+    epoch (the epoch commits only G^{e_j}). An observer of the published AVSS
+    bytes cannot strip the ElGamal mask, so the sub-shard f_d(j) stays
+    genuinely confidential while its well-formedness remains public."""
+    return _spf_scalar(sha256(b"cap-0089:enc:v1" + hash32(GROUP_SK)
+                              + u32(j) + b"v1"))
+
+
+def _avss_recipient_decrypt(j: int, c1_bytes: bytes, c2_bytes: bytes) -> int:
+    """Recipient j strips the mask of (c1, c2) with its PRIVATE e_j:
+    P = c2 * c1^{-e_j} = C^{(d)}_i * E_j^r * G^{-e_j*r} = C^{(d)}_i.
+    This is the ONLY consumer of the private half; the returned point is then
+    commitment-verified by comparing with the PUBLIC point commitment derived
+    from the dealer's broadcasts -- so reconstruction reads decrypted,
+    commitment-verified points, never secret coefficients."""
+    e_j = _avss_recv_sk(j) % _GRP_Q
+    c1 = int.from_bytes(c1_bytes, "big") % _GRP_P
+    c2 = int.from_bytes(c2_bytes, "big") % _GRP_P
+    return (c2 * pow(c1, (_GRP_Q - e_j) % _GRP_Q, _GRP_P)) % _GRP_P
 
 
 def _avss_point_commit(coeff_commits, i: int) -> int:
@@ -425,16 +444,22 @@ def _avss_point_commit(coeff_commits, i: int) -> int:
     return acc
 
 
-def _avss_ciphertext_wellformed(e_j: int, C_i: int, c1: bytes, c2: bytes,
-                                Ck0: bytes) -> bool:
-    # PUBLIC well-formedness of an encrypted share under recipient key E_j:
-    #   * c1 is a non-identity order-q subgroup element (a valid G^r);
-    #   * c2 == C^{(d)}_i * c1^{e_j} -- the ciphertext is actually the
-    #     ElGamal(-like) encryption c2 = C_i * (G^{e_j})^r of the committed
-    #     evaluation point C_i under E_j, with the binding plaintext point C_i
-    #     being the PUBLIC point commitment derived from the dealer's commits.
-    # No decryption, no complaint, no secret: this is a pure function of the
-    # published bytes and the epoch-committed E_j.
+def _avss_ciphertext_wellformed(Ej_bytes: bytes, C_i: int, c1: bytes, c2: bytes,
+                                Ck0: bytes, dealer_index: int, j: int,
+                                epoch_hash: bytes, proof) -> bool:
+    # PUBLIC well-formedness of an encrypted share under the EPOCH-COMMITTED
+    # recipient key E_j (round-23 rework). A verifiable-encryption check that
+    # needs NO secret, NO decryption and NO complaint:
+    #   * c1, c2 and the constant commitment C^{(d)}_0 are non-identity order-q
+    #     subgroup elements;
+    #   * the Schnorr NIZK proof (e, z) demonstrates knowledge of r such that
+    #     c1 = G^r AND c2 = C^{(d)}_i * E_j^r -- an equality-of-discrete-logs
+    #     proof under the bases (G, E_j), where C^{(d)}_i is the PUBLIC point
+    #     commitment RECOMPUTED from the dealer's broadcast commitments.
+    # The private exponent e_j never appears and can never be inferred from the
+    # public bytes, so the encrypted sub-shard is confidential while its
+    # well-formedness is a pure public predicate of (published bytes,
+    # epoch-committed E_j).
     c1_int = int.from_bytes(c1, "big") % _GRP_P
     c2_int = int.from_bytes(c2, "big") % _GRP_P
     if not (1 < c1_int < _GRP_P and pow(c1_int, _GRP_Q, _GRP_P) == 1):
@@ -444,7 +469,26 @@ def _avss_ciphertext_wellformed(e_j: int, C_i: int, c1: bytes, c2: bytes,
     C0 = int.from_bytes(Ck0, "big") % _GRP_P
     if not (1 < C0 < _GRP_P and pow(C0, _GRP_Q, _GRP_P) == 1):
         return False
-    return c2_int == (C_i * pow(c1_int, e_j, _GRP_P)) % _GRP_P
+    Ej_int = int.from_bytes(Ej_bytes, "big") % _GRP_P
+    if not (1 < Ej_int < _GRP_P and pow(Ej_int, _GRP_Q, _GRP_P) == 1):
+        return False
+    if not (1 < C_i < _GRP_P and pow(C_i, _GRP_Q, _GRP_P) == 1):
+        return False
+    e_int = int.from_bytes(proof[0], "big") % _GRP_Q
+    z_int = int.from_bytes(proof[1], "big") % _GRP_Q
+    # Recover the commitments t1 = G^k and t2 = E_j^k from (e, z):
+    t1_calc = ((pow(_GRP_G, z_int, _GRP_P)
+                * pow(c1_int, e_int, _GRP_P)) % _GRP_P)
+    inv_Ci = pow(C_i, _GRP_Q - 1, _GRP_P)
+    t2_calc = ((pow(Ej_int, z_int, _GRP_P)
+                * pow((c2_int * inv_Ci) % _GRP_P, e_int, _GRP_P)) % _GRP_P)
+    # Recompute the Fiat-Shamir challenge over the exact published bytes:
+    e_calc = int.from_bytes(sha256(
+        b"AVSSProof" + epoch_hash + u32(dealer_index) + u32(j)
+        + c1 + c2 + C_i.to_bytes(32, "big") + Ej_bytes
+        + t1_calc.to_bytes(32, "big")
+        + t2_calc.to_bytes(32, "big")), "big") % _GRP_Q
+    return e_calc == e_int and t1_calc > 1 and t2_calc > 1
 
 
 def _avss_dealer_publish(seed: bytes, epoch, cl_hash: bytes,
@@ -471,28 +515,51 @@ def _avss_dealer_publish(seed: bytes, epoch, cl_hash: bytes,
     Cks = tuple(pow(_GRP_G, a, _GRP_P).to_bytes(32, "big") for a in coeffs)
     points = {i: _avss_point_commit(Cks, i) for i in range(1, n_members + 1)}
     cts = {}
+    proofs = {}
     for i in range(1, n_members + 1):
-        e_j = _avss_e_from_key(epoch.enc_keys[i - 1])
+        Ej = int.from_bytes(epoch.enc_keys[i - 1], "big") % _GRP_P
         r = (_spf_scalar(sha256(b"AVSS-r" + hash32(seed) + hash32(epoch.hash)
                                 + u32(i) + cl_hash))) % _GRP_Q
         c1 = pow(_GRP_G, r, _GRP_P)
-        c2 = (points[i] * pow(pow(_GRP_G, e_j, _GRP_P), r, _GRP_P)) % _GRP_P
+        c2 = (points[i] * pow(Ej, r, _GRP_P)) % _GRP_P
         if i == corrupt_e_recipient:
             # Byzantine re-binding attempt: ciphertext for recipient i is
-            # produced under a WRONG key scope E'_j, which the public
-            # well-formedness check must reject.
-            e_bad = (e_j + 1) % _GRP_Q
+            # produced under a WRONG key scope E'_j = G^{e_j+1}, which the
+            # public well-formedness NIZK (validated against the EPOCH-COMMITTED
+            # E_j) must reject.
+            e_bad = (_avss_recv_sk(i) + 1) % _GRP_Q
             c2 = (points[i] * pow(pow(_GRP_G, e_bad, _GRP_P),
                                   r, _GRP_P)) % _GRP_P
-        cts[i] = (c1.to_bytes(32, "big"), c2.to_bytes(32, "big"))
+        c1b = c1.to_bytes(32, "big")
+        c2b = c2.to_bytes(32, "big")
+        # PUBLIC Schnorr NIZK that (c1, c2) is a well-formed mask under the
+        # EPOCH-COMMITTED E_j: a proof of knowledge of r with c1 = G^r and
+        # c2/C^{(d)}_i = E_j^r (equality of discrete logs under bases G, E_j).
+        # Built from the published bytes + epoch hash + indices, so any node
+        # re-verifies it with NO secret (see `_avss_ciphertext_wellformed`).
+        k = (_spf_scalar(sha256(b"AVSS-k" + hash32(seed) + hash32(epoch.hash)
+                                + u32(i) + cl_hash))) % _GRP_Q
+        t1 = pow(_GRP_G, k, _GRP_P)
+        t2 = pow(Ej, k, _GRP_P)
+        e = int.from_bytes(sha256(
+            b"AVSSProof" + epoch.hash + u32(dealer_index) + u32(i)
+            + c1b + c2b + points[i].to_bytes(32, "big")
+            + epoch.enc_keys[i - 1]
+            + t1.to_bytes(32, "big")
+            + t2.to_bytes(32, "big")), "big") % _GRP_Q
+        z = (k - r * e) % _GRP_Q
+        proofs[i] = (e.to_bytes(32, "big"), z.to_bytes(32, "big"))
+        cts[i] = (c1b, c2b)
     if abort_after is not None:
         # ABORTING dealer: broadcast the commits, then deliver ciphertexts to
         # only the first `abort_after` members (>= t), vanishing before the
         # rest. The t recipients must be able to recover the committed constant
-        # from their delivered shards alone.
+        # from their delivered shards alone. The record carries NO secret
+        # coefficients -- only commits, points, ciphertexts and proofs.
         cts = {i: cts[i] for i in range(1, abort_after + 1)}
+        proofs = {i: proofs[i] for i in range(1, abort_after + 1)}
     return {"Cks": Cks, "points": points, "cts": cts,
-            "coeffs": coeffs, "d": dealer_index}
+            "proofs": proofs, "d": dealer_index}
 
 
 def _avss_qualification(dealer_records, epoch, n_members):
@@ -518,14 +585,18 @@ def _avss_qualification(dealer_records, epoch, n_members):
                 break
         if not ok:
             continue
-        if len(rec["cts"]) != n_members:
+        if len(rec["cts"]) != n_members or len(rec["proofs"]) != n_members:
             continue
         for j in range(1, n_members + 1):
             c1, c2 = rec["cts"][j]
-            e_j = _avss_e_from_key(epoch.enc_keys[j - 1])
-            C_i = rec["points"][j]
-            if not _avss_ciphertext_wellformed(e_j, C_i, c1, c2,
-                                               rec["Cks"][0]):
+            proof = rec["proofs"][j]
+            # The plaintext point is RECOMPUTED from the broadcast commitments
+            # (never trusted from an auxiliary field), so a record whose
+            # published points disagree with its own commits fails here too.
+            C_i = _avss_point_commit(rec["Cks"], j)
+            if not _avss_ciphertext_wellformed(
+                    epoch.enc_keys[j - 1], C_i, c1, c2,
+                    rec["Cks"][0], rec["d"], j, epoch.hash, proof):
                 ok = False
                 break
         if ok:
@@ -606,16 +677,20 @@ def _validator_confirm_pub(secret: bytes, member_index: int) -> bytes:
 
 
 def _validator_enc_key(secret: bytes, member_index: int) -> bytes:
-    """Per-member ENCRYPTED-SHARE encryption key E_j (round-22 threads
-    3936844318 / 3936844061): the key under which member j's AVSS share is
-    encrypted by every dealer. A deterministically-DERIVED, public 32-byte key
-    (like confirm_pub / feldman_pub) that the epoch REGISTERS IN INDEX ORDER
-    and COMMITS into the epoch hash, so every node authenticates the same E_j
-    vector. It is an opaque key (NOT necessarily a group element), so it gets
-    the width check only -- the AVSS relevance is that a ciphertext is bound to
-    the exact registered E_j."""
-    return hash32(sha256(b"cap-0089:enc:v1" + hash32(secret)
-                         + u32(member_index) + b"v1"))
+    """Per-member ENCRYPTED-SHARE encryption key E_j = G^{e_j} (round-22 threads
+    3936844318 / 3936844061; round-23 rework): the PUBLIC group key under which
+    member j's AVSS share is encrypted by every dealer. The epoch REGISTERS the
+    GROUP IMAGE in index order and COMMITS it into the epoch hash, so every node
+    authenticates the same E_j vector. The epoch commits ONLY G^{e_j} -- the
+    private exponent e_j (see `_avss_recv_sk`) is member/primitive material that
+    is never stored in a public record and is not a public function of the
+    epoch. A ciphertext c2 = C^{(d)}_i * E_j^r is well-formedness-checkable
+    from E_j alone (verifiable encryption via the public NIZK below) while only
+    the recipient holding e_j can strip the mask -- so the encrypted sub-shard
+    is genuinely confidential."""
+    e_j = _spf_scalar(sha256(b"cap-0089:enc:v1" + hash32(secret)
+                             + u32(member_index) + b"v1"))
+    return pow(_GRP_G, e_j, _GRP_P).to_bytes(32, "big")
 
 
 def _confirm_vote(k_i: int, epoch_hash: bytes, C_s: bytes) -> bytes:
@@ -1376,6 +1451,20 @@ class ThresholdAuthority:
         Called only by RandomnessSource.bind() (never by an external caller).
         After binding, `_authorize_release` accepts a witness only if it was
         minted with this exact capability."""
+        self._cap_check = sha256(b"CapCommit" + cap)
+
+    def bind_release_cap(self, cap: bytes) -> None:
+        """PUBLIC release-capability binding (round-23): installs the commit
+        H(b"CapCommit", cap) of the RELEASE capability derived from a
+        ConfirmExternalizeBoundary's secret -- exactly the value
+        RandomnessSource.bind() installs via `_set_boundary_cap`. A FRESH
+        authority (e.g. one reconstructing per-member release state against its
+        OWN fresh boundary) still cannot MINT capabilities or witnesses -- that
+        needs the boundary secret and lives only in the boundary's
+        record_confirm / externalize transitions -- so binding here only enables
+        VALIDATION of the boundary's genuine witnesses. No internal release
+        registry is carried between authorities: release bits are reproduced
+        through the authenticated transitions with boundary-minted witnesses."""
         self._cap_check = sha256(b"CapCommit" + cap)
 
     def _authorize_release(self, cl_hash: bytes, witness: bytes, cap: bytes) -> bool:
@@ -3065,8 +3154,17 @@ def main():
         rel_bnd = ConfirmExternalizeBoundary(
             epoch, boundary_secret=source._boundary._secret)
         au = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
-        au._released = dict(auth._released)
-        au._cap_check = auth._cap_check
+        # round-23 thread 3939109855: NO internal release registry is copied
+        # from `auth`. The fresh authority is bound to the SAME boundary
+        # capability through the PUBLIC `bind_release_cap`, and the close-level
+        # release + each member's release bit are reproduced through the
+        # boundary-minted witnesses only -- the same authenticated transitions
+        # (`_authorize_release` / `_authorize_member_release`) that the source's
+        # own `proof()` path runs with boundary witnesses.
+        au.bind_release_cap(rel_bnd._cap())
+        if not au._authorize_release(cl_a.hash, rel_bnd.witness(cl_a),
+                                     rel_bnd._cap()):
+            raise AssertionError("close-level release witness was not accepted")
         for i in E:
             vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
                                  epoch.hash, cl_a.hash)
@@ -3205,8 +3303,12 @@ def main():
     rel_bnd2 = ConfirmExternalizeBoundary(
         epoch, boundary_secret=source._boundary._secret)
     au2 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
-    au2._released = dict(auth._released)
-    au2._cap_check = auth._cap_check
+    # round-23 3939109855: public capability binding + authenticated release
+    # reproduction (no internal registry copied).
+    au2.bind_release_cap(rel_bnd2._cap())
+    if not au2._authorize_release(cl_a.hash, rel_bnd2.witness(cl_a),
+                                  rel_bnd2._cap()):
+        raise AssertionError("close-level release witness was not accepted")
     for i in (1, 2):
         vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
                              epoch.hash, cl_a.hash)
@@ -3253,10 +3355,14 @@ def main():
 
     # ---------- Durable sign-once per event (Noot) ----------------------------
     au_n3 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
-    au_n3._released = dict(auth._released)
-    au_n3._cap_check = auth._cap_check
     n3_bnd = ConfirmExternalizeBoundary(
         epoch, boundary_secret=source._boundary._secret)
+    # round-23 3939109855: public capability binding + authenticated release
+    # reproduction (no internal registry copied).
+    au_n3.bind_release_cap(n3_bnd._cap())
+    if not au_n3._authorize_release(cl_a.hash, n3_bnd.witness(cl_a),
+                                    n3_bnd._cap()):
+        raise AssertionError("close-level release witness was not accepted")
     for i in range(1, t + 1):
         vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
                              epoch.hash, cl_a.hash)
@@ -4252,25 +4358,35 @@ def main():
     av_abort = _avss_dealer_publish(
         sha256(b"cap-0089:avss:abort"), av_epoch, av_cl_hash, av_n, av_t,
         av_n, abort_after=av_t)
-    abort_evals = {}
+    # The t recipients strip the mask of their DELIVERED ciphertext with their
+    # PRIVATE e_j; each decoded point is commitment-verified against the PUBLIC
+    # point commitment, and exponent-Lagrange over those points recovers the
+    # committed constant. The public record itself carries NO secret
+    # coefficients (round-23 3939109855).
+    decrypted = {}
     for j in range(1, av_t + 1):
-        val = av_abort["coeffs"][0]
-        for k, a_k in enumerate(av_abort["coeffs"][1:], start=1):
-            val = (val + a_k * pow(j, k, _GRP_Q)) % _GRP_Q
-        abort_evals[j] = val
-    abort_constant = _lagrange_recover(abort_evals)
-    check("AVSS reconstruction of an ABORTING dealer (round-22 3936844242): a "
-          "dealer broadcasts its commits and delivers encrypted shards to t "
-          "members, then vanishes; the t recipients recover the dealer's "
-          "constant s_0 from their delivered shards ALONE and it matches the "
-          "broadcast commitment G^{s_0} -- the aborted contribution is still "
-          "determinable -- while a dealer that aborted before completing the "
-          "full distribution is EXCLUDED from Q* by the one-ciphertext-per-"
-          "member rule",
+        c1b, c2b = av_abort["cts"][j]
+        decrypted[j] = _avss_recipient_decrypt(j, c1b, c2b).to_bytes(32, "big")
+    abort_shard_ok = all(
+        int.from_bytes(decrypted[j], "big") == av_abort["points"][j]
+        for j in range(1, av_t + 1))
+    abort_constant = _lagrange_constant_commitment(
+        [(j, decrypted[j]) for j in range(1, av_t + 1)], index0=0)
+    check("AVSS reconstruction of an ABORTING dealer (round-22 3936844242, "
+          "round-23 3939109855): a dealer broadcasts its commits and delivers "
+          "encrypted shards to t members, then vanishes; the t recipients strip "
+          "the mask with their PRIVATE e_j (_avss_recipient_decrypt), each "
+          "decoded point is commitment-verified against the published point "
+          "commitment (the PUBLIC record carries no secret coefficients), and "
+          "exponent-Lagrange over the decrypted points recovers the committed "
+          "constant G^{s_0} == the broadcast commitment -- the aborted "
+          "contribution is still determinable -- while a dealer that aborted "
+          "before completing the full distribution is EXCLUDED from Q* by the "
+          "one-ciphertext-per-member rule",
           len(av_abort["cts"]) == av_t
-          and abort_constant == av_abort["coeffs"][0] % _GRP_Q
-          and pow(_GRP_G, abort_constant, _GRP_P)
-          == int.from_bytes(av_abort["Cks"][0], "big")
+          and len(av_abort.get("coeffs", ())) == 0
+          and abort_shard_ok
+          and abort_constant == int.from_bytes(av_abort["Cks"][0], "big")
           and _avss_qualification([av_abort], av_epoch, av_n) == [])
     # E_j binding: re-qualify under a SWAPPED encryption-key vector.
     ev_swapped = EpochDescriptor(
@@ -4292,12 +4408,12 @@ def main():
     pinned_b3 = flushed_digest
     comp_seq_digest = sha256(b"".join(canon_roots)).hex()
     EXP_B3 = (
-        "911e8d1a5ee5d800ed5f9eafa01d12ddd7a10ca71833729e2dfa821f0b8dd647",
-        "83c709c1db93da90492eadb7159f41bb5470386cfc9f4b595d4d0378d38c23fc",
-        "5b7ffca5cf9301ee2f2b9ebb8b7f59d96b8f0a797798a38ae0a3ccd4b433048f",
-        "597244975c9f44243e83fd7e2182bb0b431b89808e25e2c76135fcc116b0cd34",
+        "e95c166b8a9c5db0b98eacd186adc9cec923d365452c1d2a799e8822da509955",
+        "5527657874e40816513869d71b05a346e36360fbe6b45b701ceffe3e178e0d6a",
+        "90d5b3a08a02d26802c98d6e0bc7dbfb8589b33de92ba54833e88283a56aed9b",
+        "a699a7fe5021a851bbdf2ab2f207f310e79971088012c81b7c2eece0a409f198",
     )
-    EXP_COMP = "ca49bc2d9427e981e8161cdc45fd315fdd551618b948a22aafa5eddfe59b551d"
+    EXP_COMP = "25525b91c73c3fce690553fff0e1b13b25b078286eab8435f82a9946b23ac981"
     check("P pinned B3 authoritative-history digest matches the REGISTERED "
           "conformance literals (one per delivery sequence): %s"
           % (tuple(terminal_digests),),
