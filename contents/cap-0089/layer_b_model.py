@@ -617,12 +617,22 @@ def _avss_dealer_sig(d: int, epoch_hash: bytes, rec) -> bytes:
     used by the dealer because its own e_d IS held by the rostered dealer)."""
     msg = (b"AVSSDealerAuth" + u32(d) + epoch_hash
            + _avss_record_identity_bytes(rec))
-    k = (_spf_scalar(sha256(msg))) % _GRP_Q
+    e_d = _avss_recv_sk(d) % _GRP_Q
+    # (round-28 3942590381 / foQhP): the deterministic nonce MUST depend on the
+    # SECRET e_d as well as the public message, RFC-6979-style -- deriving it
+    # from the public message alone would let ANY observer recompute k and
+    # recover the private key e_d = (s - k)/c from ONE published record; and
+    # e_d IS the member's AVSS decryption key (E_d = G^{e_d} is the
+    # epoch-committed identity AND the key that opens every envelope to that
+    # roster member), so one leaked k would expose that member's confidential
+    # sub-shares across every dealer. `_confirm_vote` / `_spf_sign` follow the
+    # SAME secret-nonce rule; verify recomputes only the public challenge.
+    k = (_spf_scalar(sha256(b"AVSSDealerNonce" + e_d.to_bytes(32, "big")
+                            + msg))) % _GRP_Q
     R = pow(_GRP_G, k, _GRP_P)
     c = int.from_bytes(
         sha256(b"AVSSDealerChal" + sha256(msg) + R.to_bytes(32, "big")),
         "big") % _GRP_Q
-    e_d = _avss_recv_sk(d) % _GRP_Q
     s = (k + c * e_d) % _GRP_Q
     return R.to_bytes(32, "big") + s.to_bytes(32, "big")
 
@@ -755,6 +765,52 @@ def _avss_distribute(base_coeffs, dealer_index: int, epoch, cl_hash: bytes,
            "proofs": proofs, "d": dealer_index}
     rec["sig"] = _avss_dealer_sig(dealer_index, epoch.hash, rec)
     return rec
+
+
+def _avss_reencrypt_wrong(rec, j, epoch, cl_hash, d, seed, m_garbage):
+    """A BYZANTINE dealer's WRONG-but-well-formed envelope (round-28 foQha):
+    starting from an honest record `rec`, re-encrypt recipient `j`'s PRIVATE
+    KEM entry with a DIFFERENT scalar `m_garbage`, recomputing the recipient
+    INDEX's envelope bytes AND its public NIZK over the NEW (A2, env) -- so the
+    record is PUBLISHED-WELL-FORMED (Q* accepts it: the Cks/points/sig are the
+    honest originals and the NIZK verifies over the exact committed bytes) yet
+    EVERY honest recipient of member `j`'s position FAILS the recipient-side
+    Feldman check G^m == C_i and contributes ZERO scalar to the Lagrange
+    assembly (`_avss_recv_scalar` -> None; `_avss_member_nonce` -> None). This
+    is the reviewer's honest-cheater: qualification is PUBLIC well-formedness
+    (never an inverse computation of the plaintext -- impossible without a ZK
+    argument), RECONSTRUCTIBILITY is bounded separately -- an honest dealer's
+    envelope is opened by ALL n - f honest recipients (see the R28-a bound),
+    so Byzantine garbage degrades into the round-24 missing-scalar path
+    (bounded UNKNOWN / roll), never a qualified-but-unreconstructible claim."""
+    Ej = int.from_bytes(epoch.enc_keys[j - 1], "big") % _GRP_P
+    A1b, Bb, A2b, _env = rec["enc"][j]
+    r2 = (_spf_scalar(sha256(b"AVSS-r2" + hash32(seed) + hash32(epoch.hash)
+                             + u32(j) + cl_hash))) % _GRP_Q
+    S2 = pow(Ej, r2, _GRP_P)
+    mask = _avss_env_mask(epoch.hash, d, j, A2b, S2.to_bytes(32, "big"))
+    env2 = bytes(a ^ b for a, b in zip((m_garbage % _GRP_Q).to_bytes(32, "big"),
+                                       mask))
+    k = (_spf_scalar(sha256(b"AVSS-k" + hash32(seed) + hash32(epoch.hash)
+                            + u32(j) + cl_hash))) % _GRP_Q
+    t1 = pow(_GRP_G, k, _GRP_P)
+    t2 = pow(Ej, k, _GRP_P)
+    e = int.from_bytes(sha256(
+        b"AVSSProof" + epoch.hash + u32(d) + u32(j)
+        + A1b + Bb + rec["points"][j].to_bytes(32, "big")
+        + epoch.enc_keys[j - 1]
+        + t1.to_bytes(32, "big")
+        + t2.to_bytes(32, "big")
+        + A2b + env2), "big") % _GRP_Q
+    r1 = (_spf_scalar(sha256(b"AVSS-r1" + hash32(seed) + hash32(epoch.hash)
+                             + u32(j) + cl_hash))) % _GRP_Q
+    z = (k - r1 * e) % _GRP_Q
+    rec2 = dict(rec)
+    rec2["enc"] = dict(rec["enc"])
+    rec2["proofs"] = dict(rec["proofs"])
+    rec2["enc"][j] = (A1b, Bb, A2b, env2)
+    rec2["proofs"][j] = (e.to_bytes(32, "big"), z.to_bytes(32, "big"))
+    return rec2
 
 
 def _avss_dealer_publish(seed: bytes, epoch, cl_hash: bytes,
@@ -1635,21 +1691,61 @@ def _scp_finalizable(n: int, q: int, members, B) -> bool:
     return False
 
 
+def _min_quorum_size(n: int, q: int, members):
+    """SMALLEST SCP quorum in the committed flat qset graph (None if no quorum
+    exists). Round-28 foQhl: the liveness gate must quantify over ACTUAL
+    finalizable quorums, not over the roster count `n - |B|`: the release
+    capacity of a close is carried by the QUORUM that externalizes it (the
+    CONFIRM set), and intact roster members OUTSIDE that quorum are merely
+    counted, never guaranteed to confirm. Two closes can be finalized by
+    DIFFERENT quorums, so the binding case is the SMALLEST entity that can
+    externalize -- every SCP-live close must carry >= t genuine releasers, and
+    the minimum quorum size is the tightest bound that is simultaneously true
+    for every quorum and therefore for the one the scheduler happens to pick."""
+    import itertools
+    mset = frozenset(members)
+    for size in range(1, n + 1):
+        for Q in itertools.combinations(range(1, n + 1), size):
+            S = set(Q)
+            if _is_qset_quorum(n, q, members, S):
+                return size
+    return None
+
+
 def _topology_contract_violations(n: int, t: int, f: int, q: int, members):
     """Return a list of (rule, detail) violations of the round-26 topology
     contract, enumerating EVERY admitted Byzantine set B (|B| <= f) exactly as
-    Core's activation SAT checker would. Empty list == activation allowed."""
+    Core's Rust activation SAT checker would. Empty list == activation allowed.
+
+    Round-28 foQhl tightened C1: the finalizing-set guarantee is measured over
+    the ACTUAL finalizable quorums of the committed graph, not over `n - |B|`.
+    `n - |B|` counts intact roster members OUTSIDE the finalizing quorum as
+    releasers, but only the CONFIRMING quorum's members cross the release
+    boundary for that close -- so the guarantee must be: EVERY finalizable
+    quorum of the committed qset graph has >= t members (all honest inside the
+    quorum). The binding case is the graph's MINIMUM quorum: any scheduler can
+    externalize the close with the smallest quorum, so if the smallest quorum
+    is below t, an SCP-live close can carry fewer than t releasers (e.g. the
+    reviewer's n=8, t=5, f=1, q=4: the 4-of-8 quorum {1,2,3,4} finalizes but
+    carries only 4 < 5 releasers; with one Byzantine voter withholding, only 3
+    < t CONFIRM-participants are guaranteed to release). min-quorum >= t also
+    subsumes presence: a quorum of size >= t can only exist when Intact has
+    >= t members, so `SCP_FINALIZABLE(B) => |Intact| >= t` follows for every B.
+    """
     violations = []
     import itertools
+    minq = _min_quorum_size(n, q, members)
+    if minq is None:
+        violations.append(("no-finalizing-quorum", (n, q)))
+    elif minq < t:
+        violations.append(("finalizing-quorum-below-threshold",
+                           ("min-quorum", minq, "threshold", t)))
     for size in range(0, f + 1):
         for B in itertools.combinations(range(1, n + 1), size):
             B = set(B)
             # C0: no admitted Byzantine set may be its own SCP quorum.
             if _is_qset_quorum(n, q, members, B):
                 violations.append(("byzantine-quorum", B))
-            # C1: SCP_FINALIZABLE(B) => |Roster n Intact(B)| >= t.
-            if _scp_finalizable(n, q, members, B) and (n - len(B)) < t:
-                violations.append(("finalizable-with-few-intact", n - len(B)))
             # C2: |Roster n B| < t (B is a subset of the roster, all n members).
             if len(B) >= t:
                 violations.append(("byzantine-coalition-size", len(B)))
@@ -2476,10 +2572,26 @@ def decode_release_carrier(carrier: bytes) -> list:
     n = struct.unpack(">I", carrier[off:off + 4])[0]
     off += 4
     entries = []
+    prev_key = None
     for _ in range(n):
         if len(carrier) < off + 32 + 2:
             raise ValueError("truncated release-registry entry")
         cl_hash = carrier[off:off + 32]
+        # round-28 3942590416 (foQhq): the carrier is SPECIFIED as canonically
+        # sorted, so a non-strictly-increasing key is a corrupt committed
+        # carrier, not a last-entry-wins convenience: `_roots[cl_hash]` is
+        # overwritten on admission, so duplicate/non-canonical ordering would
+        # let a Byzantine carrier silently pick WHICH payload wins and admit a
+        # registry whose decode differs between nodes. Every key that is NOT
+        # strictly greater than its predecessor RAISES (fail closed). The
+        # encoder already emits strictly-sorted bytes, so honest carriers
+        # decode identically.
+        if prev_key is not None and cl_hash <= prev_key:
+            raise ValueError(
+                "release-registry keys must be STRICTLY increasing "
+                "(canonical carrier order); duplicate or out-of-order cl_hash "
+                "rejected -- last-entry-wins is never admitted")
+        prev_key = cl_hash
         off += 32
         ln = struct.unpack(">H", carrier[off:off + 2])[0]
         off += 2
@@ -3523,7 +3635,7 @@ def main():
               threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
               scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
               root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
-              scp_qset=(epoch.threshold - 1, tuple(range(1, epoch.n + 1))))
+              scp_qset=(epoch.threshold + 1, tuple(range(1, epoch.n + 1))))
           .hash != epoch.hash)
     # C0: a Byzantine set that is ITSELF a quorum must be rejected at activation.
     # With the default flat qset (q = t over all n) an admitted B (|B| <= f < t)
@@ -3544,76 +3656,85 @@ def main():
               event_mapping=b"single-pulse:LockedClose->C_s/v1",
               scp_qset=(1, tuple(range(1, 9))))
               and True))
-    # C1: SCP_FINALIZABLE(B) => |Roster n Intact(B)| >= t. The flat default is
-    # EXACTLY the closed availability bound t <= n - f (Intact = n - |B|, and a
-    # finalizable close needs |Intact| >= q = t). The SAT enumeration over every
-    # admitted B (|B| <= f) used by `_topology_contract_violations` is the
-    # checker-side stand-in for the Rust solver and must be empty for valid
-    # (t, n, f) -- proving the reviewer's "any SCP-live close has >= t eventual
-    # local roster externalizers" without any CONFIRM-certificate counting.
-    check("R26 topology C1/C2: the SAT activation gate enumerates EVERY admitted "
-          "Byzantine set B (|B| <= f) over the COMMITTED qset graph and "
-          "requires SCP_FINALIZABLE(B) => |Roster n Intact(B)| >= t AND "
-          "|Roster n B| < t for all of them; the flat honest default "
-          "(n=8, t=5, f=1, q=5) satisfies both -- organic >= t intact roster "
-          "externalizers for every SCP-live close, with NO flat certificate "
-          "counting; a DEGRADED committed qset (q=3 < t) with a larger admitted "
-          "fault class (f=4, the realistic roster-subset-of-validators regime) "
-          "fires C1: a Byzantine B of size 4 leaves |Intact|=4 < t=5 while a "
-          "quorum still exists (Intact >= q=3); the honest q=5 graph does not",
+    # C1: EVERY finalizable quorum of the COMMITTED qset graph carries >= t
+    # members (== the graph's MINIMUM quorum size >= threshold). The reviewer
+    # (round-28 foQhl) showed the earlier `Roster n Intact(B)` form was too
+    # weak: it counted intact roster members OUTSIDE the finalizing quorum as
+    # releasers, though only the CONFIRMING quorum crosses the release boundary
+    # for a close. Binding case in the flat graph: for (n=8, t=5, f=1, q=4) the
+    # 4-of-8 quorum {1,2,3,4} is finalizable and carries only 4 < t releasers
+    # (with one Byzantine voter withholding, 3 < t are guaranteed) -- the old
+    # gate accepted it, the corrected SAT gate REJECTS it at activation
+    # (min-quorum 4 < t=5). min-quorum >= t subsumes the old presence bound:
+    # a quorum of size >= t needs |Intact| >= t, so `SCP_FINALIZABLE(B) =>
+    # |Roster n Intact(B)| >= t` holds for EVERY admitted B.
+    check("R26 topology C1/C2: the SAT activation gate quantifies over the "
+          "ACTUAL finalizable quorums of the committed qset graph -- EVERY "
+          "quorum must carry >= t members (the binding case is the graph's "
+          "MINIMUM quorum, which any scheduler may pick to externalize) and "
+          "|Roster n B| < t for every admitted B; the flat honest default "
+          "(n=8, t=5, f=1, q=5) satisfies both -- any finalizing quorum has "
+          ">= t=5 genuine releasers -- while a DEGRADED committed qset (q=3 < "
+          "t, or the reviewer's q=4 < t with a 4-of-8 finalizer) FIRES C1 at "
+          "activation (min-quorum below threshold)",
           not _topology_contract_violations(
               8, 5, 1, 5, tuple(range(1, 9)))
           and not _topology_contract_violations(
               8, 5, 4, 5, tuple(range(1, 9)))
           and bool(_topology_contract_violations(
-              8, 5, 4, 3, tuple(range(1, 9)))) is True)
+              8, 5, 1, 3, tuple(range(1, 9)))) is True
+          and bool(_topology_contract_violations(
+              8, 5, 1, 4, tuple(range(1, 9)))) is True)
 
     # ---------- R27 / 0xEmpty (Discord, CAP-0089) + tacticalnoot 5549584433:
     # "implicit global n/f/t vs SCP's local quorum-slice model". The reviewer's
     # two objections, made EXECUTABLE:
     #   (a) "the set that finalizes a ledger can differ from the set the shares
-    #       were dealt to": a close can be finalized by a quorum whose identity
-    #       is a strict subset of the share-dealt roster (a 4-of-8 quorum), AND a
-    #       committed qset graph may even EXCLUDE a rostered share-holder (a
-    #       quorum over members 1..7 only). The CAP neutralizes this at
-    #       ACTIVATION, not with arithmetic: the C1 gate is EMPTY for every
-    #       activatable epoch -- any finalizable pattern leaves >= t INTACT
-    #       roster members -- and fires precisely when that could break (the
-    #       realistic roster-subset-of-validators fault class f >= n-t+1); the
-    #       honest committed graph (q = t) is then C1-immune by construction.
+    #       were dealt to": a close CAN be finalized by a strict 4-of-8 subset
+    #       quorum of the share-dealt roster. The CAP neutralizes this at
+    #       ACTIVATION, not with arithmetic: the C1 gate measures the ACTUAL
+    #       finalizing quorums -- with the round-28 foQhl tightening, a
+    #       committed graph whose SMALLEST finalizable quorum is 4 members is
+    #       REJECTED at activation (a 4-member finalizer carries 4 < t
+    #       releasers; one Byzantine voter withholding -> only 3 < t release --
+    #       the exact hole the reviewer pinned), and a committed graph with
+    #       min-quorum >= t activates with a f-fault class whose every
+    #       finalizing quorum still carries >= t honest releasers.
     #   (b) "t CONFIRM voters can include f Byzantine ones, so you'd need t+f
     #       voters to guarantee t honest": a threshold-sized cert externalizes a
     #       close, but a Byzantine subset of the certified voters WITHHOLDS its
     #       release share -- recover_proof over the remaining t-f honest carriers
     #       (< t) returns None, so resolve() -> UNKNOWN (apply stalls), never a
     #       root. The CAP does NOT adopt t+f: it adopts the committed topology --
-    #       C1 bounds the Byzantine set to < n-t+1 and guarantees >= t INTACT
-    #       roster share-holders by committed qset graph, so liveness never
-    #       depended on believing the certificate's voter count (the old
-    #       cert-counting claim is discontinued; round-26 topology contract).
+    #       C1 bounds every finalizing quorum to >= t members (all honest inside
+    #       the quorum), so liveness never depended on believing the
+    #       certificate's voter count (the old cert-counting claim is
+    #       discontinued; round-26 topology contract).
     #   (c) quorum-slice MUTATION across epochs: a RELEVANT graph change --
     #       different threshold q OR different member list -- yields a NEW epoch
     #       hash (epoch roll); a pure member-list permutation canonicalizes to
     #       the SAME committed graph (same hash).
     _r27_q4_quorum = _is_qset_quorum(8, 4, tuple(range(1, 9)), frozenset({1, 2, 3, 4}))
-    _r27_q4_f1_ok = not _topology_contract_violations(8, 5, 1, 4, tuple(range(1, 9)))
-    _r27_q4_f4_fires = bool(_topology_contract_violations(8, 5, 4, 4, tuple(range(1, 9))))
+    _r27_q4_f1_rejected = bool(_topology_contract_violations(8, 5, 1, 4, tuple(range(1, 9))))
+    _r27_q4_f4_rejected = bool(_topology_contract_violations(8, 5, 4, 4, tuple(range(1, 9))))
+    _r27_q5_f1_ok = not _topology_contract_violations(8, 5, 1, 5, tuple(range(1, 9)))
     _r27_q5_f4_immune = not _topology_contract_violations(8, 5, 4, 5, tuple(range(1, 9)))
     check("R27-a (0xEmpty): 'the set that finalizes a ledger can differ from the "
           "set the shares were dealt to' is NEUTERED AT ACTIVATION, not patched "
-          "with arithmetic -- a committed graph whose quorum is a strict 4-of-8 "
-          "SUBSET of the share-dealt roster (a finalizing identity different from "
-          "the roster) leaves >= t (5) INTACT roster members for every admitted B "
-          "under the valid (n=8, t=5, f=1) envelope (C1 empty); widening the "
-          "realistic fault class to roster-subset-of-validators (f=4) makes the "
-          "SAME graph fire C1 (B={5,6,7,8}: |Intact|=4 < t=5 while a quorum "
-          "exists) -- the mismatch is caught at activation, and the HONEST "
-          "committed graph (q = t) is then C1-IMMUNE even under that widened "
-          "class (no finalizable pattern can drop intact below t). Identity may "
-          "differ; the >= t intact-releaser count never weakens",
+          "with arithmetic -- a strict 4-of-8 SUBSET quorum of the share-dealt "
+          "roster (a finalizing identity DIFFERENT from the roster) is "
+          "REJECTED at activation under the valid (n=8, t=5, f=1) envelope: "
+          "the finalizer carries 4 < t=5 releasers, and with one Byzantine "
+          "voter withholding only 3 < t CONFIRM-participants are guaranteed "
+          "(the reviewer's round-28 counterexample); the HONEST committed "
+          "graph (q=t=5) activates with min-quorum = t, so EVERY finalizable "
+          "pattern carries >= t honest releasers and is C1-IMMUNE even under "
+          "the widened fault class (f=4) -- identity may differ; the >= t "
+          "releaser count never weakens",
           _r27_q4_quorum
-          and _r27_q4_f1_ok
-          and _r27_q4_f4_fires is True
+          and _r27_q4_f1_rejected is True
+          and _r27_q4_f4_rejected is True
+          and _r27_q5_f1_ok
           and _r27_q5_f4_immune)
     _r27h_src = RandomnessSource(epoch)
     _r27h_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
@@ -3638,8 +3759,9 @@ def main():
           "NEVER a root) while the full t honest carriers recover the canonical "
           "P_s -- Byzantine withholding is delayed availability, never a false "
           "value, and the guarantee of >= t eventual HONEST releases comes from "
-          "the COMMITTED TOPOLOGY (C1: every admitted fault pattern leaves >= t "
-          "intact roster), NOT from believing the certificate's voter count",
+          "the COMMITTED TOPOLOGY (C1 round-26/28: EVERY finalizable quorum of "
+          "the committed qset graph carries >= t members -- min-quorum >= t), "
+          "NOT from believing the certificate's voter count",
           all(v is not None for (_, v) in _r27h_t_shares)
           and _r27h_auth.recover_proof(_r27h_withheld_shares, cl_a) is None
           and _r27h_auth.recover_proof(_r27h_t_shares, cl_a) == _r27h_canonical)
@@ -4478,13 +4600,29 @@ def main():
         b"cap-0089:release-registry/v1" + b"\x00\x00\x00\x01"
         + sha256(b"c") + b"\x00\xc8" + b"\x00" * 32,        # invalid length code
     ]
+    # round-28 3942590416 (foQhq): duplicate / non-canonical key order is a
+    # CORRUPT committed carrier, never last-entry-wins. `encode_release_carrier`
+    # always sorts, so a duplicate or a genuinely DESCENDING layout can only be
+    # an adversarial/manual byte string -- both must RAISE.
+    _magic_ = b"cap-0089:release-registry/v1"
+    _dup_carrier = (_magic_ + struct.pack(">I", 2)
+                    + cl_a.hash + struct.pack(">H", 0)
+                    + cl_a.hash + struct.pack(">H", 0))
+    _desc_carrier = (_magic_ + struct.pack(">I", 2)
+                     + b"\xff" * 32 + struct.pack(">H", 0)
+                     + b"\x00" * 32 + struct.pack(">H", 0))
+    bad_carriers.append(_dup_carrier)
+    bad_carriers.append(_desc_carrier)
     strict_decode = all(raises(lambda c=c: decode_release_carrier(c))
                         for c in bad_carriers)
-    check("Release registry carrier decoding is STRICT (round-24 3939264494): "
-          "a wrong magic, a truncated entry, trailing bytes, or an invalid "
-          "payload-length code all RAISE -- a node never invents registry "
-          "entries from a corrupt committed carrier (fail closed; the carrier "
-          "is consensus state and parses exactly)",
+    check("Release registry carrier decoding is STRICT (round-24 3939264494; "
+          "round-28 3942590416 / foQhq): a wrong magic, a truncated entry, "
+          "trailing bytes, an invalid payload-length code, a DUPLICATE cl_hash "
+          "and a DESCENDING (non-canonical) key order all RAISE -- a node "
+          "never invents registry entries from a corrupt committed carrier and "
+          "never resolves duplicate keys last-entry-wins (fail closed; the "
+          "carrier is consensus state and parses exactly, with strictly "
+          "increasing keys)",
           strict_decode
           and decode_release_carrier(
               encode_release_carrier({})) == []
@@ -4517,6 +4655,34 @@ def main():
                                   True, unrel_reg)
           == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
                                           canonical_value_hash(cl_a.value_bytes)))
+    # --- Round-28 3942590403 (foQhh): presence/absence is a property of the
+    # CLOSED value, never of call-time observation. ---
+    _pres_entry = encode_release_carrier({cl_a.hash: root_a})
+    _abs_entry = encode_release_carrier({})
+    _pres_reg = ReleaseRegistry(_pres_entry, epoch=epoch, authenticator=authen)
+    _abs_reg = ReleaseRegistry(_abs_entry, epoch=epoch, authenticator=authen)
+    check("Closed-ledger registry presence is consensus-deterministic "
+          "(round-28 3942590403 / foQhh): the presence/absence state for the "
+          "predecessor close is a field of the CLOSED value itself -- the "
+          "release entry BYTES are the unique proof (present) or its canonical "
+          "absent marker (absent), two distinct closed values; the pulse-vs-"
+          "fallback branch is a pure function of (slot_finalized, "
+          "registry.released()) over that committed carrier, so every node "
+          "that externalized the SAME predecessor computes the IDENTICAL "
+          "registry and the IDENTICAL branch for the nomination slot. A node "
+          "lacking the unique P_s can construct only the ABSENT carrier -- a "
+          "DIFFERENT externalized value that cannot be the close a "
+          "present-carrying node externalized -- so an honest close of the "
+          "predecessor BLOCKS on the unique proof (round-24 UNKNOWN-stall "
+          "semantics); presence can never fork on proof arrival timing",
+          _pres_entry != _abs_entry
+          and _pres_reg.released(cl_a.hash)
+          and not _abs_reg.released(cl_a.hash)
+          and nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, _pres_reg)
+          == consumer_kdf(root_a, LABEL_NOM, full_nom_map))
     # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
     # validator AND by the epoch constructor / hash path (thread 3930443019). ---
     check("Mapping missing APPLY is INVALID and the epoch is rejected "
@@ -5447,6 +5613,48 @@ def main():
           "recomputed commitment, so a qualifying record's points can never "
           "steer reconstruction)",
           q_wrong_points == [])
+    # ---------- ROUND-28 3942590393 (foQha): PUBLIC well-formedness vs
+    # RECONSTRUCTIBILITY -- a Byzantine dealer can publish a WRONG-but-well-
+    # formed ciphertext. Q* reads ONLY public bytes, so by construction it can
+    # never invert the encrypted plaintext (that is what the encryption IS);
+    # the CAP therefore does NOT claim "every qualified dealer is publicly
+    # reconstructible" -- it REVISES qualification/recovery (the reviewer's own
+    # alternative): reconstructibility is bounded TOPOLOGICALLY (every honest
+    # dealer's envelope opens for all n - f honest recipients, so an honest
+    # dealer is reconstructed through >= t honest opens alone) and Byzantine
+    # garbage degrades into the round-24 missing-scalar path (bounded UNKNOWN,
+    # epoch roll), never a qualified-but-permanently-unreconstructible state.
+    _cheat_rec = _avss_reencrypt_wrong(
+        base_honest, 1, av_epoch, av_cl_hash, base_honest["d"],
+        sha256(b"cap-0089:avss:honest:%02d" % 1), 1)
+    _cheat_qualified = _avss_qualification([_cheat_rec], av_epoch, av_n)
+    _cheat_scalar = _avss_recv_scalar(
+        1, _cheat_rec["enc"][1], _cheat_rec["d"], av_epoch.hash,
+        _avss_point_commit(_cheat_rec["Cks"], 1))
+    _cheat_member_nonce = _avss_member_nonce([_cheat_rec], 1, av_epoch)
+    _honest_dealer_opens = all(
+        _avss_recv_scalar(
+            jj, base_honest["enc"][jj], base_honest["d"], av_epoch.hash,
+            base_honest["points"][jj]) is not None
+        for jj in range(1, av_n + 1))
+    check("AVSS public well-formedness vs reconstructibility (round-28 "
+          "3942590393 / foQha): a Byzantine dealer's WRONG-but-well-formed "
+          "ciphertext (a DIFFERENT scalar encrypted under a fully valid public "
+          "NIZK) IS qualified by Q* -- the public predicate cannot invert the "
+          "plaintext-- but contributes ZERO to honest recovery: the recipient "
+          "fail-closes (G^garbage != C_i) and `_avss_member_nonce` returns "
+          "None, so the garbage dealer degrades into the round-24 "
+          "missing-scalar path (bounded UNKNOWN / epoch roll), never a "
+          "qualified-but-unreconstructible claim. Availability is carried by "
+          "the honest-dealer bound instead: EVERY honest dealer's envelope "
+          "opens for ALL n - f honest recipients (n=10, f=3 -> 7 honest "
+          "opens >= t=7), so every HONEST dealer is reconstructed from >= t "
+          "honest opens alone -- Byzantine garbage can delay availability, "
+          "never strand it (availability is governed by the topology gate)",
+          _cheat_qualified == [_cheat_rec]
+          and _cheat_scalar is None
+          and _cheat_member_nonce is None
+          and _honest_dealer_opens)
     # AVSS-FED PROOF ASSEMBLY (round-24 3939264478 / 3939264532): the slot's
     # NONCE polynomial g_v is distributed through the SAME AVSS machinery
     # (nonce dealers sub-share with constants g_v(d)), and the qualified
