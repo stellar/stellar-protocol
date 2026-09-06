@@ -5655,6 +5655,56 @@ def main():
           and _cheat_scalar is None
           and _cheat_member_nonce is None
           and _honest_dealer_opens)
+    # ROUND-28 3942590381 (foQhP): the dealer-auth Schnorr nonce is derived from
+    # the SECRET e_d as well as the public message (RFC-6979-style, cf.
+    # `_confirm_vote`), so the deterministic nonce can no longer be recomputed
+    # from public bytes to recover the private key e_d = (s - k)/c -- and e_d
+    # IS the member's AVSS decryption key (E_d = G^{e_d} opens every envelope
+    # to that member), so a message-only nonce would expose that member's
+    # confidential sub-shares from ONE published record.
+    # (a) recovery FAILS against the current signature: an attacker recomputing
+    #     k0 = H(msg) and forming (s - k0)/c mod q gets something unrelated to
+    #     e_d;
+    # (b) the HYPOTHETICAL message-only-nonce signature (rebuilt here for the
+    #     same record) still passes the PUBLIC verification equation, and its
+    #     private key recovers as (s_old - k0)/c_old == e_d exactly -- the
+    #     reviewer's attack is real and the current nonce eliminates it.
+    _sig_msg = (b"AVSSDealerAuth" + u32(base_honest["d"]) + av_epoch.hash
+                + _avss_record_identity_bytes(base_honest))
+    _sig_R = int.from_bytes(base_honest["sig"][:32], "big")
+    _sig_e_d = _avss_recv_sk(base_honest["d"]) % _GRP_Q
+    _sig_c = int.from_bytes(
+        sha256(b"AVSSDealerChal" + sha256(_sig_msg)
+               + _sig_R.to_bytes(32, "big")), "big") % _GRP_Q
+    _sig_s = int.from_bytes(base_honest["sig"][32:], "big") % _GRP_Q
+    _sig_k0 = (_spf_scalar(sha256(_sig_msg))) % _GRP_Q  # attacker's msg-only
+    _recovered = ((_sig_s - _sig_k0) % _GRP_Q
+                  * pow(_sig_c, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+    _old_k = _sig_k0
+    _old_R = pow(_GRP_G, _old_k, _GRP_P)
+    _old_c = int.from_bytes(
+        sha256(b"AVSSDealerChal" + sha256(_sig_msg)
+               + _old_R.to_bytes(32, "big")), "big") % _GRP_Q
+    _old_s = (_old_k + _old_c * _sig_e_d) % _GRP_Q
+    _old_leak = ((_old_s - _old_k) % _GRP_Q
+                 * pow(_old_c, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+    _old_verifies = (
+        pow(_GRP_G, _old_s, _GRP_P)
+        == (_old_R * pow(int.from_bytes(av_epoch.enc_keys[
+            base_honest["d"] - 1], "big") % _GRP_P, _old_c, _GRP_P)) % _GRP_P)
+    check("AVSS dealer-auth nonce binds the secret e_d (round-28 3942590381 / "
+          "foQhP): under a message-only Schnorr nonce any node recomputes k0 = "
+          "H(msg) and recovers e_d = (s - k0)/c from ONE published record "
+          "((b): the rebuilt message-only signature passes the PUBLIC "
+          "verification equation and leaks (s_old - k0)/c_old == e_d exactly, "
+          "the dealer's AVSS decryption key). The current nonce derives from "
+          "(AVSSDealerNonce || e_d || msg), so the same attack recovers "
+          "(s - k0)/c != e_d -- a published record can no longer expose the "
+          "dealer's confidential envelope material",
+          _sig_s != _sig_k0
+          and _recovered != _sig_e_d
+          and _old_verifies
+          and _old_leak == _sig_e_d)
     # AVSS-FED PROOF ASSEMBLY (round-24 3939264478 / 3939264532): the slot's
     # NONCE polynomial g_v is distributed through the SAME AVSS machinery
     # (nonce dealers sub-share with constants g_v(d)), and the qualified
