@@ -1038,20 +1038,49 @@ def run():
           all(_ed_compress(_ed_pt_mul(_ED_B, _ecvrf_sk_to_x(vrf_seeds[nid])))
               == commit_auth[nid][2] for nid in commit_auth))
 
+    def _net_vrf_keys(net_c):
+        # Canonical TAI ECVRF keypair of the fixture's contributors UNDER the
+        # SPECIFIED network id: vrf_seed = SHA-512("stellar-vrf/v1/derive" |
+        # net | node_key_seed)[0:32], vrf_public_key = x*B (RFC 9381). Under
+        # TESTNET this reproduces exactly the consensus-carried vrf_public_key;
+        # under MAINNET it yields a NETWORK-SPECIFIC pair -- the fixture's
+        # carried vrf public keys are TESTNET-derived and MUST NOT be reused as
+        # mainnet keys (round-25 3939431532 / fgK8p): a genuinely mainnet
+        # VRFCommit is (sigma_nodeID, commit_hash, vrf_public_key_M(M, slot))
+        # with the MAINNET key, so the mainnet reveal set's proofs are REAL
+        # ECVRF proofs under mainnet keys and the re-signed commits BIND them.
+        out = {}
+        for name in _NODE_NAMES:
+            n_seed = sha512(NODE_KEY_LABEL + name)[0:32]
+            sk = Ed25519PrivateKey.from_private_bytes(n_seed)
+            nid = sk.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+            if nid not in commit_auth:
+                continue
+            vrf_seed = sha512(b"stellar-vrf/v1/derive" + net_c
+                              + n_seed)[0:32]
+            vp_c = (Ed25519PrivateKey.from_private_bytes(vrf_seed)
+                    .public_key().public_bytes(Encoding.Raw,
+                                               PublicFormat.Raw))
+            out[nid] = (vrf_seed, vp_c)
+        return out
+
     def _real_context(net_c, slot_c):
-        # A reveal set internally valid in context C: beta = REAL ECVRF output,
-        # commit = sha256(beta) re-signed under scope (C.net, C.slot), proof =
-        # REAL ECVRF_prove(sk_v, T_C). Returns (rows, commits, alpha_C, th_C).
+        # A reveal set internally valid in context C: beta = REAL ECVRF output
+        # of the NETWORK'S OWN key pair, commit = sha256(beta) re-signed under
+        # scope (C.net, C.slot) binding the context's OWN vrf_public_key, proof
+        # = REAL ECVRF_prove(sk_v, T_C). Returns (rows, commits, alpha_C, th_C).
         alpha_c = transcript(net_c, slot_c, 1, anchor)
         th_c = transcript_hash(net_c, slot_c, 1, anchor)
+        vrf_keys = _net_vrf_keys(net_c)
         commit_map = {}
         rows = []
         for nid in sorted(commit_auth):
-            pi_c = _ecvrf_prove(vrf_seeds[nid], alpha_c)
+            vseed_c, vp_c = vrf_keys[nid]
+            pi_c = _ecvrf_prove(vseed_c, alpha_c)
             ch_c = sha256(_ecvrf_proof_to_hash(pi_c))
             sig_c = _node_sk_for(nid).sign(
-                commit_message(net_c, slot_c, ch_c, commit_auth[nid][2]))
-            commit_map[nid] = (ch_c, sig_c, commit_auth[nid][2])
+                commit_message(net_c, slot_c, ch_c, vp_c))
+            commit_map[nid] = (ch_c, sig_c, vp_c)
             rows.append((nid, _ecvrf_proof_to_hash(pi_c), th_c, pi_c))
         return rows, commit_map, alpha_c, th_c
 
@@ -1062,6 +1091,17 @@ def run():
         _real_context(net_main, slot)
     _m_verify, _m_accept, _m_set = make_verifier(net_main, slot, {}, main_commits,
                                          real_vrf=True, alpha_string=alpha_main)
+    _main_vp = _net_vrf_keys(net_main)
+    check("V4  mainnet context uses MAINNET-derived VRF keys (round-25 "
+          "3939431532 / fgK8p): the mainnet key pair is derived with the "
+          "canonical TAI formula UNDER network_id_mainnet -- the fixture's "
+          "carried vrf_public_key is TESTNET-derived and is never reused as a "
+          "mainnet key -- so the mainnet reveal set is genuinely mainnet: its "
+          "vrf_public_key differs from the testnet-carried key and the "
+          "re-signed mainnet commits BIND that mainnet key",
+          all(_main_vp[nid][1] != commit_auth[nid][2] for nid in commit_auth)
+          and all(main_commits[nid][2] == _main_vp[nid][1]
+                 for nid in commit_auth))
     # The WRONG-context substitution: identical mainnet-valid rows whose ONLY
     # divergent field is the proof -- replaced by the REAL proof derived for
     # the testnet-s transcript.
