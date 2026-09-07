@@ -1106,6 +1106,36 @@ def _avss_proof_from_dealers(share_records, nonce_records, subset, epoch,
     return R_b + (s % _GRP_Q).to_bytes(32, "big")
 
 
+def _avss_valid_signers(share_records, nonce_records, members, epoch):
+    """The roster members that hold BOTH a VALID aggregate share h(i) (every
+    qualified dealer's envelope opens AND Feldman-ties to the public point) AND
+    a VALID aggregate nonce n_i = g_v(i) -- the exact per-member signer
+    material the two-round assembly consumes. A member whose OWN envelope is
+    garbage under even ONE qualified dealer is absent from the list
+    (fail-closed `_avss_member_share` / `_avss_member_nonce`), never a source
+    of a half-valid partial."""
+    return [i for i in members
+            if _avss_member_share(share_records, i, epoch) is not None
+            and _avss_member_nonce(nonce_records, i, epoch) is not None]
+
+
+def _avss_distribution_closes(share_records, nonce_records, epoch, honest_members):
+    """ROUND-29 fos67/foqqv/foqrG: the AVSS DISTRIBUTION-CLOSE gate. The
+    distribution round CLOSES -- and only then may the epoch be committed and
+    activated -- iff at least `epoch.threshold` HONEST roster members each hold
+    valid share AND nonce material (`_avss_valid_signers`). This is a
+    pre-commit, pre-activation consensus act: a qualified dealer that garpes
+    envelopes to EVERY honest recipient drives the honest-valid count below t,
+    the distribution FAILS TO CLOSE, and the epoch is deterministically rolled
+    BEFORE any externalized close exists -- so no post-commit stall is even
+    reachable. It also turns the CAP's `|Q*| <= n-2f` hazard (fos67: "up to f
+    exclusions" of honest dealers leaves |Q*| as low as n-2f) into a
+    REQUIREMENT: the honest-valid floor must be >= t at close time, independent
+    of which dealer records the adversary let through."""
+    return len(_avss_valid_signers(share_records, nonce_records, honest_members,
+                                   epoch)) >= epoch.threshold
+
+
 def group_pub_from_seed(seed: bytes, threshold: int, n: int) -> bytes:
     # The epoch's committed authority/public key: Y = G^d, d = f(0) from the
     # same Shamir polynomial the n members hold shares of. `verify` binds every
@@ -1853,9 +1883,13 @@ def _topology_contract_violations(n: int, t: int, f: int, q: int, members):
         for B in itertools.combinations(range(1, n + 1), size):
             B = set(B)
             intact = frozenset(i for i in range(1, n + 1) if i not in B)
-            if flat_ok is False:
-                # Non-flat graph: keep the FULL per-B / per-quorum SAT check so a
-                # crafted sub-threshold graph is still rejected at activation.
+            if flat_ok is not True:
+                # Non-flat graph (or flat_graph that failed its own closed form):
+                # keep the FULL per-B / per-quorum SAT check so a crafted
+                # sub-threshold or non-flat graph is still rejected at activation
+                # (round-29 fpkD5: the None case MUST NOT fall through to the
+                # closed-form flat labels, which assume members == all n and
+                # would accept an unlive qset whose members exclude a finalizer).
                 if not _scp_finalizable(n, q, members, B):
                     violations.append(("no-honest-quorum-under-fault",
                                        ("byzantine", len(B), "q", q,
@@ -1875,25 +1909,6 @@ def _topology_contract_violations(n: int, t: int, f: int, q: int, members):
                     violations.append(("byzantine-quorum", B))
                 if len(B) >= t:
                     violations.append(("byzantine-coalition-size", len(B)))
-                continue
-            # flat_ok is None ==> homogeneous flat graph with f > 0 and n > 6:
-            # C1a is n - b >= q (tightest b = f, already guaranteed by the
-            # non-True branch), C1b is the > t-bound whatever the packing (the
-            # min intact-in-quorum is q - b, worst-case b = f), C0/C2 follow
-            # from f < t. Identical violations as the closed form; reported with
-            # the same labels.
-            if n - len(B) < q:
-                violations.append(("no-honest-quorum-under-fault",
-                                   ("byzantine", len(B), "q", q,
-                                    "intact", len(intact))))
-            if q - len(B) < t:
-                violations.append((
-                    "quorum-below-honest-release",
-                    ("byzantine", len(B), "quorum", q,
-                     "intact-in-quorum", q - len(B),
-                     "threshold", t)))
-            if len(B) >= t:
-                violations.append(("byzantine-coalition-size", len(B)))
     return violations
 
 
@@ -3961,13 +3976,18 @@ def main():
     _r27_partial_graph = EpochDescriptor(
         format_version=1, authority_key=vkey, roster=roster,
         activation=epoch.activation, retirement=epoch.retirement,
-        threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
+        threshold=5, byzantine_bound=1,
         scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
         root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
-        scp_qset=(epoch.threshold + epoch.byzantine_bound,
-                  tuple(range(1, epoch.n))))  # members 1..7 only:
-                                               # finalizer excludes
-                                               # a share-dealt member
+        scp_qset=(6, tuple(range(1, 8))))  # members 1..7 only (the excluded
+                                           # roster member 8 is a share-dealt
+                                           # non-finalizer): SOUND because the
+                                           # surviving qset-member count after
+                                           # ANY admitted fault is m - f = 6 = q
+                                           # (a partial member set with m - f < q
+                                           # would be a NO-HONEST-QUORUM topology
+                                           # and REJECTED at activation,
+                                           # round-29 fpkD5)
     _r27_moved_graph = EpochDescriptor(
         format_version=1, authority_key=vkey, roster=roster,
         activation=epoch.activation, retirement=epoch.retirement,
@@ -3979,17 +3999,27 @@ def main():
     check("R27-c (0xEmpty): quorum-slice MUTATION across epochs is handled by the "
           "COMMIT, not by an implicit convention -- a committed qset graph whose "
           "member list EXCLUDES a share-dealt rostered member (a finalizer whose "
-          "identity differs from the share-dealt set, on purpose) is still C1-safe "
-          "and activatable but yields a DIFFERENT epoch hash (the graph is pinned; "
-          "changing it rolls the epoch), and a pure member-list PERMUTATION "
+          "identity differs from the share-dealt set, on purpose), while keeping "
+          "the partial member set SOUND (m - f >= q, so an admitted fault still "
+          "leaves a valid quorum -- a partial graph with m - f < q is a NO-HONEST-"
+          "QUORUM topology and is REJECTED at activation, round-29 fpkD5), is still "
+          "C1-safe and activatable but yields a DIFFERENT epoch hash; a partial "
+          "member set of (8,6,1) with m = 7 and q = 7 = t + f would be UNLIVE "
+          "(faulting a qset member leaves 6 < 7) and is correctly rejected, so "
+          "the excluded-member graph needs q <= m - f = 6 (here t=5, q=6); "
+          "and a pure member-list PERMUTATION "
           "canonicalizes (sorted/set) to the SAME committed graph and the SAME "
           "epoch hash -- the topology is exactly the committed bytes, never a "
           "deployment convention, and any node can re-derive it",
-          _r27_partial_graph.scp_qset == (epoch.threshold + epoch.byzantine_bound,
-                                          tuple(range(1, epoch.n)))
+          _r27_partial_graph.scp_qset == (6,
+                                          tuple(range(1, 8)))
           and _r27_partial_graph.hash != epoch.hash
           and _r27_moved_graph.scp_qset_hash == epoch.scp_qset_hash
-          and _r27_moved_graph.hash == epoch.hash)
+          and _r27_moved_graph.hash == epoch.hash
+          and bool(_topology_contract_violations(8, 5, 1, 6,
+                                                 tuple(range(1, 7))))
+          and not _topology_contract_violations(8, 5, 1, 6,
+                                                tuple(range(1, 8))))
 
     # ---------- R3 / Noot #5: predecessor-state epoch selection --------------
     wrong_prev = sha256(u32(slot - 1) + b"an-alien-predecessor")
@@ -6051,6 +6081,86 @@ def main():
               av_epoch, av_cl2_hash, av_r1_nonce) is None
           and _public_aggregate_comms(
               dict((i, av_r1_nonce[i]) for i in range(1, av_t + 2))) == R_ref)
+
+    # ---------- ROUND-29 fos67/foqqv/foqrG: the DISTRIBUTION-CLOSE gate. -----
+    # The reviewer's worst-case foqrG premise is now BUILT and survived: a
+    # BYZANTINE DEALER (the roster member holding its own E_d identity key,
+    # `_avss_recv_sk(d)`) publishes a record whose every entry is PUBLICLY
+    # WELL-FORMED (per-entry NIZK verifies over the exact committed bytes; the
+    # envelope is re-encrypted under the SAME r1 as the honest base record --
+    # same publish seed, same cl_hash, same tag -- so the tag AND the NIZK stay
+    # valid, exactly the foQha qualified-garbage construction) but whose
+    # envelope decrypts to a GARBAGE SCALAR for EVERY honest recipient (each
+    # `_avss_recv_scalar` Feldman-tie G^m == C_i FAILS -> None). Because the
+    # dealer signature covers (d || epoch_hash || Cks) and the garbage
+    # record keeps the SAME committed coefficient registers, the record REMAINS
+    # IN Q* (`_avss_qualification(q_rogue) == q_rogue`) -- qualification is
+    # public well-formedness, it can never see the wrong plaintext (no ZK
+    # argument proves the plaintext). WITHOUT a gate, that qualified record
+    # would machine honest members 1..7 a None aggregate share: honest valid
+    # signers 0, even ALL-ROSTER valid signers = f = 3 < t, and no proof can be
+    # assembled (an honest member needs its OWN valid aggregate h(i) AND n_i).
+    # The round-29 reply is the DISTRIBUTION-CLOSE GATE, a PRE-COMMIT,
+    # pre-activation consensus act: the distribution CLOSES, and the epoch is
+    # committed+activated, ONLY if >= t HONEST members hold valid share+nonce
+    # material. The garbage-everyone record makes the close FAIL (`honest valid
+    # 0 < t`) -> the epoch never commits and no externalized close ever exists;
+    # "a qualified dealer stalling a COMMITTED close" is unreachable by
+    # construction. Honest-binding: with the rosters' honest set = t exactly
+    # (av_honest == av_t == 7 here), even a SINGLE honest recipient's garble
+    # (the one-recipient case above) drives the honest-valid count to t-1 and
+    # WITHHOLDS the close -- the gate's floor is the honest-dealer bound
+    # guaranteed by the AVSS machinery (`_avss_distribution_closes` on q_a).
+    _av_rogue_enc = dict(base_honest["enc"])
+    _av_rogue_proofs = dict(base_honest["proofs"])
+    for __j in range(1, av_honest + 1):
+        __rw = _avss_reencrypt_wrong(
+            base_honest, __j, av_epoch, av_cl_hash, base_honest["d"],
+            sha256(b"cap-0089:avss:honest:%02d" % 1), 7)
+        _av_rogue_enc[__j] = __rw["enc"][__j]
+        _av_rogue_proofs[__j] = __rw["proofs"][__j]
+    _av_rogue = dict(base_honest, enc=_av_rogue_enc, proofs=_av_rogue_proofs)
+    _av_rogue_shares = [_av_rogue if rec is base_honest else rec
+                        for rec in q_a]
+    _av_honest_set = list(range(1, av_honest + 1))
+    check("AVSS DISTRIBUTION-CLOSE gate (round-29 fos67/foqqv/foqrG): the "
+          "reviewer's worst case -- a QUALIFIED Byzantine dealer (own identity "
+          "key, well-formed NIZKs over exact bytes, SAME committed Cks, hence "
+          "SAME valid dealer signature, `_avss_qualification` keeps it in Q*) "
+          "whose envelopes open to GARBAGE scalars for EVERY honest recipient "
+          "(`_avss_reencrypt_wrong` per honest j, m_garbage scalar) -- makes "
+          "every honest member's aggregate share fail-closed: `_avss_valid_"
+          "signers` over the honest roster = 0, even over the WHOLE roster = "
+          "f < t, `_avss_proof_from_dealers` -> None. WITHOUT a pre-commit "
+          "gate that record would strand a committed close. The round-29 "
+          "answer is the DISTRIBUTION-CLOSE gate: the distribution CLOSES "
+          "(the epoch is committed + activated, and only then can a close be "
+          "externalized) IFF >= t HONEST members hold VALID share+nonce "
+          "material (`_avss_distribution_closes`); the garbage-everyone "
+          "qualified record FAILS the gate (0/7 honest valid) -> the epoch is "
+          "rolled BEFORE any close exists -- no post-externalization stall is "
+          "reachable. The gate is also HONEST-BINDING: with the honest set == "
+          "t exactly (av_honest == av_t), even the ONE-honest-recipient garble "
+          "above drops the honest-valid count to t-1 and WITHHOLDS the close "
+          "(6 < 7) -- closing requires the AVSS honest-dealer bound, never the "
+          "adversary's leftovers",
+          _avss_qualification(_av_rogue_shares, av_epoch, av_n) == _av_rogue_shares
+          and _avss_valid_signers(_av_rogue_shares, nonce_records,
+                                  _av_honest_set, av_epoch) == []
+          and len(_avss_valid_signers(_av_rogue_shares, nonce_records,
+                                     list(range(1, av_n + 1)), av_epoch)) == av_f
+          and _avss_proof_from_dealers(_av_rogue_shares, nonce_records,
+                                       list(range(1, av_n + 1)),
+                                       av_epoch, av_cl2_hash,
+                                       av_r1_nonce) is None
+          and not _avss_distribution_closes(_av_rogue_shares, nonce_records,
+                                            av_epoch, _av_honest_set)
+          and _avss_distribution_closes(q_a, nonce_records, av_epoch,
+                                        _av_honest_set)
+          and not _avss_distribution_closes(_av_garbed_shares, nonce_records,
+                                            av_epoch, _av_honest_set)
+          and _avss_valid_signers(q_a, nonce_records, _av_honest_set,
+                                  av_epoch) == _av_honest_set)
 
     # ---------- ROUND-29 foqqj: valid-but-wrong-R is REJECTED once the verifier
     # ---------- binds the round-1 aggregate nonce. ------------------------------

@@ -902,10 +902,16 @@ def run():
         if not verify_commit(nid, ch, sg):
             return False  # unauthenticated / scoped-mismatched commit
         if proof != expected_proof[nid]:
-            # FIELD-INTEGRITY / transport gate (NOT a cryptographic VRF_verify):
-            # the reveal's proof must byte-match the authoritative pinned proof
-            # for (pk=nid, T_b(s)). Real RFC 9381 ECVRF verification is the PR
-            # #5409 harness's job; this checker does NOT claim to be one.
+            # FIELD-INTEGRITY / transport gate for the FIXTURE paths
+            # (V3/V7...): proof must byte-match the authoritative pinned proof
+            # for (pk=nid, T_b(s)). Round-29 fos6s: the fixture's carried
+            # beta/proof ARE documented transport placeholders -- this byte-gate
+            # deliberately stays a TRANSPORT-INTEGRITY check and never bills
+            # itself as a VRF verdict. Genuine RFC 9381 ECVRF acceptance of
+            # REAL proof/beta tuples (generated under the fixture's own real
+            # committed keys and verified by `_ecvrf_verify`) is exercised by
+            # V4/V5/V6 -- those are the acceptance vectors, this is the wire
+            # gate.
             return False
         if prev_node_bytes is not None and nid <= prev_node_bytes:
             return False  # strict ascending (duplicates / out-of-order)
@@ -1084,6 +1090,74 @@ def run():
             rows.append((nid, _ecvrf_proof_to_hash(pi_c), th_c, pi_c))
         return rows, commit_map, alpha_c, th_c
 
+    def _wrong_alpha_context(keys_net, prove_alpha, outer_net, outer_slot):
+        # ROUND-29 fpkEM/fpkES: a negative control that isolates the ALPHA
+        # input of the real ECVRF gate and nothing else. REAL proofs are
+        # generated under keys_net's keys (the TARGET COMMITTED keys -- no key
+        # mismatch is involved) over a DIFFERENT transcript `prove_alpha`
+        # (wrong-network alpha for fpkEM, wrong-slot alpha for fpkES), beta =
+        # to_hash(proof), commit = sha256(beta) RE-SIGNED under the OUTER
+        # context's (network, slot) scope, and the OUTER context's real
+        # transcript hash retained on each row. Every non-ECVRF gate (transcript
+        # hash, commit binding, signature scope, roster, ordering) then passes;
+        # the ONLY gate that can reject is the real RFC 9381
+        # ECVRF_verify(committed_pk, T_outer, pi_wrong-alpha).
+        outer_alpha = transcript(outer_net, outer_slot, 1, anchor)
+        outer_th = transcript_hash(outer_net, outer_slot, 1, anchor)
+        vrf_keys = _net_vrf_keys(keys_net)
+        commit_map = {}
+        rows = []
+        for nid in sorted(commit_auth):
+            vseed, vp = vrf_keys[nid]
+            pi_w = _ecvrf_prove(vseed, prove_alpha)
+            beta_w = _ecvrf_proof_to_hash(pi_w)
+            ch_w = sha256(beta_w)
+            sig_w = _node_sk_for(nid).sign(
+                commit_message(outer_net, outer_slot, ch_w, vp))
+            commit_map[nid] = (ch_w, sig_w, vp)
+            rows.append((nid, beta_w, outer_th, pi_w))
+        return rows, commit_map, outer_alpha, outer_th
+
+    # -- V6: GENUINE TESTNET (fixture) acceptance vectors (round-29 fos6s). --
+    # fos6s: the fixture's carried beta/proof are DOCUMENTED transport
+    # placeholders (80-byte wire width) that were never billed as acceptance
+    # vectors; the acceptance path is treated as REAL only when the proof gate
+    # is the actual RFC 9381 ECVRF verification. V6 (and V4/V5) satisfy that:
+    # real proofs under the fixture's OWN committed testnet keys, real beta =
+    # to_hash(proof), commits re-signed under testnet scope -- accepted by
+    # `_ecvrf_verify` with zero placeholder bytes involved.
+    tn_alpha = transcript(net_id, slot, 1, anchor)
+    tn_th = transcript_hash(net_id, slot, 1, anchor)
+    tn_vrf = _net_vrf_keys(net_id)
+    tn_commits = {}
+    tn_rows = []
+    for nid in sorted(commit_auth):
+        vseed, vp = tn_vrf[nid]
+        pi_t = _ecvrf_prove(vseed, tn_alpha)
+        beta_t = _ecvrf_proof_to_hash(pi_t)
+        ch_t = sha256(beta_t)
+        sig_t = _node_sk_for(nid).sign(
+            commit_message(net_id, slot, ch_t, vp))
+        tn_commits[nid] = (ch_t, sig_t, vp)
+        tn_rows.append((nid, beta_t, tn_th, pi_t))
+    _tn_verify, _tn_accept, _tn_set = make_verifier(
+        net_id, slot, {}, tn_commits, real_vrf=True, alpha_string=tn_alpha)
+    check("V6  genuine TESTNET ECVRF acceptance vectors (round-29 fos6s): the "
+          "fixture's carried beta/proof are documented TRANSPORT placeholders; "
+          "genuine acceptance is proven with REAL RFC 9381 tuples -- beta = "
+          "to_hash(ECVRF_prove(sk_v, T_testnet)), commit = sha256(beta) "
+          "re-signed under testnet scope, proof = ECVRF_prove(sk_v, "
+          "T_testnet) -- ACCEPTED by the real ECVRF gate under the fixture's "
+          "OWN committed testnet keys (the derived vp equals the carried "
+          "vrf_public_key), so the acceptance verdict never consults a "
+          "placeholder or an expected-bytes table",
+          _tn_set(tn_rows, tn_th)
+          and all(tn_vrf[nid][1] == commit_auth[nid][2]
+                  for nid in commit_auth)
+          and all(_ecvrf_verify(tn_commits[nid][2], tn_alpha,
+                                tn_rows[i][3])[0]
+                  for i, nid in enumerate(sorted(commit_auth))))
+
     # -- V4: mainnet context (same slot s) --
     beta_a_test = placeholder_beta(contribs[0][0], net_id, slot, anchor)
     beta_a_main = placeholder_beta(contribs[0][0], net_main, slot, anchor)
@@ -1108,8 +1182,6 @@ def run():
     test_proofs = {nid: _ecvrf_prove(vrf_seeds[nid],
                                      transcript(net_id, slot, 1, anchor))
                    for nid in commit_auth}
-    main_bad = [(nid, beta, th, test_proofs[nid])
-                for nid, beta, th, _pi in main_rows]
     check("V4  REAL mainnet ECVRF proofs differ from REAL testnet proofs "
           "(the isolation is non-vacuous): pi_mainnet != pi_testnet for every "
           "contributor because T(s)-scope enters encode_to_curve and the "
@@ -1127,13 +1199,34 @@ def run():
         for nid, (ch, sg, _vp) in main_commits.items())
     _main_beta_binds = all(sha256(row[1]) == main_commits[nid][0]
                            for row, nid in zip(main_rows, sorted(commit_auth)))
-    check("V4  cross-network REAL proof-context binding (isolated): the SAME "
-          "mainnet-valid rows -- signature valid under mainnet scope, beta "
-          "binding to the committed hash, correct roster, transcript == "
-          "mainnet -- with ONLY the proof swapped for the REAL testnet-s "
-          "derivation are REJECTED by the REAL ECVRF gate; the divergence is "
-          "specifically PROOF-context binding, never a signature/commit gate",
-          not _m_set(main_bad, th_main)
+    # round-29 fpkEM: the OLD negative swapped in a proof derived under the
+    # TESTNET keys -- so its rejection was confounded by a KEY mismatch, and
+    # the test never isolated the alpha input. The isolated negative now runs
+    # under the TARGET MAINNET committed keys (no key mismatch can be blamed)
+    # with a REAL proof derived over the TESTNET transcript alpha; beta/commit
+    # are re-scoped to mainnet and the mainnet transcript hash is retained, so
+    # ONLY ECVRF_verify(mainnet PK, T_mainnet, pi over T_testnet) can reject.
+    neg4_rows, neg4_commits, neg4_alpha, neg4_th = _wrong_alpha_context(
+        net_main, transcript(net_id, slot, 1, anchor), net_main, slot)
+    _neg4_verify, _neg4_accept, _neg4_set = make_verifier(
+        net_main, slot, {}, neg4_commits, real_vrf=True,
+        alpha_string=neg4_alpha)
+    check("V4  cross-network ALPHA-ISOLATED negative control (round-29 fpkEM): "
+          "the same mainnet-committed KEY structure with a REAL proof derived "
+          "over the TESTNET transcript alpha -- beta = to_hash(pi), commit "
+          "sha256(beta) re-signed under mainnet scope, MAINNET transcript hash "
+          "retained, so e-v-e-r-y non-ECVRF gate (transcript hash, commit "
+          "binding, signature scope, roster, ordering) passes -- is REJECTED "
+          "at the REAL ECVRF gate alone; the test no longer confounds key and "
+          "alpha",
+          not _neg4_set(neg4_rows, neg4_th)
+          and neg4_th == th_main
+          and all(r[2] == neg4_th for r in neg4_rows)
+          and all(sha256(r[1]) == neg4_commits[r[0]][0] for r in neg4_rows)
+          and all(_neg4_verify(r[0], neg4_commits[r[0]][0],
+                               neg4_commits[r[0]][1]) for r in neg4_rows)
+          and all(neg4_commits[nid][2] == _main_vp[nid][1]
+                  for nid in commit_auth)
           and _main_sig_ok and _main_beta_binds)
     check("V4  cross-network replay detected (byte-level): a testnet "
           "contribution does not match the mainnet transcript",
@@ -1149,8 +1242,6 @@ def run():
     slot_s_proofs = {nid: _ecvrf_prove(vrf_seeds[nid],
                                        transcript(net_id, slot, 1, anchor))
                      for nid in commit_auth}
-    ns_bad = [(nid, beta, th, slot_s_proofs[nid])
-              for nid, beta, th, _pi in next_rows]
     check("V5  REAL slot-(s+1) ECVRF proofs differ from REAL slot-s proofs "
           "(the isolation is non-vacuous): pi_{s+1} != pi_s for every "
           "contributor because the slot enters the transcript alpha",
@@ -1167,12 +1258,32 @@ def run():
     _next_beta_binds = all(sha256(row[1]) == next_commits[nid][0]
                            for row, nid in zip(next_rows,
                                                sorted(commit_auth)))
-    check("V5  cross-slot REAL proof-context binding (isolated): the SAME "
-          "slot-(s+1)-valid rows with ONLY the proof swapped for the REAL "
-          "slot-s derivation are REJECTED by the REAL ECVRF gate -- valid "
-          "signature, valid commit, valid transcript, correct roster, "
-          "wrong-slot proof fails at the proof gate, not the signature gate",
-          not _s_set(ns_bad, th_next_slot)
+    # round-29 fpkES: the OLD negative swapped ONLY the proof but carried the
+    # slot-(s+1) beta -- so its rejection was inevitable from the beta-vs-proof
+    # MISMATCH, never isolating the alpha. The isolated negative generates a
+    # REAL slot-s proof under the SAME testnet key, re-derives beta = to_hash
+    # and RE-SIGNS the commit sha256(beta) for the slot-(s+1) OUTER scope, and
+    # RETAINS the slot-(s+1) transcript hash -- so commit binding, signature
+    # scope, roster, transcript hash and ordering ALL pass and ONLY the real
+    # ECVRF_verify(PK_testnet, T_{s+1}, pi_s) alpha check rejects.
+    neg5_rows, neg5_commits, neg5_alpha, neg5_th = _wrong_alpha_context(
+        net_id, transcript(net_id, slot, 1, anchor), net_id, slot + 1)
+    _neg5_verify, _neg5_accept, _neg5_set = make_verifier(
+        net_id, slot + 1, {}, neg5_commits, real_vrf=True,
+        alpha_string=neg5_alpha)
+    check("V5  cross-slot ALPHA-ISOLATED negative control (round-29 fpkES): "
+          "the same testnet key with a REAL slot-s proof -- beta = to_hash "
+          "re-derived, commit sha256(beta) re-signed for the slot-(s+1) OUTER "
+          "scope, slot-(s+1) TRANSCRIPT HASH retained, so every non-ECVRF gate "
+          "(transcript hash, commit binding, signature scope, roster, "
+          "ordering) passes -- is REJECTED at the REAL ECVRF gate alone; the "
+          "old beta-swap tautology is gone",
+          not _neg5_set(neg5_rows, neg5_th)
+          and neg5_th == th_next_slot
+          and all(r[2] == neg5_th for r in neg5_rows)
+          and all(sha256(r[1]) == neg5_commits[r[0]][0] for r in neg5_rows)
+          and all(_neg5_verify(r[0], neg5_commits[r[0]][0],
+                               neg5_commits[r[0]][1]) for r in neg5_rows)
           and _next_sig_ok and _next_beta_binds)
     check("V5  cross-slot replay detected (byte-level)",
           th_next_slot.hex() == t["V5_transcript_hash_cross_slot"]
