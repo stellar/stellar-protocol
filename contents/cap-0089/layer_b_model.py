@@ -1107,33 +1107,95 @@ def _avss_proof_from_dealers(share_records, nonce_records, subset, epoch,
 
 
 def _avss_valid_signers(share_records, nonce_records, members, epoch):
-    """The roster members that hold BOTH a VALID aggregate share h(i) (every
-    qualified dealer's envelope opens AND Feldman-ties to the public point) AND
-    a VALID aggregate nonce n_i = g_v(i) -- the exact per-member signer
-    material the two-round assembly consumes. A member whose OWN envelope is
-    garbage under even ONE qualified dealer is absent from the list
-    (fail-closed `_avss_member_share` / `_avss_member_nonce`), never a source
-    of a half-valid partial."""
+    """PRIMITIVE-PATH mirror: the roster members that hold BOTH a VALID
+    aggregate share h(i) (every qualified dealer's envelope opens -- with the
+    member's OWN private key -- AND Feldman-ties to the public point) AND a
+    VALID aggregate nonce n_i = g_v(i). This is the exact per-member signer
+    material the two-round assembly consumes, and ONLY the member itself can
+    know it. It is NOT part of the close gate below (round-30 fwY5j): a node
+    cannot open everyone's ciphertext, so the gate must decide on the members'
+    authenticated certificates instead."""
     return [i for i in members
             if _avss_member_share(share_records, i, epoch) is not None
             and _avss_member_nonce(nonce_records, i, epoch) is not None]
 
 
-def _avss_distribution_closes(share_records, nonce_records, epoch, honest_members):
-    """ROUND-29 fos67/foqqv/foqrG: the AVSS DISTRIBUTION-CLOSE gate. The
+def _avss_material_certificate(i: int, epoch, cl_hash: bytes) -> bytes:
+    """Member i's AUTHENTICATED material-OK certificate (round-30 fwY5j): a
+    deterministic Schnorr signature under the member's CONFIRM identity key
+    `k_i` (whose public image K_i is epoch-committed) over the statement
+    ("AVSSMaterialOK", epoch_hash, cl_hash, member_index i). A member issues
+    it EXACTLY when it has successfully opened ITS OWN envelopes under every
+    qualified dealer (with its own private `e_i`) and Feldman-verified both
+    its aggregate share and its own nonce -- a SELF-RECOVERY assertion that
+    only the member can make truthfully. The certificate is PUBLICLY
+    VERIFIABLE (any node checks the signature under the committed K_i and the
+    exact index), and the label is distinct from the CONFIRM-vote channel so
+    the two transactions can never be cross-replayed."""
+    k_i = _validator_confirm_sk(GROUP_SK, i)
+    r = _spf_scalar(sha256(b"AVSSMatNonce" + k_i.to_bytes(32, "big")
+                           + epoch.hash + cl_hash + u32(i))) % _GRP_Q
+    R = pow(_GRP_G, r, _GRP_P)
+    R_bytes = R.to_bytes(32, "big")
+    K = pow(_GRP_G, k_i, _GRP_P)
+    c = int.from_bytes(sha256(b"AVSSMatChal" + epoch.hash + cl_hash
+                              + u32(i) + R_bytes + K.to_bytes(32, "big")
+                              + b"cap-0089-v1"), "big") % _GRP_Q
+    s = (r + c * k_i) % _GRP_Q
+    return R_bytes + s.to_bytes(32, "big")
+
+
+def _avss_material_cert_verify(K_i_pub: bytes, i: int, epoch, cl_hash: bytes,
+                               cert: bytes) -> bool:
+    """PURE public verification of one material-OK certificate: fixed 64-byte
+    Schnorr shape, subgroup elements, the challenge bound to (epoch, C_s,
+    EXACT member index i, K_i). Uses ONLY public arithmetic; never decrypts
+    and never consults an honesty set. Fail-closed on every anomaly."""
+    if K_i_pub is None or len(K_i_pub) != 32 or cert is None or len(cert) != 64:
+        return False
+    K = int.from_bytes(K_i_pub, "big")
+    if not (0 < K < _GRP_P):
+        return False
+    R_bytes, s_bytes = cert[:32], cert[32:]
+    R = int.from_bytes(R_bytes, "big")
+    s = int.from_bytes(s_bytes, "big")
+    if not (0 < R < _GRP_P) or not (0 <= s < _GRP_Q):
+        return False
+    c = int.from_bytes(sha256(b"AVSSMatChal" + epoch.hash + cl_hash
+                              + u32(i) + R_bytes + K_i_pub + b"cap-0089-v1"),
+                       "big") % _GRP_Q
+    return pow(_GRP_G, s, _GRP_P) == (R * pow(K, c, _GRP_P)) % _GRP_P
+
+
+def _avss_distribution_closes(cert_records, epoch, cl_hash, roster_size, f):
+    """ROUND-30 fwY5j: the PUBLIC AVSS DISTRIBUTION-CLOSE gate. The
     distribution round CLOSES -- and only then may the epoch be committed and
-    activated -- iff at least `epoch.threshold` HONEST roster members each hold
-    valid share AND nonce material (`_avss_valid_signers`). This is a
-    pre-commit, pre-activation consensus act: a qualified dealer that garpes
-    envelopes to EVERY honest recipient drives the honest-valid count below t,
-    the distribution FAILS TO CLOSE, and the epoch is deterministically rolled
-    BEFORE any externalized close exists -- so no post-commit stall is even
-    reachable. It also turns the CAP's `|Q*| <= n-2f` hazard (fos67: "up to f
-    exclusions" of honest dealers leaves |Q*| as low as n-2f) into a
-    REQUIREMENT: the honest-valid floor must be >= t at close time, independent
-    of which dealer records the adversary let through."""
-    return len(_avss_valid_signers(share_records, nonce_records, honest_members,
-                                   epoch)) >= epoch.threshold
+    activated -- iff at least `epoch.threshold + f` DISTINCT, EXACTLY-INDEXED
+    roster members hold VALID material-OK certificates
+    (`_avss_material_cert_verify` under the epoch-committed K_i). It decides
+    on NO private ciphertext, NO decryption report and NO externally supplied
+    honesty set (the round-29 gate's `honest_members` oracle and
+    `_avss_valid_signers` opening-everyone's-envelope path are GONE from the
+    decision): the certificate set is the ONLY input, and every certificate
+    verifies PURELY PUBLICLY.
+    Soundness is the adversarial bound f: an HONEST member issues its
+    certificate iff ITS OWN self-recovery succeeded (it cannot -- will not --
+    attest garbage it failed to decrypt), and Byzantine members can pad the
+    count with at most f FALSE certificates. Therefore `certified >= t + f`
+    forces `honest_material_holders >^= certified - f >= t`: the close is
+    decided exactly when >= t HONEST holders' self-recoveries are
+    CONSENSUS-CERTIFIED in public. This is the SAME `q >= t + f` flat
+    activation lattice as round-29 foqq9 -- the certified-roster COUNT is the
+    `q` the graph must reach, and for the model's (10, 7, 3) roster that count
+    is the whole roster (10)."""
+    def _ok(i):
+        if not (1 <= i <= roster_size):
+            return False
+        Ki = _validator_confirm_pub(GROUP_SK, i)
+        return _avss_material_cert_verify(Ki, i, epoch, cl_hash,
+                                          cert_records.get(i))
+    certified = [i for i in range(1, roster_size + 1) if _ok(i)]
+    return len(certified) >= epoch.threshold + f
 
 
 def group_pub_from_seed(seed: bytes, threshold: int, n: int) -> bytes:
@@ -2687,14 +2749,21 @@ def nomination_fallback_priority(epoch_hash: bytes, slot: int,
     # 3930443124 requires an exact byte encoding / hash-to-priority formula, not
     # a vague "canonical rotation" and not `None`.
     #
-    # It is a PURE FUNCTION of canonical, committed state -- epoch_hash, the
-    # target slot, the protected close_commitment C_s, and the canonical value
-    # hash V_s -- domain-separated by a dedicated label. It is deliberately NOT
-    # hidden entropy and NOT a second root: it is the single, deterministic way
-    # every implementation orders the next round's candidates during UNKNOWN, so
-    # there is exactly one priority in every case (threads 3929943621 /
-    # 3930443124). It never introduces a caller-chosen value and never invents a
-    # second consensus/nomination authority.
+    # ROUND-30 fwY5z: the fallback is indexed on the CLOSED SOURCE close, never
+    # on the value being nominated. `slot` is the TARGET slot s being nominated
+    # (s == source_slot + 1); `close_commitment` is the SOURCE close C_{s-1};
+    # `canonical_value_hash` is the SOURCE close's canonical value hash. The
+    # target's own value C_s does NOT EXIST at nomination time and is not a
+    # parameter -- the function has no input that could reference it. It is a
+    # PURE FUNCTION of canonical, committed state -- epoch_hash, the target slot
+    # NUMBER (bound only as a domain separator, `struct.pack(">Q", slot)`), the
+    # protected source close C_{s-1}, and the source value hash -- separated by
+    # a dedicated label. It is deliberately NOT hidden entropy and NOT a second
+    # root: it is the single, deterministic way every implementation orders the
+    # next round's candidates during UNKNOWN, so there is exactly one priority
+    # in every case (threads 3929943621 / 3930443124). It never introduces a
+    # caller-chosen value and never invents a second consensus/nomination
+    # authority.
     return sha256(b"NOMINATION-Fallback" + hash32(network_id) + hash32(epoch_hash)
                   + struct.pack(">Q", slot) + hash32(close_commitment)
                   + hash32(canonical_value_hash))
@@ -2847,32 +2916,39 @@ def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
                         canonical_value_hash: bytes,
                         slot_finalized: bool, release_registry: ReleaseRegistry,
                         network_id: bytes = NETWORK) -> bytes:
-    # The ONE-way, OBSERVER-INDEPENDENT, NEVER-None nomination priority (threads
+    # ROUND-30 fwY5s/fwY5z: SOURCE-close -> TARGET-slot convention. The
+    # ONE-way, OBSERVER-INDEPENDENT, NEVER-None nomination priority (threads
     # 3929943621 / 3930443124 / round-18 3935393898 / round-20 3936012529 /
     # round-21 3936363900 / round-22 3936620399 / 3936620265). Selection is
     # NEVER a function of locally-DELIVERED bytes and NEVER of whether THIS
     # caller happens to hold the root at the call instant -- that would give two
     # priorities for one slot (the pulse for a node that already has P_s, the
-    # fallback for a node that does not). The decision is a PURE function of
-    # CONSENSUS FACTS, identical for every honest node:
-    #   * `slot_finalized`    -- the close was SCP-finalized / externalized
-    #     (committed consensus state, same for every node);
-    #   * `release_registry`  -- the CONSENSUS-CARRIED release registry: the
-    #     close's canonical root R_s is released iff the EXTERNALIZED VALUE /
-    #     frozen LedgerHeader.ext carried it (`release_registry.released(
-    #     close_commitment)`). The registry is committed state -- it is NEVER
-    #     derived from whether the proof bytes arrived at THIS node, and the
-    #     caller cannot assert a bare boolean (round-22 3936620399).
+    # fallback for a node that does not). `slot` is the TARGET slot s being
+    # NOMINATED; `close_commitment` and `canonical_value_hash` are the ALREADY-
+    # CLOSED SOURCE (predecessor) inputs C_{s-1} / H(V_{s-1}) -- the target
+    # close C_s does not exist yet and is NEVER an input to either branch. The
+    # decision is a PURE function of CONSENSUS FACTS, identical for every
+    # honest node:
+    #   * `slot_finalized`    -- the SOURCE close was SCP-finalized /
+    #     externalized (committed consensus state, same for every node);
+    #   * `release_registry`  -- the CONSENSUS-CARRIED RELEASE REGISTRY OF THE
+    #     SOURCE CLOSE: the source's canonical root R_{s-1} is released iff the
+    #     SOURCE'S OWN EXTERNALIZED VALUE / frozen LedgerHeader.ext carried it
+    #     (`release_registry.released(close_commitment)`). The registry is
+    #     committed state -- it is NEVER derived from whether the proof bytes
+    #     arrived at THIS node, and the caller cannot assert a bare boolean
+    #     (round-22 3936620399).
     # `root` is therefore only the VALUE to derive the pulse from -- when the
-    # registry says the root is released the canonical R_s is deterministically
-    # the same for every node and must be supplied (we assert it); it is NEVER a
-    # decision input. There is ONE rule for the entire slot: the hidden-entropy
-    # pulse `KDF(R_s, NOMINATION)` when `slot_finalized` and the registry marks
-    # the root released and NOMINATION is enabled by the committed
-    # `event_mapping`; otherwise the single closed-form fallback -- in every
-    # case a concrete priority, NEVER None (thread 3936012529), so nodes cannot
-    # observe two values for one slot no matter how asynchronously the proof is
-    # delivered.
+    # registry says the source root is released the canonical R_{s-1} is
+    # deterministically the same for every node and must be supplied (we assert
+    # it); it is NEVER a decision input. There is ONE rule for the entire
+    # target slot: the hidden-entropy pulse `KDF(R_{s-1}, NOMINATION)` when
+    # `slot_finalized` and the registry marks the SOURCE root released and
+    # NOMINATION is enabled by the committed `event_mapping`; otherwise the
+    # single closed-form fallback (a pure function of (epoch, target slot
+    # number, C_{s-1}, H(V_{s-1}))) -- in every case a concrete priority, NEVER
+    # None (thread 3936012529), so nodes cannot observe two values for one slot
+    # no matter how asynchronously the proof is delivered.
     root_released = (release_registry is not None
                      and release_registry.released(close_commitment))
     if slot_finalized and root_released:
@@ -4802,6 +4878,51 @@ def main():
     no_auth = ReleaseRegistry(
         encode_release_carrier({cl_a.hash: root_a}), epoch=epoch,
         authenticator=None)
+    # --- Round-30 fwY5s/fwY5z: the source-close -> target-slot relationship
+    # --- is EXPLICIT, and the branch is one proof-independent rule. ----------
+    # Nomination for TARGET slot s consumes ONLY the already-closed SOURCE
+    # close s-1: its canonical root (if the SOURCE close's OWN consensus-
+    # carried release registry marks it released) else the closed-form fallback
+    # whose inputs are (epoch, TARGET slot NUMBER s, the SOURCE commitment
+    # C_{s-1}, the SOURCE canonical value hash). The target's own value C_s
+    # does NOT EXIST yet and is NOT a parameter of either branch -- the
+    # fallback signature has no target-value input (fwY5z), so a proposer can
+    # never pick between a pulse-priority branch and an absent branch for its
+    # own nominee: the branch is a pure function of the closed source's
+    # committed registry, exactly ONE balloted value per slot, with no
+    # presence/absence carrier alternative to select (fwY5s).
+    _fb_next = nomination_fallback_priority(epoch.hash, cl_a.slot + 1,
+                                            cl_a.hash,
+                                            canonical_value_hash(cl_a.value_bytes))
+    _fb_later = nomination_fallback_priority(epoch.hash, cl_a.slot + 2,
+                                             cl_a.hash,
+                                             canonical_value_hash(cl_a.value_bytes))
+    check("Round-30 fwY5s/fwY5z: the target slot's nomination derives ONLY "
+          "from the CLOSED SOURCE close (s-1) -- the pulse branch uses the "
+          "SOURCE root KDF(R_{s-1}, NOMINATION) read from the SOURCE close's "
+          "own consensus-carried registry (same pulse for every node, whether "
+          "or not P_{s-1} is currently on the wire), and the fallback branch "
+          "takes ONLY (epoch, target slot number, C_{s-1}, H(value_{s-1})): "
+          "the target's own value C_s does not exist yet and is NOT an input, "
+          "so there is no 'pulse if I hold the proof / absent-branch if I do "
+          "not' proposer selection (fwY5s: one balloted value per slot, branch "
+          "fixed by the closed source registry) and no fallback indexed on the "
+          "value being nominated (fwY5z: both branches derive from s-1; the "
+          "target slot NUMBER enters only as a domain separator -- the "
+          "priorities for source+1 and source+2 differ while the source inputs "
+          "are byte-identical)",
+          nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot + 1,
+                              cl_a.hash,
+                              canonical_value_hash(cl_a.value_bytes),
+                              True, rel_reg) == pulse_nom
+          and nomination_priority(None, full_nom_map, epoch.hash,
+                                  cl_a.slot + 1, cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, unrel_reg) == _fb_next
+          and _fb_next == nomination_fallback_priority(
+              epoch.hash, cl_a.slot + 1, cl_a.hash,
+              canonical_value_hash(cl_a.value_bytes))
+          and _fb_later != _fb_next)
     check("ReleaseRegistry admits ONLY carrier-decoded entries tied to "
           "(epoch, C_s) (round-24 3939264494): a registry cannot be conjured "
           "from a bare caller-supplied dict -- it is built by DECODING the "
@@ -6082,8 +6203,9 @@ def main():
           and _public_aggregate_comms(
               dict((i, av_r1_nonce[i]) for i in range(1, av_t + 2))) == R_ref)
 
-    # ---------- ROUND-29 fos67/foqqv/foqrG: the DISTRIBUTION-CLOSE gate. -----
-    # The reviewer's worst-case foqrG premise is now BUILT and survived: a
+    # ---------- ROUND-30 fwY5j: the DISTRIBUTION-CLOSE gate is now a PUBLIC
+    # ---------- authenticated-certificate count (the honesty oracle is gone).
+    # Round-29 built the reviewer's worst-case foqrG premise SURVIVED: a
     # BYZANTINE DEALER (the roster member holding its own E_d identity key,
     # `_avss_recv_sk(d)`) publishes a record whose every entry is PUBLICLY
     # WELL-FORMED (per-entry NIZK verifies over the exact committed bytes; the
@@ -6100,17 +6222,33 @@ def main():
     # would machine honest members 1..7 a None aggregate share: honest valid
     # signers 0, even ALL-ROSTER valid signers = f = 3 < t, and no proof can be
     # assembled (an honest member needs its OWN valid aggregate h(i) AND n_i).
-    # The round-29 reply is the DISTRIBUTION-CLOSE GATE, a PRE-COMMIT,
-    # pre-activation consensus act: the distribution CLOSES, and the epoch is
-    # committed+activated, ONLY if >= t HONEST members hold valid share+nonce
-    # material. The garbage-everyone record makes the close FAIL (`honest valid
-    # 0 < t`) -> the epoch never commits and no externalized close ever exists;
-    # "a qualified dealer stalling a COMMITTED close" is unreachable by
-    # construction. Honest-binding: with the rosters' honest set = t exactly
-    # (av_honest == av_t == 7 here), even a SINGLE honest recipient's garble
-    # (the one-recipient case above) drives the honest-valid count to t-1 and
-    # WITHHOLDS the close -- the gate's floor is the honest-dealer bound
-    # guaranteed by the AVSS machinery (`_avss_distribution_closes` on q_a).
+    # The round-29 reply was a gate keyed on `honest_members`, an EXTERNALLY
+    # SUPPLIED honesty set, and on `_avss_valid_signers`, which opens EVERY
+    # recipient's private ciphertext -- neither is implementable by a protocol
+    # participant (a node cannot know the Byzantine set, and cannot decrypt
+    # anyone's envelope but its own). Round-30 fwY5j replaces the whole
+    # decision with a PUBLIC, consensus-verifiable CERTIFICATE count: each
+    # roster member, upon successfully opening ITS OWN envelopes (its private
+    # e_i) and Feldman-verifying its aggregate share and its own nonce, issues
+    # an AUTHENTICATED material-OK certificate -- a Schnorr signature under its
+    # epoch-committed identity key K_i over (epoch, C_s, exact index) -- and
+    # the gate closes iff >= `threshold + f` DISTINCT exactly-indexed
+    # certificates verify PURELY PUBLICLY (`_avss_material_cert_verify`,
+    # public arithmetic only). Soundness is the adversarial bound: HONEST
+    # members certify iff their own recovery succeeded (they cannot attest
+    # garbage they failed to decrypt), Byzantine can pad at most f FALSE
+    # certificates, so certified >= t + f forces honest holders >=
+    # (t + f) - f = t -- the SAME `q >= t + f` flat activation lattice as
+    # foqq9, with the certified-roster COUNT serving as the `q` (== n == 10
+    # here). The garbage-everyone record FAILS the gate (certified = the
+    # Byzantine holders only = f < t + f) -> the epoch never commits and no
+    # externalized close ever exists; "a qualified dealer stalling a COMMITTED
+    # close" is unreachable by construction. The gate stays HONEST-BINDING
+    # through the PUBLIC lattice: with the roster (10, 7, 3) the latch needs
+    # ALL ten member certificates, so even a SINGLE honest recipient's garble
+    # (the one-recipient case above) leaves one certificate permanently
+    # unmintable (only that member holds its own K_i) -> 9 < 10 WITHHOLDS the
+    # close -- no honesty oracle, no decryption, no second decision input.
     _av_rogue_enc = dict(base_honest["enc"])
     _av_rogue_proofs = dict(base_honest["proofs"])
     for __j in range(1, av_honest + 1):
@@ -6123,44 +6261,104 @@ def main():
     _av_rogue_shares = [_av_rogue if rec is base_honest else rec
                         for rec in q_a]
     _av_honest_set = list(range(1, av_honest + 1))
-    check("AVSS DISTRIBUTION-CLOSE gate (round-29 fos67/foqqv/foqrG): the "
-          "reviewer's worst case -- a QUALIFIED Byzantine dealer (own identity "
-          "key, well-formed NIZKs over exact bytes, SAME committed Cks, hence "
-          "SAME valid dealer signature, `_avss_qualification` keeps it in Q*) "
-          "whose envelopes open to GARBAGE scalars for EVERY honest recipient "
+    _truth_q = _avss_valid_signers(q_a, nonce_records,
+                                   list(range(1, av_n + 1)), av_epoch)
+    _certs_q = {i: _avss_material_certificate(i, av_epoch, av_cl_hash)
+                for i in _truth_q}
+    _truth_rogue = _avss_valid_signers(
+        _av_rogue_shares, nonce_records, list(range(1, av_n + 1)), av_epoch)
+    _certs_rogue = {i: _avss_material_certificate(i, av_epoch, av_cl_hash)
+                    for i in _truth_rogue}
+    _truth_gar = _avss_valid_signers(
+        _av_garbed_shares, nonce_records, list(range(1, av_n + 1)), av_epoch)
+    _certs_gar = {i: _avss_material_certificate(i, av_epoch, av_cl_hash)
+                  for i in _truth_gar}
+    _K_pub = {i: _validator_confirm_pub(GROUP_SK, i)
+              for i in range(1, av_n + 1)}
+    _cert_8 = _avss_material_certificate(8, av_epoch, av_cl_hash)
+    _confirm_1 = _confirm_vote(_validator_confirm_sk(GROUP_SK, 1),
+                               av_epoch.hash, av_cl_hash)
+    _certs_q_extra = dict(_certs_q)
+    _certs_q_extra[99] = b"x" * 64
+    check("AVSS DISTRIBUTION-CLOSE gate is a PUBLIC authenticated-"
+          "certificate count (round-30 fwY5j): the reviewer's worst case -- a "
+          "QUALIFIED Byzantine dealer (own identity key, well-formed NIZKs "
+          "over exact bytes, SAME committed Cks, hence SAME valid dealer "
+          "signature, `_avss_qualification` keeps it in Q*) whose envelopes "
+          "open to GARBAGE scalars for EVERY honest recipient "
           "(`_avss_reencrypt_wrong` per honest j, m_garbage scalar) -- makes "
-          "every honest member's aggregate share fail-closed: `_avss_valid_"
-          "signers` over the honest roster = 0, even over the WHOLE roster = "
-          "f < t, `_avss_proof_from_dealers` -> None. WITHOUT a pre-commit "
-          "gate that record would strand a committed close. The round-29 "
-          "answer is the DISTRIBUTION-CLOSE gate: the distribution CLOSES "
-          "(the epoch is committed + activated, and only then can a close be "
-          "externalized) IFF >= t HONEST members hold VALID share+nonce "
-          "material (`_avss_distribution_closes`); the garbage-everyone "
-          "qualified record FAILS the gate (0/7 honest valid) -> the epoch is "
-          "rolled BEFORE any close exists -- no post-externalization stall is "
-          "reachable. The gate is also HONEST-BINDING: with the honest set == "
-          "t exactly (av_honest == av_t), even the ONE-honest-recipient garble "
-          "above drops the honest-valid count to t-1 and WITHHOLDS the close "
-          "(6 < 7) -- closing requires the AVSS honest-dealer bound, never the "
-          "adversary's leftovers",
+          "every honest member's SELF-recovery fail (`_avss_valid_signers` "
+          "over the honest roster = [], the only whole-roster material "
+          "holders are the f = 3 Byzantine members, `_avss_proof_from_dealers` "
+          "-> None). The gate now closes IFF >= threshold + f DISTINCT "
+          "material-OK certificates (Schnorr signatures under the epoch-"
+          "committed K_i, issued only after the member's OWN envelope+nonce "
+          "Feldman recovery) verify PURELY PUBLICLY -- no decryption, no "
+          "honesty set: `_avss_distribution_closes` takes ONLY the "
+          "certificate records, the epoch, the close hash, the roster size and "
+          "the adversarial bound f, and `_avss_material_cert_verify` checks "
+          "nothing but public arithmetic. The all-hold honest course "
+          "certifies n = 10 >= t + f and CLOSES; the qualified-garbage-"
+          "everyone record leaves certified = the Byzantine members only (3 "
+          "< 10) and FAILS the gate -> the epoch is rolled BEFORE any close "
+          "exists -- no post-externalization stall is reachable. Membership is "
+          "exact: an entry for index 99 (beyond the roster) is ignored, and a "
+          "root-misindexed or cross-channel certificate is rejected",
           _avss_qualification(_av_rogue_shares, av_epoch, av_n) == _av_rogue_shares
           and _avss_valid_signers(_av_rogue_shares, nonce_records,
                                   _av_honest_set, av_epoch) == []
-          and len(_avss_valid_signers(_av_rogue_shares, nonce_records,
-                                     list(range(1, av_n + 1)), av_epoch)) == av_f
+          and len(_truth_rogue) == av_f
           and _avss_proof_from_dealers(_av_rogue_shares, nonce_records,
                                        list(range(1, av_n + 1)),
                                        av_epoch, av_cl2_hash,
                                        av_r1_nonce) is None
-          and not _avss_distribution_closes(_av_rogue_shares, nonce_records,
-                                            av_epoch, _av_honest_set)
-          and _avss_distribution_closes(q_a, nonce_records, av_epoch,
-                                        _av_honest_set)
-          and not _avss_distribution_closes(_av_garbed_shares, nonce_records,
-                                            av_epoch, _av_honest_set)
-          and _avss_valid_signers(q_a, nonce_records, _av_honest_set,
-                                  av_epoch) == _av_honest_set)
+          and _avss_distribution_closes(_certs_q, av_epoch, av_cl_hash,
+                                        av_n, av_f)
+          and _avss_distribution_closes(_certs_rogue, av_epoch, av_cl_hash,
+                                        av_n, av_f) is False
+          and _avss_distribution_closes(_certs_q_extra, av_epoch, av_cl_hash,
+                                        av_n, av_f)
+          and _avss_material_cert_verify(_K_pub[8], 8, av_epoch, av_cl_hash,
+                                         _cert_8)
+          and not _avss_material_cert_verify(_K_pub[7], 7, av_epoch, av_cl_hash,
+                                             _cert_8)
+          and not _avss_material_cert_verify(_K_pub[1], 1, av_epoch, av_cl_hash,
+                                             _confirm_1)
+          and not _avss_material_cert_verify(_K_pub[1], 1, av_epoch, av_cl_hash,
+                                             b"x" * 64))
+    check("Certified >= t + f forces >= t HONEST material holders -- the "
+          "`q >= t + f` close lattice (round-30 fwY5j): the gate's threshold "
+          "is `threshold + f` (10 for the roster), NOT `threshold` (7) -- a "
+          "plain t-certificate count would let the adversary's f false "
+          "certificates pad a garbage epoch across the line; counting t + f "
+          "with HONEST certs truthful-by-construction and Byzantine false "
+          "pads bounded by f yields honest-holders >= certified - f >= t "
+          "exactly when the gate closes. A 7-certificate set on the honest "
+          "records does NOT close (7 < 10); the full 10-certificate honest "
+          "set DOES (10 >= 10) and its certified-honest floor is >= t",
+          not _avss_distribution_closes(
+              dict((i, _certs_q[i]) for i in range(1, av_t + 1)),
+              av_epoch, av_cl_hash, av_n, av_f)
+          and _avss_distribution_closes(_certs_q, av_epoch, av_cl_hash,
+                                        av_n, av_f)
+          and len(set(_truth_q) & set(_certs_q)) >= av_t)
+    check("The PUBLIC lattice keeps the gate HONEST-BINDING with NO honesty "
+          "oracle (round-30 fwY5j): with the roster (10, 7, 3) the latch "
+          "needs ALL ten distinct member certificates, so the ONE-honest-"
+          "recipient garble (member 7's aggregate share fails closed) leaves "
+          "exactly that member's certificate unmintable FOREVER -- the "
+          "garbled member's own private k_7 is the only signing key for its "
+          "K_7, so a Byzantine substitution (member 8's signature re-asserted "
+          "at index 7) is REJECTED by the exact-index challenge binding. "
+          "Certified = the 9 genuine holders = 9 < 10 WITHHOLDS the close -- "
+          "the round-29 honest-binding survival now flows from the PUBLIC "
+          "certification lattice, never from an externally supplied honest "
+          "set and never from opening anyone's ciphertext",
+          len(_truth_gar) == av_n - 1
+          and not _avss_material_cert_verify(_K_pub[7], 7, av_epoch, av_cl_hash,
+                                             _cert_8)
+          and _avss_distribution_closes(_certs_gar, av_epoch, av_cl_hash,
+                                        av_n, av_f) is False)
 
     # ---------- ROUND-29 foqqj: valid-but-wrong-R is REJECTED once the verifier
     # ---------- binds the round-1 aggregate nonce. ------------------------------
