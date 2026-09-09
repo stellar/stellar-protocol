@@ -138,15 +138,16 @@ jobs:
               ? `Thanks for linking an existing discussion for this CAP — I have **locked this PR** so the conversation stays in that discussion, but left it as-is otherwise. The full process, including how CAP statuses work, is documented in the [CAP Contribution Process](${readmeUrl}#contribution-process).`
               : `New CAP ideas start as a **discussion**, not a pull request, so I have **locked this PR and marked it as a draft** for now. The full process, including how CAP statuses work, is documented in the [CAP Contribution Process](${readmeUrl}#contribution-process).`;
 
-            // The discussion step is dropped for a CAP that already links one, and
-            // the merge step only asks the author to mark the PR ready for review
-            // when this run actually converted it to a draft.
+            // The discussion step stays in the list for a CAP that already links
+            // one, struck through and ticked off, so the numbered steps still read
+            // as the whole process. The merge step only asks the author to mark the
+            // PR ready for review when this run actually converted it to a draft.
+            const startDiscussion = `💬 **Start a discussion.** Per [Pre-CAP (Initial Discussion)](${readmeUrl}#pre-cap-initial-discussion), discussion for new ideas happens on the [stellar-dev mailing list](${mailingListUrl}) or [GitHub Discussions](${discussionsUrl}). Please introduce your idea there so people in the Stellar ecosystem can collaborate on it.`;
+
             const steps = [];
-            if (!hasDiscussion) {
-              steps.push(
-                `💬 **Start a discussion.** Per [Pre-CAP (Initial Discussion)](${readmeUrl}#pre-cap-initial-discussion), discussion for new ideas happens on the [stellar-dev mailing list](${mailingListUrl}) or [GitHub Discussions](${discussionsUrl}). Please introduce your idea there so people in the Stellar ecosystem can collaborate on it.`
-              );
-            }
+            steps.push(
+              hasDiscussion ? `~~${startDiscussion}~~ ✅` : startDiscussion
+            );
             steps.push(
               `🤝 **Collaborate.** Iterate on the proposal with the community in ${
                 hasDiscussion ? 'your discussion' : 'that discussion'
