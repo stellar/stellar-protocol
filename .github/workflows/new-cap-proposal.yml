@@ -60,10 +60,11 @@ jobs:
             }
 
             // An author who links an existing Stellar discussion in their CAP has
-            // already followed the discussion-first process, so their PR is left
-            // unlocked and not converted to a draft; the guidance comment is still
-            // posted, since the rest of it (how numbering works, what the statuses
-            // mean) applies either way. Match a link to a specific discussion (a
+            // already followed the discussion-first process, so their PR is not
+            // converted to a draft. It is still locked, to keep the conversation in
+            // the discussion, and the guidance comment is still posted, since the
+            // rest of it (how numbering works, what the statuses mean) applies
+            // either way. Match a link to a specific discussion (a
             // discussion number), in either of the forms real CAPs use, anywhere in
             // the file — most put it on the preamble's Discussion line, but some
             // reference it in the body instead.
@@ -97,7 +98,7 @@ jobs:
             const hasDiscussion = linked.length === newCapFiles.length;
             if (hasDiscussion) {
               core.info(
-                `Every new CAP links an existing discussion (${linked.join(', ')}); leaving the PR unlocked and not a draft.`
+                `Every new CAP links an existing discussion (${linked.join(', ')}); skipping the draft conversion.`
               );
             }
 
@@ -134,12 +135,12 @@ jobs:
               'https://groups.google.com/forum/#!forum/stellar-dev';
 
             const intro = hasDiscussion
-              ? `Thanks for linking an existing discussion for this CAP — I have left this PR open and as-is. The full process, including how CAP statuses work, is documented in the [CAP Contribution Process](${readmeUrl}#contribution-process).`
+              ? `Thanks for linking an existing discussion for this CAP — I have **locked this PR** so the conversation stays in that discussion, but left it as-is otherwise. The full process, including how CAP statuses work, is documented in the [CAP Contribution Process](${readmeUrl}#contribution-process).`
               : `New CAP ideas start as a **discussion**, not a pull request, so I have **locked this PR and marked it as a draft** for now. The full process, including how CAP statuses work, is documented in the [CAP Contribution Process](${readmeUrl}#contribution-process).`;
 
             // The discussion step is dropped for a CAP that already links one, and
-            // the merge step only mentions unlocking and marking ready for review
-            // when this run actually locked and drafted the PR.
+            // the merge step only asks the author to mark the PR ready for review
+            // when this run actually converted it to a draft.
             const steps = [];
             if (!hasDiscussion) {
               steps.push(
@@ -151,7 +152,7 @@ jobs:
                 hasDiscussion ? 'your discussion' : 'that discussion'
               } until it is ready to become a draft. See [Creating a CAP Draft](${readmeUrl}#creating-a-cap-draft).`,
               hasDiscussion
-                ? '✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, post in your discussion asking for it to be merged. A maintainer will then review it for formatting, **assign a CAP number**, and merge it.'
+                ? '✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, post in your discussion asking for it to be merged. A maintainer will then unlock this PR, review it for formatting, **assign a CAP number**, and merge it.'
                 : '✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, mark this PR ready for review and then post in your discussion asking for it to be merged. A maintainer will then unlock this PR, review it for formatting, **assign a CAP number**, and merge it.'
             );
 
@@ -182,31 +183,32 @@ jobs:
             // draft conversion fails, no marker is left behind and a rerun or
             // reopened event will retry the whole sequence instead of short-circuiting
             // on the marker with the PR left unlocked or not a draft.
-            if (!hasDiscussion) {
-              await github.rest.issues.lock({
-                owner,
-                repo,
-                issue_number: pull_number,
-                lock_reason: 'resolved',
-              });
+            await github.rest.issues.lock({
+              owner,
+              repo,
+              issue_number: pull_number,
+              lock_reason: 'resolved',
+            });
 
-              // Convert the PR to a draft so it is clearly not ready to merge while
-              // the idea is discussed. There is no REST endpoint for this, so use the
-              // GraphQL convertPullRequestToDraft mutation. Already-draft PRs are left
-              // as-is. node_id is the PR's GraphQL global ID from the event payload.
-              if (context.payload.pull_request.draft) {
-                core.info('PR is already a draft; skipping draft conversion.');
-              } else {
-                await github.graphql(
-                  `mutation($pullRequestId: ID!) {
-                    convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
-                      pullRequest { isDraft }
-                    }
-                  }`,
-                  { pullRequestId: context.payload.pull_request.node_id }
-                );
-                core.info(`Converted PR #${pull_number} to a draft.`);
-              }
+            // Convert the PR to a draft so it is clearly not ready to merge while
+            // the idea is discussed. A CAP that already links a discussion is left
+            // out of draft. There is no REST endpoint for this, so use the GraphQL
+            // convertPullRequestToDraft mutation. Already-draft PRs are left as-is.
+            // node_id is the PR's GraphQL global ID from the event payload.
+            if (hasDiscussion) {
+              core.info('CAP links an existing discussion; skipping draft conversion.');
+            } else if (context.payload.pull_request.draft) {
+              core.info('PR is already a draft; skipping draft conversion.');
+            } else {
+              await github.graphql(
+                `mutation($pullRequestId: ID!) {
+                  convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+                    pullRequest { isDraft }
+                  }
+                }`,
+                { pullRequestId: context.payload.pull_request.node_id }
+              );
+              core.info(`Converted PR #${pull_number} to a draft.`);
             }
 
             // Post the guidance comment last; its marker records that the sequence
@@ -218,8 +220,4 @@ jobs:
               body,
             });
 
-            core.info(
-              hasDiscussion
-                ? `Posted the CAP proposal guidance on PR #${pull_number}.`
-                : `Locked PR #${pull_number} and posted the CAP proposal guidance.`
-            );
+            core.info(`Locked PR #${pull_number} and posted the CAP proposal guidance.`);
