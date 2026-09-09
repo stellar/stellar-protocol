@@ -140,8 +140,7 @@ jobs:
 
             // The discussion step stays in the list for a CAP that already links
             // one, struck through and ticked off, so the numbered steps still read
-            // as the whole process. The merge step only asks the author to mark the
-            // PR ready for review when this run actually converted it to a draft.
+            // as the whole process.
             const startDiscussion = `💬 **Start a discussion.** Per [Pre-CAP (Initial Discussion)](${readmeUrl}#pre-cap-initial-discussion), discussion for new ideas happens on the [stellar-dev mailing list](${mailingListUrl}) or [GitHub Discussions](${discussionsUrl}). Please introduce your idea there so people in the Stellar ecosystem can collaborate on it.`;
 
             const steps = [];
@@ -152,9 +151,7 @@ jobs:
               `🤝 **Collaborate.** Iterate on the proposal with the community in ${
                 hasDiscussion ? 'your discussion' : 'that discussion'
               } until it is ready to become a draft. See [Creating a CAP Draft](${readmeUrl}#creating-a-cap-draft).`,
-              hasDiscussion
-                ? '✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, post in your discussion asking for it to be merged. A maintainer will then unlock this PR, review it for formatting, **assign a CAP number**, and merge it.'
-                : '✅ **Request a merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, mark this PR ready for review and then post in your discussion asking for it to be merged. A maintainer will then unlock this PR, review it for formatting, **assign a CAP number**, and merge it.'
+              '✅ **Mark it ready to merge.** Once the proposal has been collaborated on by other people in the Stellar ecosystem, mark this PR as ready for review. That is the indicator to maintainers that it is ready to be merged: a maintainer will then unlock this PR, review it for formatting, **assign a CAP number**, and merge it.'
             );
 
             const body = [
