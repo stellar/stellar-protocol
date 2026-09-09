@@ -6,8 +6,11 @@ name: 'New CAP Proposal'
 # process to the author.
 #
 # Uses pull_request_target so the GITHUB_TOKEN has write access even for PRs
-# opened from forks. No untrusted PR code is checked out or executed; the job
-# only inspects the list of changed files via the API.
+# opened from forks. It is critical that this job never checks out or executes
+# untrusted PR data: it inspects the list of changed files via the API and
+# fetches the added CAP's contents at the PR head only to regex it for a
+# discussion link. That content is never checked out, executed, or interpolated
+# anywhere.
 
 on:
   pull_request_target:
@@ -16,6 +19,9 @@ on:
       - 'core/**'
 
 permissions:
+  # read is required to fetch the added CAP's contents at the PR head;
+  # declaring permissions sets every omitted scope to none.
+  contents: read
   issues: write
   # write is required to convert the PR to a draft (the GraphQL
   # convertPullRequestToDraft mutation); listing changed files only needs read.
@@ -50,6 +56,46 @@ jobs:
 
             if (newCapFiles.length === 0) {
               core.info('No new files added under core/; nothing to do.');
+              return;
+            }
+
+            // An author who links an existing Stellar discussion in their CAP has
+            // already followed the discussion-first process, so leave their PR
+            // alone. Match a link to a specific discussion (a discussion number),
+            // in either of the forms real CAPs use, anywhere in the file — most
+            // put it on the preamble's Discussion line, but some reference it in
+            // the body instead.
+            const discussionLink =
+              /https:\/\/github\.com\/(?:orgs\/stellar|stellar\/stellar-protocol)\/discussions\/\d+/;
+
+            // Read at the PR head, since a new CAP does not exist at the base.
+            // This is untrusted PR content: it is only regexed below, never
+            // checked out, executed, or interpolated. If a fetch fails, treat the
+            // file as having no link so the guidance below still runs.
+            const headSha = context.payload.pull_request.head.sha;
+            const linked = [];
+            for (const f of newCapFiles) {
+              let content = '';
+              try {
+                const res = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: f.filename,
+                  ref: headSha,
+                });
+                content = Buffer.from(res.data.content, 'base64').toString('utf8');
+              } catch (e) {
+                core.info(`Could not read ${f.filename} at ${headSha}: ${e.message}`);
+              }
+              if (discussionLink.test(content)) {
+                linked.push(f.filename);
+              }
+            }
+
+            if (linked.length === newCapFiles.length) {
+              core.info(
+                `Every new CAP links an existing discussion (${linked.join(', ')}); nothing to do.`
+              );
               return;
             }
 
