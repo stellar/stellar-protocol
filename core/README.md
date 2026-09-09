@@ -291,11 +291,11 @@ The protocol meetings will be used to decide on next step:
 
 ### Awaiting Decision -> Final Comment Period (FCP)
 - A vote will take place among the CAP Core Team.
-  - A unanimous approval from the CAP Core Team will put the CAP in a `Accepted` status.
+  - A unanimous approval from the CAP Core Team will put the CAP in an `Accepted` status.
   - Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
     majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
     raises concerns).
-  - It can take upwards of 3 meetings before a disposition is reached.
+  - The team will reach a disposition within 3 meetings.
 
 ### FCP -> Accepted/Rejected
 - After a week of an Final Comment Period (FCP) where any major concerns that have not been
