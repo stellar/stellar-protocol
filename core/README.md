@@ -218,6 +218,7 @@ Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/
 
 [GitHub Discussions]: https://github.com/stellar/stellar-protocol/discussions
 
+- New ideas start as a discussion, not a pull request.
 - Make sure to gather feedback and alternative ideas — it's useful before putting together a
   formal draft!
 - Consider contacting experts in a particular area for feedback while you're hashing out the
@@ -229,12 +230,18 @@ repository. You should make sure to adhere to the following:
 
 - Make sure to place the draft in the `core/` folder.
 - Your CAP should be named `cap-TBD.md`
+- Do not self-assign, reference, or request a CAP number. Leave the CAP number in the preamble as
+  `To Be Assigned`. A CAP number will be assigned by a maintainer just before merge.
+- Do not add the proposal to the `core/README.md` as it increases the chance of conflicts at merge
+  time. The proposal will be added to the readme by a maintainer.
 - If your CAP requires images or other supporting files, they should be included in a sub-directory
   of the `contents` folder for that CAP, such as `contents/cap-TBD/`. Links
   should be relative, for example a link to an image from your CAP would be
   `../contents/cap-TBD/image.png`.
 
-Finally, submit a PR of your draft via your fork of this repository.
+Finally, submit a PR of your draft via your fork of this repository. Once the idea has been
+discussed and the proposal is ready for a maintainer to review and merge, mark the PR as ready for
+review and ask in your discussion for it to be merged.
 
 #### Additional Tips
 - Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
@@ -248,8 +255,8 @@ From there, the following process will happen.
 #### CAP gets merged
 If you properly followed the steps above, your PR will get merged.
 
-The CAP and associated files will get renamed based on the latest
-CAP draft number before merging.
+A maintainer will assign the CAP number, and the CAP and associated files will get renamed based on
+that number before merging.
 
 #### Assembling a working group
 
