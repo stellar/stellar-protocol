@@ -1,0 +1,6675 @@
+#!/usr/bin/env python3
+"""CAP-0089 Layer B executable state-machine model -- SINGLE-PULSE architecture
+(per tacticalnoot's zero-point passes: one close-input contract, a genuinely
+thresholded authority derived ONLY from the epoch, a PURE archival verifier, and
+predecessor-state epoch selection).
+
+One canonical Core close-lock commitment per closed ledger, derived from ONE
+native close-input contract `RandomnessCloseInputV1` that binds every semantic
+input able to interact with the random result and EXCLUDES provenance:
+
+    in_v1   = (network_id, epoch_hash, ledgerSeq, previousLedgerHash, H(value))
+    C_s     = H("CloseLock" || in_v1)            -- single commitment / domain
+    P_s     = ThresholdSignature(epoch, C_s)     -- UNIQUE proof (secret-bound)
+    R_s     = H("Root" || authority_key || epoch_hash || C_s || R || s)
+                                                 -- derived only after verify
+                                                 -- R = committed nonce (P_s[:32]),
+                                                 -- s = verified scalar (P_s[32:])
+    PRNG(s) / APPLY(s) / NOMINATION(s+1) = KDF(R_s, label)
+
+`C_s` IS the threshold-signed domain: there is no second, independently encoded
+"challenge" (Noot: a second encoding is another drift surface; the primitive
+evaluates the already-canonical C_s directly). `previousLedgerHash` is an
+EXPLICIT model input sourced from the externalized StellarValue (the real
+predecessor hash Core commits), so the model consumes the bytes Core actually
+locks; a vector asserts changing only that real predecessor hash changes C_s and
+R_s. Provenance (lcValueSignature, proposer NodeID, SCP envelopes/certificate
+paths, timestamps, transport) is deliberately absent.
+
+Authority is a THRESHOLD authority derived ONLY from the epoch descriptor:
+`ThresholdAuthority.from_epoch(epoch)` fixes the roster (sorted member
+share-verification keys committed by the epoch), n = len(roster), t = epoch
+threshold, and the group key. There is no caller-provided n/t/roster (Noot:
+"threshold is a property of the locked authority, not an argument to the
+caller"). Each member's share is bound to SECRET material held only by the
+authority (the model's stand-in for generated VUF/DKG key material; in
+production it never leaves the holder set). Reconstructing the canonical P_s
+REQUIRES >= t valid shares: there is no public proof-emission function in this
+program, so a player holding every public close field but fewer than `t` shares
+cannot obtain any P_s accepted by the pure verifier.
+
+The shared primitive is consumed through an ABSTRACT interface
+`UniqueThresholdProof` (the smallest audited seam; Rust supplies the real
+construction, BLS/VUF or another unique-output primitive). This model wires the
+interface contract and ASSERTS the invariants the candidate crypto must satisfy
+(I1-I4); the cryptographic proof (pre-lock secrecy, threshold unforgeability,
+unique output, strict canonicalization) lives in the primitive harness, not in a
+placeholder hash. The model's `verify` mirrors the primitive's pure verifier: a
+deterministic function of (epoch, C_s, P_s) plus the scheme's canonical setup --
+no source, no admission memory, no process memory.
+
+State machine laws:
+    Gate 0 (integrity):      LockedClose hash must re-derive from its fields.
+    Gate 1 (epoch+network):  close bound to THIS epoch, THIS network, active.
+    Gate 2 (boundary):       release is authorized ONLY by CONFIRM/EXTERNALIZE +
+                             local full validation; accepted-commit never is.
+    Gate 3 (proof):          the ARCHIVED PURE verifier verify(epoch, C_s, P_s)
+                             accepts the proof (no source/admission memory).
+    No proof -> UNKNOWN (stalled apply); invalid -> REJECTED. Applied history is
+    a PREFIX of the canonical slot-ordered history -- nodes differ only in
+    prefix length, never an applied ROOT,UNKNOWN,ROOT hole.
+
+Activation (Noot #5): the epoch applied for a slot is selected from the
+PREDECESSOR canonical state (`epoch_for_transition`), never local quorum sets.
+Zero or two committed epochs for a slot FAIL CLOSED (no selection).
+
+Durable sign-once (Noot): every authority member durably locks one semantic
+event before first emission -- the same (epoch, slot, C_s) retry is idempotent,
+a different C_s for the same slot is refused. Because share secrets and the
+reconstruction rule are deterministic per epoch, a restarted authority
+re-derives the same share and the same P_s/R_s without new authority choice or
+process memory (native durability covers the crash-before-header ordering, CAP).
+
+Exit laws asserted:
+    O1 One use -> one pulse.  Retries / aliases / an equivalent value cannot let
+       a consumer lock N draws and pick one after seeing the roots; a source
+       keeps ONE canonical slot lock.
+    O2 Earliest-knowledge sealing.  With < t valid shares no complete proof is
+       a property of the primitive/flows, not a caller flag.
+    O3 Permanent pulse.  After R_s is canonically accepted, later key/suite
+       changes, proof re-encoding, recovery, migration, or archival replay can
+       never create a second historical pulse.
+
+Object/capability invariant (B4): the resolved object holds only
+{event_hash, outcome, source_root?} -- NO successor key, delegate, membership
+edit, recovery authority, or permission field.
+
+Run: python layer_b_model.py   (exit 0 on pass, 1 on any failure)
+"""
+import hashlib
+import itertools
+import os
+import struct
+import sys
+
+EPOCH_SCHEME = b"stellar-vrf/epoch/unique-threshold/v1"
+NETWORK = hashlib.sha256(b"Test SDF Network ; September 2015").digest()
+LABEL_PRN = b"PRNG"
+LABEL_APPLY = b"APPLY"
+LABEL_NOM = b"NOMINATION"
+NO_CALLER_OUTCOME_CLASS = frozenset()
+# The CONFIRM->EXTERNALIZE edge vs accepted-commit: the transition TYPE is now a
+# fact INSIDE `ConfirmExternalizeBoundary` (the ONLY producer of release
+# witnesses -- Copilot this review: no caller-asserted transition bytes). These
+# names remain as the documented protocol roles; the boundary's `externalize()`
+# is the only operation that realises CONFIRM/EXTERNALIZE, and accepted-commit
+# is deliberately NOT authoritative (never externalizes).
+RELEASE_CERT_CONFIRM_EXTERNALIZE = b"confirm/externalize"
+RELEASE_CERT_ACCEPTED_COMMIT = b"accepted-commit"   # deliberately NOT authoritative
+
+# The model standby for the primitive's SYSTEM/GROUP key material. It is never
+# serialized, never committed in the epoch, and never printed; it mirrors the
+# boundary that the real VUF/DKG group secret lives only inside the primitive
+# (Rust) and the holder set. `verify` (below) uses it exactly the way a
+# production verifier uses the certified group public key + committed setup.
+GROUP_SK = hashlib.sha256(b"cap-0089:model:group-sk:v1").digest()
+
+
+def sha256(b: bytes) -> bytes:
+    return hashlib.sha256(b).digest()
+
+
+def u32(n: int) -> bytes:
+    return struct.pack(">I", n)
+
+
+def lp(b: bytes) -> bytes:
+    # Length-prefix a VARIABLE-length field so the canonical encoding is
+    # injective (dnFWC): distinct byte boundaries cannot collide. Used only for
+    # genuinely variable-length elements (schemes, rule labels, list containers)
+    # and NEVER for fixed-width wire types (see hash32 below).
+    return struct.pack(">I", len(b)) + b
+
+
+def hash32(b: bytes) -> bytes:
+    # Core-native wire type for a fixed-width `opaque Hash[32]` (XDR) /
+    # uint256: a FIXED 32-byte element with NO length prefix. Validation is
+    # explicit so a caller cannot feed a malformed length and silently change
+    # the canonical encoding (Copilot 3917696404 round-2 follow-up / this
+    # review's B1 wire-type note). Rejects anything that is not exactly 32 bytes.
+    if b is None or len(b) != 32:
+        raise ValueError("Hash[32] wire element must be exactly 32 bytes")
+    return b
+
+
+def close_input(epoch_hash: bytes, network_id: bytes, ledger_seq: int,
+                previous_ledger_hash: bytes, value_hash: bytes) -> bytes:
+    """Single canonical close-input contract `RandomnessCloseInputV1`.
+
+    Wire shape (documented in B1, matches Core XDR widths EXACTLY): literal
+    contract tag `"RandomnessCloseInputV1"` + a `uint32` arm version (currently
+    `1`), then `network_id`, `epoch_hash`, `previous_ledger_hash`, `value_hash`
+    as Core `opaque Hash[32]` values (a FIXED 32 bytes each, NO length prefix --
+    the `lp()` length prefix is a variable-length string encoding and is NOT the
+    XDR encoding for a fixed Hash[32]; using it here would make a native
+    implementation derive a different C_s), with the `uint32` `ledgerSeq` placed
+    between `epoch_hash` and `previous_ledger_hash` in the EXACT byte order the
+    code below emits: `network_id, epoch_hash, ledgerSeq, previousLedgerHash,
+    V_s` (Copilot this review, thread evw-VZM / evwVZM, High). A native
+    implementation following the declared XDR widths therefore derives the SAME
+    C_s as the model. Binds network, epoch, the REAL ledgerSeq, the predecessor
+    ledger (state-transition semantics) and the exact externalized value bytes.
+    Provenance (signatures, proposer, envelopes, transport) is deliberately
+    absent. (The epoch's separate `format_version` canonical identity byte is
+    committed in `EpochDescriptor.hash`, NOT in this close input.)"""
+    return (b"RandomnessCloseInputV1" + u32(1)
+            + hash32(network_id) + hash32(epoch_hash)
+            + u32(ledger_seq) + hash32(previous_ledger_hash) + hash32(value_hash))
+
+
+def provenance_free_value(value_bytes: bytes) -> bytes:
+    """The canonical PROVENANCE-FREE value payload (Copilot this review, threads
+    evw_K / evw-VY7 / evw-VZa, High+Medium; re-review thread 3930442982).
+
+    For a real serialized Core `StellarValue`, provenance is NOT a cleanly
+    strippable trailing 32 bytes -- the signed `ext` V0 arm ends with a
+    `LedgerCloseValueSignature { NodeID nodeID; Signature signature; }` member,
+    and a BASIC arm has none. The CAP's canonical rule is XDR-AWARE: parse the
+    emitted value's `ext` arm, re-encode the value with the `lcValueSignature`
+    members (nodeID, signature) set to their CANONICAL ZERO values **while
+    PRESERVING the arm structure and full wire width** (thread 3930443090 fixes
+    the signature member to its full 64-byte width), then re-serialize. This
+    harness mirrors that rule for its synthetic serialized form `payload ||
+    signer`: the trailing `signer` region (the provenance) is **zeroed IN PLACE
+    to its full fixed width**, NOT stripped -- so `payload || signerA` and
+    `payload || signerB` both canonicalize to `payload || <zeroed signer of the
+    SAME width>`, matching the CAP's "structure and width preserved, signer
+    fields zeroed" property (thread 3930442982). Model closes supplied already as
+    a 32-byte payload hash are simply that hash.
+
+    `value_bytes` is therefore one of:
+      * a 32-byte bare payload hash (the harness norm, e.g. `sha256(payload)`),
+        which is the canonical provenance-free digest already; or
+      * the harness's canonical serialized form `payload || signer` where the
+        fixed trailing 32-byte `signer` is the provenance to EXCLUDE -- it is
+        zeroed in place (same width), not dropped."""
+    if len(value_bytes) == 32:
+        return value_bytes                     # already the canonical digest
+    if len(value_bytes) > 32:
+        # Zero the fixed 32-byte signer region IN PLACE (width preserved), per
+        # the CAP's XDR-aware "preserve arm, zero the signer fields" rule. This
+        # is the canonical-provenance FREE form, not a naive slice.
+        payload = value_bytes[:-32]
+        return payload + (b"\x00" * 32)
+    return value_bytes                         # degenerate/short (defensive)
+
+
+def canonical_value_hash(value_bytes: bytes) -> bytes:
+    """The CANONICAL close-lock value commitment V_s (Copilot this review,
+    threads evw_K / evw-VY7 / evw-VZa; round-25 3939431532).
+
+    ONE XDR-aware rule, identical in the CAP and here: if `value_bytes` is
+    already a 32-byte canonical payload hash it is used UNCHANGED (the CAP's
+    normative contract -- `core/cap-0089.md:1918-1924` says a model input
+    already reduced to the canonical 32-byte `V_s` is consumed as-is, with NO
+    second hash -- so a vector passing `sha256(payload)` yields `V_s =
+    sha256(payload)`, exactly one hashing); otherwise the canonical
+    PROVENANCE-FREE value (`provenance_free_value`, an explicit XDR re-encode
+    that drops the `lcValueSignature` signer member -- NOT a naive slice) is
+    hashed with the domain-separation prefix. This keeps a
+    byte-identical-value-but-differently-SIGNED close mapping to the SAME V_s and
+    the SAME `C_s` (one-use/one-event), while a GENUINELY different payload
+    yields a different V_s. The 32-byte branch contributes no prefix and no
+    second hash so the harness's close-lock bytes match the normative formula
+    exactly."""
+    if len(value_bytes) == 32:
+        return value_bytes                      # V_s as-is -- no double hash
+    return sha256(b"ProvenanceExcludedValue/v1"
+                  + provenance_free_value(value_bytes))
+
+
+# --- Verifiable stand-in bound to the epoch public key (Copilot 3917696376 /
+# this review's line-519 note) ------------------------------------------------
+# A pure-hash "canonical 32-byte value" is NOT a proof: any attacker can conjure
+# one, and a public verifier could not tell it from the real value. `verify`
+# therefore validates a GENUINE asymmetric signature relation bound to the
+# epoch's committed PUBLIC key, using a small, self-contained Schnorr-style
+# scheme over a hardcoded 256-bit safe-prime group (no external crypto library;
+# Python built-in `pow`/`%`). This is an HONEST STAND-IN: it demonstrates the
+# public-key seam a real BLS/VUF primitive must satisfy (public verification,
+# secret-only production, deterministic unique per-message output, reject of
+# arbitrary bytes) using algebra instead of a hash placeholder. It is NOT the
+# production primitive -- RFC 9381/BLS pairing lives in the separately-reviewed
+# harness (PR #5409); the model only proves the interface contract.
+#
+# Group: p = 2*q + 1 (safe prime, 256-bit), q prime, generator G = 4 (order q).
+#   d (secret scalar) = H(G_secret) mod q            -- only the recovered group
+#       secret can compute it (threshold-only production)
+#   pub Y            = G^d mod p                      -- committed in epoch
+#   sign d over msg: r = H("SpfNonce", d, epoch, msg) mod q    (deterministic,
+#       SECRET nonce -- revealing it would leak d), R = G^r mod p,
+#       c = H("SpfChal", epoch, msg, R_bytes, Y_bytes), s = r + c*d mod q
+#   proof             = R_bytes (32) || s_bytes (32)  -- 64 bytes
+#   verify (public, needs only Y):
+#       c = H("SpfChal", epoch, msg, R_bytes, Y_bytes)
+#       accept iff G^s mod p == R * Y^c mod p
+# The verifier needs NO secret and NO secret-derived value, yet can only accept
+# proofs minted with `d` -- so a bare 64-byte grab-bag is REJECTED, while the
+# genuine threshold-recovered proof verifies (Copilot line-519).
+_GRP_P = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff72ef
+_GRP_Q = (_GRP_P - 1) // 2
+_GRP_G = 4                        # generator of the order-q subgroup
+
+
+def _spf_scalar(secret: bytes) -> int:
+    # Deterministic secret scalar d in [1, q) from the recovered group secret.
+    # Only the group-secret holder (>= t valid shares) can compute this.
+    d = int.from_bytes(sha256(b"SpfScalar" + secret + b"cap-0089-v1"), "big")
+    return (d % (_GRP_Q - 1)) + 1     # ensure 1 <= d < q
+
+
+def _spf_pub(d: int) -> bytes:
+    return pow(_GRP_G, d, _GRP_P).to_bytes(32, "big")
+
+
+def _poly_coeffs(seed: bytes, threshold: int, n: int):
+    """Deterministic Shamir polynomial coefficients over GF(q). The GREEDY/group
+    secret is `f(0) = d`; the leading coefficients are derived from the setup
+    seed only (never from epoch/close bytes, so `d`, the epoch public key, and
+    the polynomial are stable across restarts and independent of any single
+    message). Reproducible from (seed, threshold, n) exactly as a real DKG
+    would publish a committed polynomial (this review: reconstruction must come
+    from the supplied shares, not a stored master)."""
+    return [(_spf_scalar(b"PolyCoeff" + u32(k) + b"cap-0089-v1" + seed)
+             % _GRP_Q) for k in range(threshold)]
+
+
+def _poly_share(seed: bytes, threshold: int, n: int, member_index: int) -> int:
+    """f(i) mod q -- the member's SECRET polynomial share (a Shamir share), the
+    actual value `recover_proof` Lagrange-interpolates. Fixed per member and
+    independent of the close (close-binding is enforced separately by the
+    sign-once/authorization gates in `share`)."""
+    coeffs = _poly_coeffs(seed, threshold, n)
+    x = member_index % _GRP_Q
+    acc = 0
+    for k, a in enumerate(coeffs):
+        acc = (acc + a * pow(x, k, _GRP_Q)) % _GRP_Q
+    return acc
+
+
+def _group_secret(seed: bytes, threshold: int, n: int) -> int:
+    """d = f(0) -- the unique recovered group secret. Defined from the same
+    polynomial the shares are evaluations of, so any t-subset Lagrange-
+    interpolates to this EXACT value (one-future / byte-identical P_s)."""
+    return _poly_coeffs(seed, threshold, n)[0]
+
+
+def _feldman_commit(seed: bytes, threshold: int, n: int, member_index: int) -> bytes:
+    """Public Feldman commitment C_i = G^{f(i)} (an order-q group element) for a
+    member's long-lived secret share f(i). It is PUBLIC (never secret) and is
+    used ONLY to verify a member's message-dependent FROST partial signature
+    `s_i = n(i) + c*f(i)` via `G^{s_i} == N_i * C_i^c`, without ever revealing
+    f(i). Committed into the epoch's membership surface so that partials are
+    bound to the epoch's own roster (Copilot this review #3/#4)."""
+    fi = _poly_share(seed, threshold, n, member_index) % _GRP_Q
+    return pow(_GRP_G, fi, _GRP_P).to_bytes(32, "big")
+
+
+def _frost_nonce_poly(nonce_seed: bytes, threshold: int, n: int) -> list:
+    """Deterministic per-(epoch, C_s) nonce polynomial g (deg t-1) over GF(q).
+    Its secret `r = g(0)` masks every partial so that the long-lived secret
+    shares f(i) are never revealed and t partials from one close cannot be
+    recombined for another close (message-dependent threshold shares, Copilot
+    this review #3, High). Reproduction uses ONLY the nonce_seed (derived from
+    the authority seed + epoch_hash + C_s), so restart/durable-sign-once
+    re-derives the identical nonce with no process memory."""
+    return [(_spf_scalar(b"FrostNoncePolyCoeff" + u32(k)
+                         + b"cap-0089-v1" + nonce_seed) % _GRP_Q)
+            for k in range(threshold)]
+
+
+def _frost_share(nonce_coeffs: list, member_index: int) -> int:
+    """n(i) -- the member's SECRET nonce share (an evaluation of the per-message
+    nonce polynomial g). Fresh for every (epoch, C_s); never emitted raw. Its
+    per-message secrecy is what makes partials `s_i = n(i) + c*f(i)` inert to
+    cross-close recombination."""
+    x = member_index % _GRP_Q
+    acc = 0
+    for k, a in enumerate(nonce_coeffs):
+        acc = (acc + a * pow(x, k, _GRP_Q)) % _GRP_Q
+    return acc % _GRP_Q
+
+
+def _lagrange_recover(shares):
+    """Reconstruct f(0) by Lagrange interpolation over GF(q) from >= t distinct
+    (x_i, f(x_i)) pairs. `shares`: {member_index (as x): y}. Uses ONLY the
+    supplied share values -- there is NO master secret on, or needed by, this
+    path (Copilot this review). Returns the unique scalar `d = f(0)`."""
+    xs = list(shares.keys())
+    acc = 0
+    for i in xs:
+        xi = i % _GRP_Q
+        yi = shares[i] % _GRP_Q
+        num = 1
+        den = 1
+        for j in xs:
+            if j == i:
+                continue
+            xj = j % _GRP_Q
+            # L_i(0) = prod_{j!=i} (0 - xj) / (xi - xj)  over GF(q)
+            num = (num * ((-xj) % _GRP_Q)) % _GRP_Q
+            den = (den * ((xi - xj) % _GRP_Q)) % _GRP_Q
+        li = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+        acc = (acc + yi * li) % _GRP_Q
+    return acc % _GRP_Q
+
+
+def _lagrange_constant_commitment(points, index0=0):
+    """Recover the committed CONSTANT of a degree-(t-1) group polynomial from
+    `points` = list of (member_index, C_i = G^{f(i)}), interpolating in the
+    EXPONENT (on the group), i.e. compute G^{f(index0)}. Returns an int mod p.
+
+    This is the PUBLIC Lagrange combination over the committed Feldman images
+    `C_i`, the direct analogue of `_public_aggregate` (R) but for the shared
+    polynomial rather than the nonce polynomial. Because every C_i = G^{f(i)}
+    and f is degree-(t-1), any t-subset sums L_j(0)*f(j) = f(0); so the result
+    is independent of WHICH t-subset is used, while being computable from ONLY
+    the public committed values -- the exact check an activation-time verifier
+    performs with no secret. Used to prove the committed `feldman_pub` are the
+    evaluations of ONE polynomial whose constant commitment equals
+    `authority_key` = G^{f(0)} (Copilot this review, thread ew-Ogf, High)."""
+    xs = [i for (i, _c) in points]
+    ys = [int.from_bytes(c, "big") % _GRP_P for (_i, c) in points]
+    xi0 = index0 % _GRP_Q
+    acc = 1
+    for (xi, Ci) in zip(xs, ys):
+        x = xi % _GRP_Q
+        num = 1
+        den = 1
+        for xj2 in xs:
+            if xj2 == xi:
+                continue
+            xj = xj2 % _GRP_Q
+            num = (num * ((xi0 - xj) % _GRP_Q)) % _GRP_Q
+            den = (den * ((x - xj) % _GRP_Q)) % _GRP_Q
+        lam = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+        acc = (acc * pow(Ci, lam, _GRP_P)) % _GRP_P
+    return acc
+
+
+# ---------------------------------------------------------------------------
+# AVSS dealer/qualification emulation + DISTRIBUTED FROST FEEDING (round-22
+# threads 3936844242 / 3936620224 / 3936844061 / 3936844318; round-23
+# 3939109855; round-24 3939264478 / 3939264509 / 3939264532). Exercises the
+# normative AVSS guarantees on the SAME share curve
+# `_poly_coeffs(GROUP_SK, ...)` the epoch commits:
+#   * COMMIT REGISTER: the dealer broadcasts coefficient commitments
+#     C_k = G^{a_k} (Feldman-VSS opening);
+#   * ENCRYPTED-SCALAR-SHARE DISTRIBUTION: each roster member receives the
+#     SCALAR sub-share f_d(i) (NOT its group image -- round-24 3939264478),
+#     in a two-part envelope per recipient i:
+#       - a PUBLIC multiplicative tag (A1 = G^{r1}, B = C_i * E_j^{r1}) with a
+#         PUBLIC Schnorr NIZK proving knowledge of (r1, B/C_i = E_j^{r1}), the
+#         verifiable-encryption witness tying the record to the published point
+#         commitment C_i (no secret, no decryption);
+#       - a PRIVATE KEM channel (A2 = G^{r2}, env = scalar XOR
+#         H("AVSSEnv"|epoch|d|i|A2|E_j^{r2})) that ONLY recipient j -- with its
+#         PRIVATE e_j -- can open to the actual SCALAR sub-share. r2 never
+#         appears in the public tag, so E_j^{r2} is NOT a published value
+#         (unlike the tag's E_j^{r1}, which IS public); the scalar stays
+#         confidential while the point tag's well-formedness stays a pure
+#         PUBLIC predicate. Recipients FELDMAN-VERIFY the opened scalar
+#         G^m == C_i -- the proof tying each plaintext to the published point.
+#   * QUALIFICATION Q*: ONE canonical public rule -- never a decryption
+#     report; STRUCTURALLY FAIL-CLOSED (round-24 3939264509): every record's
+#     key set, element widths and proof shapes are validated BEFORE indexing,
+#     and any anomaly EXCLUDES the record instead of raising -- invariant I13
+#     "malformed proofs never crash" holds by construction;
+#   * RECONSTRUCTION OF AN ABORTING DEALER: >= t delivered SCALAR sub-shares
+#     interpolate the committed constant s_d (checked G^{s_d} == C_0), the
+#     exact material a FROST partial s_i = n_i + c*f(i) consumes;
+#   * AVSS-FED PROOF ASSEMBLY (`_avss_reshare`, `_avss_proof_from_dealers`):
+#     the qualified dealers' reconstructed per-member SCALAR sub-shares -- for
+#     BOTH the share polynomial f AND the slot's nonce polynomial g_v --
+#     assemble the byte-identical canonical P_s with no process able to derive
+#     the full coefficient vector (round-24 3939264478 / 3939264532).
+# ---------------------------------------------------------------------------
+def _avss_recv_sk(j: int) -> int:
+    """PRIVATE AVSS decryption exponent e_j for roster member j -- the discrete
+    log of the EPOCH-COMMITTED public key E_j = G^{e_j} (the same derivation
+    `_validator_enc_key(GROUP_SK, j)` makes public, mirrored here as the private
+    half). Like the CONFIRM signing material (`_validator_confirm_sk` /
+    GROUP_SK), this is PRIMITIVE-path information held only by the recipient:
+    it is NEVER stored in a public record and is NOT a public function of the
+    epoch (the epoch commits only G^{e_j}). An observer of the published AVSS
+    bytes cannot strip the ElGamal mask, so the sub-shard f_d(j) stays
+    genuinely confidential while its well-formedness remains public."""
+    return _spf_scalar(sha256(b"cap-0089:enc:v1" + hash32(GROUP_SK)
+                              + u32(j) + b"v1"))
+
+
+def _avss_scalar_eval(coeffs, x: int) -> int:
+    """f_d(x) mod q -- Horner evaluation of a dealer's degree-(t-1) sub-
+    polynomial at member index x. Public structural mirror of `_poly_share` /
+    `_frost_share` for the AVSS-DISTRIBUTED polynomial (share or nonce)."""
+    xm = x % _GRP_Q
+    acc = 0
+    for a in reversed(coeffs):
+        acc = (acc * xm + (a % _GRP_Q)) % _GRP_Q
+    return acc % _GRP_Q
+
+
+def _avss_env_mask(epoch_hash: bytes, dealer_index: int, j: int,
+                   A2_bytes: bytes, S2_bytes: bytes) -> bytes:
+    """KEM mask of the PRIVATE scalar channel:
+    H("AVSSEnv", epoch_hash, dealer_index, j, A_2, E_j^{r2}). The dealer
+    computes E_j^{r2} from its own ephemeral r2 and the PUBLIC E_j; recipient
+    j recomputes the SAME value as A_2^{e_j} = G^{e_j*r2} from its PRIVATE e_j.
+    r2 never appears in (and is independent of) the public point tag / NIZK,
+    so E_j^{r2} is NOT derivable from the public record -- the scalar
+    sub-share stays confidential while the tag's well-formedness stays a
+    public predicate."""
+    return sha256(b"AVSSEnv" + epoch_hash + u32(dealer_index) + u32(j)
+                  + A2_bytes + S2_bytes)
+
+
+def _avss_recv_scalar(j: int, enc_entry, dealer_index: int, epoch_hash: bytes,
+                      C_i: int) -> [int, None]:
+    """Recipient j opens the PRIVATE KEM envelope of `enc_entry` with its
+    epoch PRIVATE e_j and FELDMAN-VERIFIES the plaintext against the PUBLIC
+    point commitment C_i -- the proof tying the scalar plaintext to the
+    published point (exactly the check a real FROST signer performs before
+    using its share). Returns the SCALAR sub-share f_d(j) mod q, or None for a
+    malformed/forged envelope -- fail-closed, never raises."""
+    try:
+        if not (isinstance(enc_entry, tuple) and len(enc_entry) == 4):
+            return None
+        _A1_b, _B_b, A2_b, env_b = enc_entry
+        for _part in (A2_b, env_b):
+            if not (isinstance(_part, bytes) and len(_part) == 32):
+                return None
+        e_j = _avss_recv_sk(j) % _GRP_Q
+        A2 = int.from_bytes(A2_b, "big") % _GRP_P
+        if not (1 < A2 < _GRP_P and pow(A2, _GRP_Q, _GRP_P) == 1):
+            return None
+        S2 = pow(A2, e_j, _GRP_P)          # G^{e_j*r2} == E_j^{r2}
+        mask = _avss_env_mask(epoch_hash, dealer_index, j, A2_b,
+                              S2.to_bytes(32, "big"))
+        m = int.from_bytes(bytes(a ^ b for a, b in zip(env_b, mask)), "big")
+        if not (0 <= m < _GRP_Q):
+            return None
+        if pow(_GRP_G, m, _GRP_P) != (C_i % _GRP_P):
+            return None                   # Feldman tie to the public point FAILED
+        return m
+    except Exception:
+        return None
+
+
+def _avss_point_commit(coeff_commits, i: int) -> int:
+    # C^{(d)}_i = G^{f(i)} = prod_k C_k^{(i^k)}: the PUBLIC evaluation
+    # commitment of the dealer's degree-(t-1) polynomial at member index i,
+    # recomputed by any node from the broadcast coefficient commitments
+    # (Feldman-VSS opening where the evaluation is public).
+    acc = 1
+    for k, Ck_bytes in enumerate(coeff_commits):
+        Ck = int.from_bytes(Ck_bytes, "big") % _GRP_P
+        acc = (acc * pow(Ck, pow(i, k), _GRP_P)) % _GRP_P
+    return acc
+
+
+def _avss_entry_wellformed(Ej_bytes: bytes, C_i: int, Ck0: bytes,
+                           dealer_index: int, j: int, epoch_hash: bytes,
+                           enc_entry, proof) -> bool:
+    # PUBLIC well-formedness of ONE encrypted-scalar ENTRY under the
+    # EPOCH-COMMITTED recipient key E_j (round-24 3939264478 / 3939264509).
+    # STRUCTURALLY FAIL-CLOSED: entry/proof shapes are validated BEFORE any
+    # indexing, and every anomaly returns False (never raises) -- the caller
+    # (Q*) simply EXCLUDES the record, exercising invariant I13 'malformed
+    # proofs never crash' by construction. The public check needs NO secret,
+    # NO decryption and NO complaint:
+    #   * the entry is a 4-tuple of 32-byte elements (A1, B, A2, env), the
+    #     proof a 2-tuple of 32-byte elements (e, z);
+    #   * A1, B, C_i and the constant commitment C^{(d)}_0 are non-identity
+    #     order-q subgroup elements;
+    #   * the Schnorr NIZK (e, z) demonstrates knowledge of r1 with
+    #     A1 = G^{r1} AND B = C^{(d)}_i * E_j^{r1} -- an
+    #     equality-of-discrete-logs proof under the bases (G, E_j), where
+    #     C^{(d)}_i is the PUBLIC point commitment RECOMPUTED from the
+    #     dealer's broadcast commitments.
+    # The private exponent e_j and the envelope randomness r2 never appear and
+    # can never be inferred from the public bytes (r2 is independent of the tag
+    # randomness r1), so the scalar sub-shard is confidential while its point
+    # tag's well-formedness is a pure public predicate of (published bytes,
+    # epoch-committed E_j).
+    try:
+        if not (isinstance(enc_entry, tuple) and len(enc_entry) == 4) \
+                or not (isinstance(proof, tuple) and len(proof) == 2):
+            return False
+        A1_b, B_b, _A2_b, _env_b = enc_entry
+        for _part in (A1_b, B_b):
+            if not (isinstance(_part, bytes) and len(_part) == 32):
+                return False
+        for _part in proof:
+            if not (isinstance(_part, bytes) and len(_part) == 32):
+                return False
+        A1_int = int.from_bytes(A1_b, "big") % _GRP_P
+        B_int = int.from_bytes(B_b, "big") % _GRP_P
+        if not (1 < A1_int < _GRP_P and pow(A1_int, _GRP_Q, _GRP_P) == 1):
+            return False
+        if not (1 < B_int < _GRP_P and pow(B_int, _GRP_Q, _GRP_P) == 1):
+            return False
+        C0 = int.from_bytes(Ck0, "big") % _GRP_P
+        if not (1 < C0 < _GRP_P and pow(C0, _GRP_Q, _GRP_P) == 1):
+            return False
+        Ej_int = int.from_bytes(Ej_bytes, "big") % _GRP_P
+        if not (1 < Ej_int < _GRP_P and pow(Ej_int, _GRP_Q, _GRP_P) == 1):
+            return False
+        if not (1 < C_i < _GRP_P and pow(C_i, _GRP_Q, _GRP_P) == 1):
+            return False
+        e_int = int.from_bytes(proof[0], "big") % _GRP_Q
+        z_int = int.from_bytes(proof[1], "big") % _GRP_Q
+        # Recover the commitments t1 = G^k and t2 = E_j^k from (e, z):
+        t1_calc = ((pow(_GRP_G, z_int, _GRP_P)
+                    * pow(A1_int, e_int, _GRP_P)) % _GRP_P)
+        inv_Ci = pow(C_i, _GRP_Q - 1, _GRP_P)
+        t2_calc = ((pow(Ej_int, z_int, _GRP_P)
+                    * pow((B_int * inv_Ci) % _GRP_P, e_int, _GRP_P)) % _GRP_P)
+        # Recompute the Fiat-Shamir challenge over the exact published bytes --
+        # point tag, public point commitment, E_j, the KEM tag AND the inner
+        # envelope (round-25 3939431465): the proof must cover the exact (A2,
+        # env) ciphertext of the PRIVATE channel, so a forged record cannot swap
+        # any envelope byte without invalidating e_calc.
+        e_calc = int.from_bytes(sha256(
+            b"AVSSProof" + epoch_hash + u32(dealer_index) + u32(j)
+            + A1_b + B_b + C_i.to_bytes(32, "big") + Ej_bytes
+            + t1_calc.to_bytes(32, "big")
+            + t2_calc.to_bytes(32, "big")
+            + _A2_b + _env_b), "big") % _GRP_Q
+        return e_calc == e_int and t1_calc > 1 and t2_calc > 1
+    except Exception:
+        return False
+
+
+def _avss_record_identity_bytes(rec) -> bytes:
+    """Canonical IDENTITY bytes of a dealer record -- the roster index d, the
+    epoch hash and the ordered coefficient commitments Cks -- exactly the
+    fields the dealer signature (§ sig) covers. Deterministic, so the signer
+    and every verifier agree byte-for-byte. The points map is NOT separately
+    signed because Q* (fgK8T) requires every published point to EQUAL the
+    value recomputed from these same Cks -- signing Cks binds the commitment
+    register whose points are a pure function."""
+    body = b""
+    for Ck in rec["Cks"]:
+        body += Ck
+    return body
+
+
+def _avss_dealer_sig(d: int, epoch_hash: bytes, rec) -> bytes:
+    """DEALER-AUTHENTICATION Schnorr signature (64 bytes = R || s) over
+    (d || epoch_hash || Cks) under the dealer's EPOCH-COMMITTED identity key
+    E_d = G^{e_d} (round-25 3939431477). Only the roster member that genuinely
+    holds the private e_d can produce a signature verifying under E_d, so a
+    dealer record is cryptographically bound to the roster identity owning its
+    index: `d` is no longer an unladen, caller-asserted field, a Byzantine
+    peer cannot publish a record under another member's index (it lacks that
+    e_d), and a record whose index is not on the roster has no committed E_d
+    at all. Private-path information (the exact analogue of `_avss_recv_sk`,
+    used by the dealer because its own e_d IS held by the rostered dealer)."""
+    msg = (b"AVSSDealerAuth" + u32(d) + epoch_hash
+           + _avss_record_identity_bytes(rec))
+    e_d = _avss_recv_sk(d) % _GRP_Q
+    # (round-28 3942590381 / foQhP): the deterministic nonce MUST depend on the
+    # SECRET e_d as well as the public message, RFC-6979-style -- deriving it
+    # from the public message alone would let ANY observer recompute k and
+    # recover the private key e_d = (s - k)/c from ONE published record; and
+    # e_d IS the member's AVSS decryption key (E_d = G^{e_d} is the
+    # epoch-committed identity AND the key that opens every envelope to that
+    # roster member), so one leaked k would expose that member's confidential
+    # sub-shares across every dealer. `_confirm_vote` / `_spf_sign` follow the
+    # SAME secret-nonce rule; verify recomputes only the public challenge.
+    k = (_spf_scalar(sha256(b"AVSSDealerNonce" + e_d.to_bytes(32, "big")
+                            + msg))) % _GRP_Q
+    R = pow(_GRP_G, k, _GRP_P)
+    c = int.from_bytes(
+        sha256(b"AVSSDealerChal" + sha256(msg) + R.to_bytes(32, "big")),
+        "big") % _GRP_Q
+    s = (k + c * e_d) % _GRP_Q
+    return R.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+
+def _avss_verify_dealer_auth(E_d_bytes: bytes, d: int, epoch_hash: bytes,
+                             rec) -> bool:
+    """PUBLIC verification of a dealer record's authentication signature under
+    the EPOCH-COMMITTED E_d (round-25 3939431477). Pure public-equation check
+    (G^s == R * E_d^c); every anomaly returns False (fail-closed, never
+    raises), so a record that fails is s-l-e-n-t-l-y EXCLUDED by Q* like any
+    other malformed record."""
+    try:
+        sig = rec.get("sig")
+        if not (isinstance(sig, bytes) and len(sig) == 64):
+            return False
+        R = int.from_bytes(sig[:32], "big") % _GRP_P
+        s = int.from_bytes(sig[32:], "big") % _GRP_Q
+        if not (1 < R < _GRP_P and pow(R, _GRP_Q, _GRP_P) == 1):
+            return False
+        E_d = int.from_bytes(E_d_bytes, "big") % _GRP_P
+        if not (1 < E_d < _GRP_P and pow(E_d, _GRP_Q, _GRP_P) == 1):
+            return False
+        msg = (b"AVSSDealerAuth" + u32(d) + epoch_hash
+               + _avss_record_identity_bytes(rec))
+        c = int.from_bytes(
+            sha256(b"AVSSDealerChal" + sha256(msg) + sig[:32]), "big") % _GRP_Q
+        return pow(_GRP_G, s, _GRP_P) == (R * pow(E_d, c, _GRP_P)) % _GRP_P
+    except Exception:
+        return False
+
+
+def _avss_distribute(base_coeffs, dealer_index: int, epoch, cl_hash: bytes,
+                     n_members: int, threshold: int, d_constant: int,
+                     seed: bytes, abort_after=None, corrupt_e_recipient=None):
+    # Core AVSS distribution over a SUPPLIED degree-(t-1) polynomial
+    # `base_coeffs`. A dealer `dealer_index` sub-shares with an own sub-
+    # polynomial f_d whose CONSTANT is `d_constant`:
+    #   * GROUP curve: d_constant = s_d = f(d), the dealer's OWN share of the
+    #     delegated group polynomial f (the curve `_poly_coeffs(GROUP_SK, ...)`
+    #     the epoch commits), so C^{(d)}_0 = G^{s_d} is a PUBLIC point on f;
+    #   * NONCE curve: d_constant = g_v(d), the dealer's share of the slot's
+    #     nonce polynomial g_v, so the n constants reconstitute G^{g_v(0)}.
+    # The record is FULLY PUBLIC {"Cks", "points", "enc", "proofs", "d"} --
+    # NO secret coefficient travels in it. Each roster member i receives its
+    # SCALAR sub-share f_d(i) (NOT the group image, round-24 3939264478):
+    #   * PUBLIC point tag: A1 = G^{r1}, B = C^{(d)}_i * E_j^{r1}, with the
+    #     PUBLIC Schnorr NIZK (e, z) proving equality of the discrete logs
+    #     (r1 under G) and (r1 under E_j) -- the verifiable-encryption witness
+    #     that the record masks EXACTLY the published point commitment;
+    #   * PRIVATE KEM channel: A2 = G^{r2}, env = f_d(i) XOR
+    #     H("AVSSEnv"|epoch|d|i|A2|E_j^{r2}), openable ONLY by recipient i with
+    #     its PRIVATE e_j. r1 and r2 are independent, so E_j^{r2} is never
+    #     derivable from the public tag (E_j^{r1} IS public) -- the scalar
+    #     stays confidential while the tag's well-formedness stays public.
+    # `abort_after`: deliver envelopes to only the first `abort_after` members
+    # (>= t) then vanish (ABORTING dealer -- reconstructable from the delivered
+    # SCALAR shards alone). `corrupt_e_recipient`: re-bind ONE point tag under
+    # the WRONG key scope E'_j = G^{e_j+1} (a Byzantine dealer whose record
+    # must be excluded by PUBLIC well-formedness -- never by a decryption
+    # report).
+    s_d = d_constant % _GRP_Q
+    coeffs = [s_d] + list(base_coeffs[1:])       # f_d(0) = d_constant
+    Cks = tuple(pow(_GRP_G, a, _GRP_P).to_bytes(32, "big") for a in coeffs)
+    points = {i: _avss_point_commit(Cks, i) for i in range(1, n_members + 1)}
+    enc = {}
+    proofs = {}
+    for i in range(1, n_members + 1):
+        Ej = int.from_bytes(epoch.enc_keys[i - 1], "big") % _GRP_P
+        m_i = _avss_scalar_eval(coeffs, i)       # SCALAR sub-share f_d(i)
+        r1 = (_spf_scalar(sha256(b"AVSS-r1" + hash32(seed) + hash32(epoch.hash)
+                                 + u32(i) + cl_hash))) % _GRP_Q
+        A1 = pow(_GRP_G, r1, _GRP_P)
+        B = (points[i] * pow(Ej, r1, _GRP_P)) % _GRP_P
+        if i == corrupt_e_recipient:
+            # Byzantine re-binding attempt: the point tag for recipient i is
+            # produced under a WRONG key scope E'_j = G^{e_j+1}, which the
+            # public well-formedness NIZK (validated against the EPOCH-COMMITTED
+            # E_j) must reject. The private envelope stays under the real e_j;
+            # the record is excluded by the PUBLIC rule alone.
+            e_bad = (_avss_recv_sk(i) + 1) % _GRP_Q
+            B = (points[i] * pow(pow(_GRP_G, e_bad, _GRP_P),
+                                 r1, _GRP_P)) % _GRP_P
+        A1b = A1.to_bytes(32, "big")
+        Bb = B.to_bytes(32, "big")
+        # PRIVATE KEM channel for the SCALAR sub-share:
+        r2 = (_spf_scalar(sha256(b"AVSS-r2" + hash32(seed) + hash32(epoch.hash)
+                                 + u32(i) + cl_hash))) % _GRP_Q
+        A2 = pow(_GRP_G, r2, _GRP_P)
+        S2 = pow(Ej, r2, _GRP_P)                 # recipient: A2^{e_j}
+        A2b = A2.to_bytes(32, "big")
+        mask = _avss_env_mask(epoch.hash, dealer_index, i, A2b,
+                              S2.to_bytes(32, "big"))
+        env = bytes(a ^ b for a, b in zip(m_i.to_bytes(32, "big"), mask))
+        # PUBLIC Schnorr NIZK that (A1, B) is a well-formed mask under the
+        # EPOCH-COMMITTED E_j: knowledge of r1 with A1 = G^{r1} and
+        # B/C^{(d)}_i = E_j^{r1} (equality of discrete logs under bases G, E_j).
+        # The challenge is computed over the FULL published envelope -- the
+        # point tag (A1, B), the PUBLIC commitment C^{(d)}_i, E_j, the KEM tag
+        # A2 AND the inner envelope bytes -- so the proof cryptographically
+        # COVERS the exact ciphertext bytes A2 || env of the PRIVATE channel.
+        # A Byzantine dealer cannot substitute a different envelope `env` or
+        # KEM tag `A2` after producing `e` without breaking the equation
+        # (round-25 3939431465); the commitment is to knowledge of r1 for the
+        # tag AND to the exact (A2, env) bytes of the scalar channel it wraps.
+        # Built from the published bytes + epoch hash + indices, so any node
+        # re-verifies it with NO secret (see `_avss_entry_wellformed`).
+        k = (_spf_scalar(sha256(b"AVSS-k" + hash32(seed) + hash32(epoch.hash)
+                                + u32(i) + cl_hash))) % _GRP_Q
+        t1 = pow(_GRP_G, k, _GRP_P)
+        t2 = pow(Ej, k, _GRP_P)
+        e = int.from_bytes(sha256(
+            b"AVSSProof" + epoch.hash + u32(dealer_index) + u32(i)
+            + A1b + Bb + points[i].to_bytes(32, "big")
+            + epoch.enc_keys[i - 1]
+            + t1.to_bytes(32, "big")
+            + t2.to_bytes(32, "big")
+            + A2b + env), "big") % _GRP_Q
+        z = (k - r1 * e) % _GRP_Q
+        proofs[i] = (e.to_bytes(32, "big"), z.to_bytes(32, "big"))
+        enc[i] = (A1b, Bb, A2b, env)
+    if abort_after is not None:
+        # ABORTING dealer: broadcast the commits, then deliver envelopes to
+        # only the first `abort_after` members (>= t), vanishing before the
+        # rest. The t recipients must be able to recover the committed constant
+        # from their delivered SCALAR shards alone. The record carries NO
+        # secret coefficients -- only commits, points, envelopes and proofs.
+        enc = {i: enc[i] for i in range(1, abort_after + 1)}
+        proofs = {i: proofs[i] for i in range(1, abort_after + 1)}
+    rec = {"Cks": Cks, "points": points, "enc": enc,
+           "proofs": proofs, "d": dealer_index}
+    rec["sig"] = _avss_dealer_sig(dealer_index, epoch.hash, rec)
+    return rec
+
+
+def _avss_reencrypt_wrong(rec, j, epoch, cl_hash, d, seed, m_garbage):
+    """A BYZANTINE dealer's WRONG-but-well-formed envelope (round-28 foQha):
+    starting from an honest record `rec`, re-encrypt recipient `j`'s PRIVATE
+    KEM entry with a DIFFERENT scalar `m_garbage`, recomputing the recipient
+    INDEX's envelope bytes AND its public NIZK over the NEW (A2, env) -- so the
+    record is PUBLISHED-WELL-FORMED (Q* accepts it: the Cks/points/sig are the
+    honest originals and the NIZK verifies over the exact committed bytes) yet
+    EVERY honest recipient of member `j`'s position FAILS the recipient-side
+    Feldman check G^m == C_i and contributes ZERO scalar to the Lagrange
+    assembly (`_avss_recv_scalar` -> None; `_avss_member_nonce` -> None). This
+    is the reviewer's honest-cheater: qualification is PUBLIC well-formedness
+    (never an inverse computation of the plaintext -- impossible without a ZK
+    argument), RECONSTRUCTIBILITY is bounded separately -- an honest dealer's
+    envelope is opened by ALL n - f honest recipients (see the R28-a bound),
+    so Byzantine garbage degrades into the round-24 missing-scalar path
+    (bounded UNKNOWN / roll), never a qualified-but-unreconstructible claim."""
+    Ej = int.from_bytes(epoch.enc_keys[j - 1], "big") % _GRP_P
+    A1b, Bb, A2b, _env = rec["enc"][j]
+    r2 = (_spf_scalar(sha256(b"AVSS-r2" + hash32(seed) + hash32(epoch.hash)
+                             + u32(j) + cl_hash))) % _GRP_Q
+    S2 = pow(Ej, r2, _GRP_P)
+    mask = _avss_env_mask(epoch.hash, d, j, A2b, S2.to_bytes(32, "big"))
+    env2 = bytes(a ^ b for a, b in zip((m_garbage % _GRP_Q).to_bytes(32, "big"),
+                                       mask))
+    k = (_spf_scalar(sha256(b"AVSS-k" + hash32(seed) + hash32(epoch.hash)
+                            + u32(j) + cl_hash))) % _GRP_Q
+    t1 = pow(_GRP_G, k, _GRP_P)
+    t2 = pow(Ej, k, _GRP_P)
+    e = int.from_bytes(sha256(
+        b"AVSSProof" + epoch.hash + u32(d) + u32(j)
+        + A1b + Bb + rec["points"][j].to_bytes(32, "big")
+        + epoch.enc_keys[j - 1]
+        + t1.to_bytes(32, "big")
+        + t2.to_bytes(32, "big")
+        + A2b + env2), "big") % _GRP_Q
+    r1 = (_spf_scalar(sha256(b"AVSS-r1" + hash32(seed) + hash32(epoch.hash)
+                             + u32(j) + cl_hash))) % _GRP_Q
+    z = (k - r1 * e) % _GRP_Q
+    rec2 = dict(rec)
+    rec2["enc"] = dict(rec["enc"])
+    rec2["proofs"] = dict(rec["proofs"])
+    rec2["enc"][j] = (A1b, Bb, A2b, env2)
+    rec2["proofs"][j] = (e.to_bytes(32, "big"), z.to_bytes(32, "big"))
+    return rec2
+
+
+def _avss_dealer_publish(seed: bytes, epoch, cl_hash: bytes,
+                         n_members: int, threshold: int,
+                         dealer_index: int,
+                         abort_after=None, corrupt_e_recipient=None):
+    # GROUP-curve AVSS dealer: sub-shares the epoch's OWN delegated polynomial
+    # f (same curve `_poly_coeffs(GROUP_SK, ...)` the epoch commits) with
+    # constant s_d = f(d) -- so the n dealer constants {G^{s_d}} reconstitute
+    # G^{f(0)} == the epoch authority key by PUBLIC Lagrange combination (any
+    # t of them). See `_avss_distribute` for the record shape / two-channel
+    # confidentiality / fail-closed behaviour.
+    base = _poly_coeffs(seed, threshold, n_members)
+    s_d = _poly_share(GROUP_SK, threshold, n_members, dealer_index)
+    return _avss_distribute(base, dealer_index, epoch, cl_hash, n_members,
+                            threshold, s_d, seed, abort_after,
+                            corrupt_e_recipient)
+
+
+def _avss_qualification(dealer_records, epoch, n_members):
+    # Q* -- the CANONICAL, PUBLIC qualification rule (round-22 threads
+    # 3936620224 / 3936844061; round-24 3939264509; round-25 3939431477 /
+    # 3939431489). A dealer qualifies iff, from PUBLIC bytes ONLY (never a
+    # decryption outcome, never a per-recipient complaint):
+    #   1. every coefficient commitment C^{(d)}_k is a non-identity order-q
+    #      subgroup element;
+    #   2. the dealer published EXACTLY ONE record PER ROSTER INDEX and the
+    #      record is AUTHENTICATED by the roster member owning that index (the
+    #      signature verifies under the EPOCH-COMMITTED identity key E_d --
+    #      round-25 3939431477): a single record per index, and no record can
+    #      claim an index it does not own;
+    #   3. the published points map EQUALS the public point commitments
+    #      recomputed from the record's OWN coefficient commitments
+    #      (C_i == prod C_k^(i^k) -- round-25 3939431489), so the entries /
+    #      proofs are checked against EXACTLY the points the record publishes,
+    #      and a record whose points disagree with its commits is excluded;
+    #   4. one well-formed ENTRY PER ROSTER MEMBER under the corresponding
+    #      EPOCH-COMMITTED E_j (checked against the public point commitment
+    #      RECOMPUTED from the dealer's own coefficient commitments).
+    # STRUCTURALLY FAIL-CLOSED (3939264509): the record's FIELD SET, index
+    # bounds, element widths (32 bytes) and proof shapes (2 x 32 bytes) are
+    # validated BEFORE any indexing, and any anomaly EXCLUDES the record
+    # instead of raising -- invariant I13 'malformed proofs never crash' holds
+    # by construction and is exercised below. Any two nodes with the same
+    # epoch E_j vector and the same published records compute the SAME Q*.
+    octave = set(range(1, n_members + 1))
+    d_counts = {}
+    for rec in dealer_records:
+        if isinstance(rec, dict) and isinstance(rec.get("d"), int):
+            d_counts[rec["d"]] = d_counts.get(rec["d"], 0) + 1
+    # ONE record per dealer index: a batch offering TWO records for the same
+    # roster identity is AMBIGUOUS (no node can pick between them), so every
+    # duplicated index is excluded wholesale (round-25 3939431477).
+    unique_d = {d for d, c in d_counts.items() if c == 1}
+    qualified = []
+    for rec in dealer_records:
+        try:
+            if not (isinstance(rec, dict) and all(
+                    k in rec for k in ("Cks", "points", "enc", "proofs", "d",
+                                       "sig"))):
+                continue
+            if rec["d"] not in unique_d or rec["d"] not in octave:
+                continue                     # ambiguous / off-roster index
+            if not _avss_verify_dealer_auth(
+                    epoch.enc_keys[rec["d"] - 1], rec["d"], epoch.hash, rec):
+                continue                     # not authenticated by roster member d
+            Cks = rec["Cks"]
+            if not (isinstance(Cks, (tuple, list)) and len(Cks) == epoch.threshold
+                    and all(isinstance(Ck, bytes) and len(Ck) == 32
+                            for Ck in Cks)):
+                continue
+            enc_ = rec["enc"]
+            proofs_ = rec["proofs"]
+            points_ = rec["points"]
+            if not (isinstance(enc_, dict) and isinstance(proofs_, dict)
+                    and isinstance(points_, dict)):
+                continue
+            if (set(enc_.keys()) != octave or set(proofs_.keys()) != octave
+                    or set(points_.keys()) != octave):
+                continue                     # missing key j / extra key: excluded
+            ok = True
+            for Ck in Cks:
+                ck_int = int.from_bytes(Ck, "big")
+                if not (1 < ck_int < _GRP_P
+                        and pow(ck_int, _GRP_Q, _GRP_P) == 1):
+                    ok = False
+                    break
+            if not ok:
+                continue
+            for j in range(1, n_members + 1):
+                # The plaintext point is RECOMPUTED from the broadcast
+                # commitments and the record's OWN published points must equal
+                # it (round-25 3939431489) -- a record whose points agree
+                # with neither its commits nor the recomputed value fails.
+                C_i = _avss_point_commit(Cks, j)
+                if points_[j] != C_i:
+                    ok = False
+                    break
+                if not _avss_entry_wellformed(
+                        epoch.enc_keys[j - 1], C_i, Cks[0], rec["d"],
+                        j, epoch.hash, enc_[j], proofs_[j]):
+                    ok = False
+                    break
+            if ok:
+                qualified.append(rec)
+        except Exception:
+            # Fail-closed: an unparsable record is EXCLUDED, never a crash.
+            continue
+    return qualified
+
+
+def _avss_lagrange_coeff(xs, x, at=0):
+    """L_x^{(xs)}(at) mod q -- the Lagrange coefficient of the evaluation at
+    index x over the PUBLIC index set `xs`, interpolated at `at` (default 0).
+    Pure scalar arithmetic over GF(q) on public member/dealer indices; used for
+    the RESHARING coefficient lambda_d = L_d^{(Q*)}(0) and for the member-side
+    Lagrange combination in the FROST assembly."""
+    num = 1
+    den = 1
+    x_i = x % _GRP_Q
+    for j in xs:
+        x_j = j % _GRP_Q
+        if x_j == x_i:
+            continue
+        num = (num * ((at - x_j) % _GRP_Q)) % _GRP_Q
+        den = (den * ((x_i - x_j) % _GRP_Q)) % _GRP_Q
+    return (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+
+
+def _avss_member_share(share_records, i: int, epoch) -> [int, None]:
+    """Member i's SCALAR share of the RESHARED group polynomial
+    h(x) = sum_d L_d^{(Q*)}(0) * f_d(x), reconstructed from the QUALIFIED
+    dealers' records: member i decrypts each dealer d's SCALAR sub-share
+    f_d(i) (Feldman-verified against the PUBLIC point commitments) and combines
+    with the PUBLIC coefficients L_d^{(Q*)}(0). h(0) == f(0) -- the SAME
+    delegated secret -- yet NO process ever holds the full coefficient vectors
+    of h or f: member i knows only its own scalar h(i). Returns the scalar h_i
+    and its public image G^{h_i} (or None if any envelope is malformed --
+    fail-closed)."""
+    D = [rec["d"] for rec in share_records]
+    lam = {d: _avss_lagrange_coeff(D, d) for d in D}
+    acc = 0
+    comm = 1
+    for rec in share_records:
+        d = rec["d"]
+        C_j = _avss_point_commit(rec["Cks"], i)
+        m = _avss_recv_scalar(i, rec["enc"][i], d, epoch.hash, C_j)
+        if m is None:
+            return None                   # forged/malformed envelope: fail closed
+        acc = (acc + lam[d] * m) % _GRP_Q
+        # The combined public image uses the commitment RECOMPUTED from the
+        # broadcast coefficients (never the auxiliary points map -- round-25
+        # 3939431489), so reconstruction cannot be steered by a record whose
+        # stored points differ from its own commits.
+        comm = (comm * pow(C_j, lam[d], _GRP_P)) % _GRP_P
+    if pow(_GRP_G, acc, _GRP_P) != comm:
+        return None                       # public commitment tie failed
+    return acc
+
+
+def _avss_member_nonce(nonce_records, i: int, epoch) -> [int, None]:
+    """Member i's SCALAR NONCE share g_v(i), reconstructed the same double-
+    Lagrange way from the distributed NONCE polynomial's dealers (each nonce
+    dealer d sub-shares with constant g_v(d)). Round-24 3939264532: the slot's
+    nonce polynomial goes through the SAME AVSS distribution as the share
+    polynomial -- no single process derives the whole g_v, only each member's
+    own g_v(i)."""
+    N = [rec["d"] for rec in nonce_records]
+    mu = {d: _avss_lagrange_coeff(N, d) for d in N}
+    acc = 0
+    for rec in nonce_records:
+        d = rec["d"]
+        C_j = _avss_point_commit(rec["Cks"], i)
+        m = _avss_recv_scalar(i, rec["enc"][i], d, epoch.hash, C_j)
+        if m is None:
+            return None                   # forged/malformed envelope: fail closed
+        acc = (acc + mu[d] * m) % _GRP_Q
+    return acc % _GRP_Q
+
+
+def _avss_aggregate_nonce(nonce_records) -> bytes:
+    """PUBLIC aggregate nonce commitment R = G^{g_v(0)} from the nonce dealers'
+    CONSTANT commitments {G^{g_v(d)}: d in the nonce-dealer set} -- the
+    exponent-Lagrange over the dealer set, computable from the published
+    registers alone, exactly like `_public_aggregate` but over the AVSS nonce
+    distribution."""
+    N = [rec["d"] for rec in nonce_records]
+    mu = {d: _avss_lagrange_coeff(N, d) for d in N}
+    R = 1
+    for rec in nonce_records:
+        c0 = int.from_bytes(rec["Cks"][0], "big") % _GRP_P
+        R = (R * pow(c0, mu[rec["d"]], _GRP_P)) % _GRP_P
+    return R.to_bytes(32, "big")
+
+
+def _avss_challenge(epoch, cl_hash: bytes, R_bytes: bytes) -> int:
+    """The public Fiat-Shamir challenge c = H("SpfChal", epoch_hash, C_s, R, Y,
+    tag) mod q -- byte-identical to `_public_challenge`/`UniqueThresholdProof`'s
+    verification, computed here from AVSS-assembled state without the master
+    seed."""
+    return int.from_bytes(sha256(b"SpfChal" + epoch.hash + cl_hash + R_bytes
+                                 + epoch.authority_key + b"cap-0089-v1"),
+                          "big") % _GRP_Q
+
+
+def _public_aggregate_comms(comms: dict) -> bytes:
+    """PUBLIC aggregate nonce commitment R = G^{g_v(0)} from the MEMBERS'
+    ROUND-1 nonce commitments N_i = G^{n_i} (round-29 foqqv): the exponent-
+    Lagrange combination over the supplied per-member commitments, byte-
+    identical to `_public_aggregate`. Because every n_i lies on the SAME
+    degree-(t-1) nonce polynomial g_v, the sum of L_j(0)*n_j = g_v(0)
+    regardless of which >= t subset is used -- so R (and the bound close) is
+    invariant under ANY >= t contributing subset, and it is computable with NO
+    master secret. In production the per-member N_i are the FROST round-1
+    broadcast; the AVSS nonce distribution below is a TRANSPORT DEMONSTRATION
+    that those commitments are evaluations of one secret polynomial -- the
+    authoritative R for verification is always this member-registry aggregate,
+    so a Byzantine NONCE dealer can neither steer R nor strand it."""
+    xs = sorted(comms.keys())
+    acc = 1
+    for i in xs:
+        xi = i % _GRP_Q
+        Ni = int.from_bytes(comms[i], "big") % _GRP_P
+        num = 1
+        den = 1
+        for j in xs:
+            if j == i:
+                continue
+            xj = j % _GRP_Q
+            num = (num * ((-xj) % _GRP_Q)) % _GRP_Q
+            den = (den * ((xi - xj) % _GRP_Q)) % _GRP_Q
+        lam = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+        if lam < 0:
+            lam += _GRP_Q
+        acc = (acc * pow(Ni, lam, _GRP_P)) % _GRP_P
+    return acc.to_bytes(32, "big")
+
+
+def _avss_proof_from_dealers(share_records, nonce_records, subset, epoch,
+                             cl_hash: bytes, member_comm_r: dict = None) -> [bytes, None]:
+    """Feed the qualified dealers' reconstructed SCALAR shares into the real
+    proof path (round-24 3939264478 / 3939264532): assemble the canonical P_s
+    from the AVSS-DISTRIBUTED share polynomial AND the AVSS-DISTRIBUTED nonce
+    polynomial for `cl_hash`, with NO process able to derive the full
+    coefficient vector of either.
+
+    * each member i in `subset` holds its OWN scalar share h(i) (from
+      `_avss_member_share`, verified against the public resharings) and its OWN
+      scalar nonce n_i = g_v(i) (from `_avss_member_nonce`);
+    * the aggregate nonce commitment R is the members' ROUND-1 commitment
+      aggregate (`_public_aggregate_comms` over `member_comm_r`, the per-member
+      N_i = G^{n_i} registry) -- invariant under any >= t contributing subset
+      (round-29 foqqv) -- and the challenge c is PUBLIC;
+    * the t partials sigma_i = n_i + c*h(i) are Lagrange-combined over the
+      member subset to s = g_v(0) + c*f(0) -- exactly `recover_proof`'s scalar
+      combination -- giving the byte-identical canonical P_s = (R || s).
+
+    Round-29 foqrG: a member whose OWN envelope fails to open (a Byzantine
+    dealer garbled exactly THAT member's sub-share or nonce) is SKIPPED
+    INDIVIDUALLY -- it contributes no partial, and the assembly SURVIVES as
+    long as >= t members still contribute (mirroring `recover_proof`'s
+    per-partial discard); the honest-dealer bound guarantees the >= t honest
+    opens. Only a subset with < t valid contributors returns None.
+
+    The assembler receives ONLY (records, per-member decrypted scalars, public
+    commitments); it never owns, is never handed, and never computes the
+    coefficient vectors of f or g_v."""
+    if len(subset) < epoch.threshold:
+        return None
+    h = {}
+    n = {}
+    for i in subset:
+        h_i = _avss_member_share(share_records, i, epoch)
+        n_i = _avss_member_nonce(nonce_records, i, epoch)
+        if h_i is None or n_i is None:
+            continue                       # skip ONLY this member (round-29 foqrG)
+        h[i] = h_i
+        n[i] = n_i
+    xs = list(h.keys())
+    if len(xs) < epoch.threshold:
+        return None                        # < t valid contributors: no recovery
+    if member_comm_r is not None:
+        R_b = _public_aggregate_comms(
+            {i: member_comm_r[i] for i in xs if i in member_comm_r})
+    else:
+        R_b = _avss_aggregate_nonce(nonce_records)
+    c = _avss_challenge(epoch, cl_hash, R_b)
+    partials = {i: (n[i] + c * h[i]) % _GRP_Q for i in xs}
+    s = 0
+    for i in xs:
+        s = (s + partials[i]
+             * _avss_lagrange_coeff(xs, i)) % _GRP_Q
+    return R_b + (s % _GRP_Q).to_bytes(32, "big")
+
+
+def _avss_valid_signers(share_records, nonce_records, members, epoch):
+    """PRIMITIVE-PATH mirror: the roster members that hold BOTH a VALID
+    aggregate share h(i) (every qualified dealer's envelope opens -- with the
+    member's OWN private key -- AND Feldman-ties to the public point) AND a
+    VALID aggregate nonce n_i = g_v(i). This is the exact per-member signer
+    material the two-round assembly consumes, and ONLY the member itself can
+    know it. It is NOT part of the close gate below (round-30 fwY5j): a node
+    cannot open everyone's ciphertext, so the gate must decide on the members'
+    authenticated certificates instead."""
+    return [i for i in members
+            if _avss_member_share(share_records, i, epoch) is not None
+            and _avss_member_nonce(nonce_records, i, epoch) is not None]
+
+
+def _avss_record_bytes(rec) -> bytes:
+    """CANONICAL byte encoding of one dealer record for the dealer-set digest
+    (round-31 fw_fU): dealer index, ordered coefficient commitments, per-index
+    SORTED points / enc / proofs maps and the authentication signature, in a
+    fixed, domain-separated layout -- the SAME record hashes to the IDENTICAL
+    bytes on every node, and any GENUINELY different record (honest vs
+    re-encrypted-wrong vs garbed envelopes) hashes differently."""
+    out = b""
+    out += u32(rec["d"])
+    for Ck in rec["Cks"]:
+        out += Ck
+    for j in sorted(rec["points"]):
+        out += u32(j) + rec["points"][j].to_bytes(32, "big")
+    for j in sorted(rec["enc"]):
+        out += u32(j) + b"".join(rec["enc"][j])
+    for j in sorted(rec["proofs"]):
+        out += u32(j) + b"".join(rec["proofs"][j])
+    out += lp(rec["sig"])
+    return out
+
+
+def _avss_dealer_digest(dealer_records, epoch, n_members) -> bytes:
+    """CANONICAL digest of the CONSENSUS-COMMITTED AVSS dealer set for the
+    epoch (round-31 fw_fU): H over the QUALIFIED dealer records `Q* =
+    _avss_qualification(...)` in canonical sorted-dealer order. Every node runs
+    the SAME public qualification predicate over the SAME committed register
+    (the dealer records the distribution certified), so the digest is
+    IDENTICAL network-wide -- `Q*` is a pure function of the committed
+    register digest, never of a node's locally-arrived / delayed / ABSENT
+    dealer set (the old 'reliable broadcast makes Q* canonical' claim is
+    deliberately NOT relied on: reliable broadcast guarantees consistent
+    delivery of what ARRIVES, not identical absent/late boundaries). Binding
+    this digest into every material-OK certificate (`_avss_material_certificate`)
+    makes certificates minted over two divergent local dealer sets mutually
+    INCOMPATIBLE, so the honest-combination fallacy cannot arise."""
+    qualified = sorted(
+        _avss_qualification(dealer_records, epoch, n_members),
+        key=lambda r: r["d"])
+    body = b""
+    for rec in qualified:
+        body += _avss_record_bytes(rec)
+    return sha256(b"AVSSDealerSet/v1" + body)
+
+
+def _avss_material_certificate(i: int, epoch, cl_hash: bytes,
+                               dealer_digest: bytes) -> bytes:
+    """Member i's AUTHENTICATED material-OK certificate (round-30 fwY5j;
+    round-31 fw_fU binds the consensus-committed dealer-set digest): a
+    deterministic Schnorr signature under the member's CONFIRM identity key
+    `k_i` (whose public image K_i is epoch-committed) over the statement
+    ("AVSSMaterialOK", epoch_hash, cl_hash, DEALER_SET_DIGEST, member_index i).
+    A member issues it EXACTLY when it has successfully opened ITS OWN
+    envelopes under every qualified dealer (with its own private `e_i`) and
+    Feldman-verified both its aggregate share and its own nonce -- a
+    SELF-RECOVERY assertion that only the member can make truthfully. The
+    certificate is PUBLICLY VERIFIABLE (any node checks the signature under
+    the committed K_i and the exact index), and signing the dealer-set digest
+    binds the certificate to the EXACT `Q*` register the issuer certified:
+    two nodes that derived different local dealer sets cannot share a
+    certificate batch, because each certificate verifies only under the digest
+    it was minted for (round-31 fw_fU)."""
+    k_i = _validator_confirm_sk(GROUP_SK, i)
+    r = _spf_scalar(sha256(b"AVSSMatNonce" + k_i.to_bytes(32, "big")
+                           + epoch.hash + cl_hash + dealer_digest
+                           + u32(i))) % _GRP_Q
+    R = pow(_GRP_G, r, _GRP_P)
+    R_bytes = R.to_bytes(32, "big")
+    K = pow(_GRP_G, k_i, _GRP_P)
+    c = int.from_bytes(sha256(b"AVSSMatChal" + epoch.hash + cl_hash
+                              + u32(i) + dealer_digest + R_bytes
+                              + K.to_bytes(32, "big")
+                              + b"cap-0089-v1"), "big") % _GRP_Q
+    s = (r + c * k_i) % _GRP_Q
+    return R_bytes + s.to_bytes(32, "big")
+
+
+def _avss_material_cert_verify(K_i_pub: bytes, i: int, epoch, cl_hash: bytes,
+                               cert: bytes, dealer_digest: bytes) -> bool:
+    """PURE public verification of one material-OK certificate: fixed 64-byte
+    Schnorr shape, subgroup elements, the challenge bound to (epoch, C_s, the
+    consensus-committed DEALER-SET DIGEST -- round-31 fw_fU -- EXACT member
+    index i, K_i). Uses ONLY public arithmetic; never decrypts and never
+    consults an honesty set. Fail-closed on every anomaly (a cert minted over
+    a DIFFERENT digest fails here, so cross-view certificate batches cannot
+    pair into a committed register)."""
+    if (K_i_pub is None or len(K_i_pub) != 32 or cert is None or len(cert) != 64
+            or not isinstance(dealer_digest, bytes) or len(dealer_digest) != 32):
+        return False
+    K = int.from_bytes(K_i_pub, "big")
+    if not (0 < K < _GRP_P):
+        return False
+    R_bytes, s_bytes = cert[:32], cert[32:]
+    R = int.from_bytes(R_bytes, "big")
+    s = int.from_bytes(s_bytes, "big")
+    if not (0 < R < _GRP_P) or not (0 <= s < _GRP_Q):
+        return False
+    c = int.from_bytes(sha256(b"AVSSMatChal" + epoch.hash + cl_hash
+                              + u32(i) + dealer_digest + R_bytes + K_i_pub
+                              + b"cap-0089-v1"), "big") % _GRP_Q
+    return pow(_GRP_G, s, _GRP_P) == (R * pow(K, c, _GRP_P)) % _GRP_P
+
+
+def _avss_distribution_closes(cert_records, epoch, cl_hash, roster_size, f,
+                              dealer_digest):
+    """ROUND-30 fwY5j / ROUND-31 fw_fU: the PUBLIC AVSS DISTRIBUTION-CLOSE
+    gate. The distribution round CLOSES -- and only then may the epoch be
+    committed and activated -- iff at least `epoch.threshold + f` DISTINCT,
+    EXACTLY-INDEXED roster members hold VALID material-OK certificates
+    (`_avss_material_cert_verify` under the epoch-committed K_i) signed over
+    the CONSENSUS-COMMITTED DEALER-SET DIGEST `dealer_digest` (round-31
+    fw_fU): a batch of certificates minted over a different / deferred local
+    dealer set FAILS the gate against the committed digest, so the gate and
+    the resulting `Q*` are bound to ONE committed register, never to a node's
+    reliable-broadcast absent/late boundary. It decides
+    on NO private ciphertext, NO decryption report and NO externally supplied
+    honesty set (the round-29 gate's `honest_members` oracle and
+    `_avss_valid_signers` opening-everyone's-envelope path are GONE from the
+    decision): the certificate set is the ONLY input, and every certificate
+    verifies PURELY PUBLICLY.
+    Soundness is the adversarial bound f: an HONEST member issues its
+    certificate iff ITS OWN self-recovery succeeded (it cannot -- will not --
+    attest garbage it failed to decrypt), and Byzantine members can pad the
+    count with at most f FALSE certificates. Therefore `certified >= t + f`
+    forces `honest_material_holders >^= certified - f >= t`: the close is
+    decided exactly when >= t HONEST holders' self-recoveries are
+    CONSENSUS-CERTIFIED in public. This is the SAME `q >= t + f` flat
+    activation lattice as round-29 foqq9 -- the certified-roster COUNT is the
+    `q` the graph must reach, and for the model's (10, 7, 3) roster that count
+    is the whole roster (10)."""
+    def _ok(i):
+        if not (1 <= i <= roster_size):
+            return False
+        Ki = _validator_confirm_pub(GROUP_SK, i)
+        return _avss_material_cert_verify(Ki, i, epoch, cl_hash,
+                                          cert_records.get(i), dealer_digest)
+    certified = [i for i in range(1, roster_size + 1) if _ok(i)]
+    return len(certified) >= epoch.threshold + f
+
+
+def group_pub_from_seed(seed: bytes, threshold: int, n: int) -> bytes:
+    # The epoch's committed authority/public key: Y = G^d, d = f(0) from the
+    # same Shamir polynomial the n members hold shares of. `verify` binds every
+    # accepted proof to this committed key.
+    return _spf_pub(_group_secret(seed, threshold, n))
+
+
+# ---------------------------------------------------------------------------
+# HONEST HOLDER vs ATTACKER surface split (Copilot this review #1, High).
+#
+# `GROUP_SK` (line ~112) and the helpers `_poly_coeffs` / `_poly_share` /
+# `_group_secret` / `_spf_sign` model the SEEDED GROUP SECRET and the signing
+# path that ONLY the primitive (Rust) and its >= t holders may take. In this
+# harness they are plain module functions so the honest-signing tests (N3/I3,
+# the genuine threshold theorem) can be exercised from the authority's own
+# signing path. They are NOT reachable from the attacker surface.
+#
+# `AttackerView` is the test's canonical ATTACKER: it is constructed with ONLY
+# public committed material (epoch descriptor, authority_key, roster,
+# membership_commitment, and the candidate closes) and exposes NO attribute or
+# method to obtain shares, the seed, `_group_secret`, `_spf_sign`, or any other
+# signing material. Every negative-synthesis / pre-lock unavailability check
+# (O2, S2, K2) is driven through this façade, so the evidence the model offers
+# is exactly "an attacker interface that cannot touch signing material cannot
+# produce an accepted proof or a pre-lock root" -- not a claim that Python
+# cannot be read. The truly cryptographic pre-lock secrecy (that < t shares are
+# information-theoretically insufficient) is guaranteed by the real BLS/VUF
+# primitive, which this harness consciously does not re-derive.
+class AttackerView:
+    def __init__(self, epoch, candidates):
+        self.epoch = epoch
+        self.authority_key = epoch.authority_key
+        self.roster = epoch.roster
+        self.membership_commitment = epoch.membership_commitment
+        self.candidates = tuple(candidates)          # public candidate closes
+        # Deliberately NO secret, shares, seed, _group_secret, or _spf_sign.
+
+    def public_root_guess(self, c, p_guess):
+        # A raw H("Root",...) over a GUESSED proof is not an accepted root;
+        # it only reflects "a root could be computed for a specific proof". It
+        # never runs the public-key check, so it is not `verify`.
+        return sha256(b"Root" + self.authority_key + self.epoch.hash
+                      + c.hash + p_guess)
+
+    def __repr__(self):
+        return ("AttackerView(public only: authority_key, roster, "
+                "membership_commitment, %d candidate closes)" % len(self.candidates))
+
+
+def _validator_confirm_sk(secret: bytes, member_index: int) -> int:
+    """Per-member CONFIRM (SCP/externalization) signing key `k_i`, a genuinely
+    MEMBER-HELD SECRET: it is derived from the authority's PRIVATE `secret`, NOT
+    from any public data (Copilot this review: the old `_member_confirm` derived
+    `k_i = H("ConfirmSubKey" || membership_commitment || i)` from PUBLILY-visible
+    bytes, so any observer could mint a valid CONFIRM vote for every roster
+    member -- it authenticated nothing). `k_i` is used ONLY to authenticate a
+    member's CONFIRM->EXTERNALIZE vote to the boundary; never to sign/verify the
+    randomness proof. An observer with only the epoch (public) cannot compute
+    `k_i`: it requires the private group/DKG secret. The epoch commits ONLY the
+    corresponding PUBLIC verification key (see `_validator_confirm_pub`)."""
+    return _spf_scalar(sha256(b"NodeConfirmKey/v2" + hash32(secret)
+                              + u32(member_index) + b"v1"))
+
+
+def _validator_confirm_pub(secret: bytes, member_index: int) -> bytes:
+    """Public verification key K_i = G^{k_i} for a member's CONFIRM vote. This is
+    the ONLY per-member CONFIRM material an epoch commits/registers: the private
+    key stays with the member (rev-w#7). Bound to the epoch's roster commitment
+    through the `confirm_pub` the epoch registers."""
+    return _spf_pub(_validator_confirm_sk(secret, member_index))
+
+
+def _validator_enc_key(secret: bytes, member_index: int) -> bytes:
+    """Per-member ENCRYPTED-SHARE encryption key E_j = G^{e_j} (round-22 threads
+    3936844318 / 3936844061; round-23 rework): the PUBLIC group key under which
+    member j's AVSS share is encrypted by every dealer. The epoch REGISTERS the
+    GROUP IMAGE in index order and COMMITS it into the epoch hash, so every node
+    authenticates the same E_j vector. The epoch commits ONLY G^{e_j} -- the
+    private exponent e_j (see `_avss_recv_sk`) is member/primitive material that
+    is never stored in a public record and is not a public function of the
+    epoch. A ciphertext c2 = C^{(d)}_i * E_j^r is well-formedness-checkable
+    from E_j alone (verifiable encryption via the public NIZK below) while only
+    the recipient holding e_j can strip the mask -- so the encrypted sub-shard
+    is genuinely confidential."""
+    e_j = _spf_scalar(sha256(b"cap-0089:enc:v1" + hash32(secret)
+                             + u32(member_index) + b"v1"))
+    return pow(_GRP_G, e_j, _GRP_P).to_bytes(32, "big")
+
+
+def _confirm_vote(k_i: int, epoch_hash: bytes, C_s: bytes) -> bytes:
+    # Member CONFIRM vote = deterministic Schnorr signature over
+    # ("CONFIRM", epoch_hash, C_s) under the member's PRIVATE subkey k_i. Sealed
+    # and verifiable via the committed public K_i; an observer (lacking k_i,
+    # which is not a public function) cannot mint one.
+    r = _spf_scalar(sha256(b"ConfirmNonce" + k_i.to_bytes(32, "big")
+                           + epoch_hash + C_s))
+    R = pow(_GRP_G, r, _GRP_P)
+    R_bytes = R.to_bytes(32, "big")
+    K = pow(_GRP_G, k_i, _GRP_P)
+    c = int.from_bytes(sha256(b"ConfirmChal" + epoch_hash + C_s
+                              + R_bytes + K.to_bytes(32, "big") + b"v1"), "big") % _GRP_Q
+    s = (r + c * k_i) % _GRP_Q
+    return R_bytes + s.to_bytes(32, "big")
+
+
+def _confirm_vote_verify(K_i_pub: bytes, epoch_hash: bytes, C_s: bytes,
+                         vote: bytes) -> bool:
+    if K_i_pub is None or len(K_i_pub) != 32 or vote is None or len(vote) != 64:
+        return False
+    K = int.from_bytes(K_i_pub, "big")
+    if not (0 < K < _GRP_P):
+        return False
+    R_bytes, s_bytes = vote[:32], vote[32:]
+    R = int.from_bytes(R_bytes, "big")
+    s = int.from_bytes(s_bytes, "big")
+    # Copilot round-16 (thread 3934383210): a Schnorr response is a scalar mod q,
+    # so s == 0 is a VALID canonical value that a deterministic _confirm_vote can
+    # legitimately emit; rejecting the high 0 bit would drop a valid member vote
+    # and stall release. Accept the full range [0, q).
+    if not (0 < R < _GRP_P) or not (0 <= s < _GRP_Q):
+        return False
+    c = int.from_bytes(sha256(b"ConfirmChal" + epoch_hash + C_s
+                              + R_bytes + K_i_pub + b"v1"), "big") % _GRP_Q
+    return pow(_GRP_G, s, _GRP_P) == (R * pow(K, c, _GRP_P)) % _GRP_P
+
+
+def _spf_sign(d: int, epoch_hash: bytes, C_s: bytes) -> bytes:
+    # Deterministic, secret-nonce Schnorr signature (the model's canonical
+    # signature; RFC-6979-style). The model's own producer emits exactly one
+    # byte-string per (d, epoch, C_s). NOTE: the accepted ROOT is pinned to the
+    # proof's NONCE COMMITMENT `R = P_s[:32]` (see `canonical_root` /
+    # UniqueThresholdProof.verify) -- NOT to the malleable scalar `s` -- and
+    # because the nonce is
+    # deterministic and `d` is denied to every actor, only this ONE byte-identical
+    # `P_s` can exist per close (N3/I3): alternate ENCODINGS canonicalize to the
+    # same bytes, and a deviant `P_s` (which requires holding `d`) is never the
+    # source's genuine proof, so no second root for the same close is reachable
+    # (the one-future bound, Copilot this review).
+    d_bytes = d.to_bytes(32, "big")
+    r = _spf_scalar(sha256(b"SpfNonce" + d_bytes + epoch_hash + C_s))
+    R = pow(_GRP_G, r, _GRP_P)
+    R_bytes = R.to_bytes(32, "big")
+    Y = pow(_GRP_G, d, _GRP_P)
+    Y_bytes = Y.to_bytes(32, "big")
+    c = int.from_bytes(sha256(b"SpfChal" + epoch_hash + C_s
+                              + R_bytes + Y_bytes + b"cap-0089-v1"), "big")
+    c %= _GRP_Q
+    s = (r + c * d) % _GRP_Q
+    return R_bytes + s.to_bytes(32, "big")
+
+
+def _spf_verify(pub32: bytes, epoch_hash: bytes, C_s: bytes, proof: bytes) -> bool:
+    # PURE public verification bound to the committed public key `pub32`.
+    # Rejects anything that is not a valid signature under Y -- arbitrary bytes,
+    # a wrong-epoch proof, a replayed cross-slot proof all fail here.
+    if pub32 is None or len(pub32) != 32 or proof is None or len(proof) != 64:
+        return False
+    R_bytes, s_bytes = proof[:32], proof[32:]
+    Y = int.from_bytes(pub32, "big")
+    if not (0 < Y < _GRP_P):
+        return False
+    R = int.from_bytes(R_bytes, "big")
+    if not (0 < R < _GRP_P):
+        return False
+    s = int.from_bytes(s_bytes, "big")
+    # Copilot round-16 (thread 3934383210): s == 0 is a valid scalar mod q; accept
+    # the full range [0, q) so a legitimate zero response cannot make a valid
+    # FROST/signature reconstruction fail.
+    if not (0 <= s < _GRP_Q):
+        return False
+    c = int.from_bytes(sha256(b"SpfChal" + epoch_hash + C_s
+                              + R_bytes + pub32 + b"cap-0089-v1"), "big")
+    c %= _GRP_Q
+    # G^s == R * Y^c (mod p)
+    return pow(_GRP_G, s, _GRP_P) == (R * pow(Y, c, _GRP_P)) % _GRP_P
+
+
+class EpochDescriptor:
+    """Inert verification material, canonicalized as ONE rule-hash so that any
+    change to format/scheme/group key/roster/threshold/root-rule/event-mapping/
+    verifier produces a NEW epoch (migration neutrality).
+
+    The epoch COMMITS the full canonical threshold authority: a sorted roster of
+    member share-verification keys (committed as `membership_commitment`), the
+    group (`authority_key`), the threshold, and the verifier/root/encoding rules.
+    n and t are DERIVED from this descriptor by `ThresholdAuthority.from_epoch`;
+    they are never caller arguments."""
+
+    def __init__(self, format_version: int, authority_key: bytes,
+                 roster, activation: int, retirement: int, threshold: int,
+                 root_rule: bytes, event_mapping: bytes,
+                 verifier_rule: bytes = b"unique-threshold/v1",
+                 scheme: bytes = EPOCH_SCHEME,
+                 byzantine_bound: int = None,
+                 confirm_pub=None,
+                 feldman_pub=None,
+                 enc_keys=None,
+                 scp_qset: tuple = None):
+        # Round-26 topology contract (tacticalnoot 5549653283): the COMMITTED SCP
+        # quorum-set graph `scp_qset = (q, members)` is that the epoch's liveness
+        # relies on. Default = the flat `(threshold, all members)` graph mirroring
+        # the n-member validator set. `q` and `members` are validated at
+        # construction and committed into the epoch hash, so a relevant qset
+        # change (a different `q` or a different member list) produces a NEW epoch
+        # hash -- the topology is pinned, exactly as the reviewer's "exact SCP
+        # qset graph it [the epoch] relies on ... a relevant qset change rolls the
+        # epoch" requires. The activation-time SAT gate (see
+        # `_topology_contract_violations`) is evaluated right here at construction
+        # so a COMMITTED epoch can never be activated with a topology that can
+        # finalize under a Byzantine-set-only quorum or with fewer than t intact
+        # rostered releasers.
+        self.format_version = format_version
+        # Commit the authority/group public key AFTER authenticating it as a
+        # non-identity element of the order-q subgroup (Copilot this review #1,
+        # High). An out-of-group / identity public key (e.g. Y = 1) would let
+        # anyone choose s and satisfy `G^s == R * Y^c` with Y^c = 1, so forged
+        # proofs could derive roots. We reject at construction: the committed
+        # authority key must be a generator-subgroup element of order q.
+        authority_key = hash32(authority_key)            # rejects wrong widths
+        authority = int.from_bytes(authority_key, "big")
+        if not (1 < authority < _GRP_P
+                and pow(authority, _GRP_Q, _GRP_P) == 1):
+            raise ValueError(
+                "authority_key must be a non-identity order-q group element "
+                "(1 < Y < p and Y^q == 1 mod p)")
+        self.authority_key = authority_key
+        # Canonical member ordering (Copilot round-20 thread 3936012458): sort the
+        # member RECORDS as a UNIT -- (roster_key, confirm_pub[k], feldman_pub[k])
+        # -- so that reordering `roster` does NOT silently detach a caller-supplied
+        # per-member `confirm_pub` / `feldman_pub` from its roster index. Sorting
+        # `roster` alone while leaving caller-supplied key vectors in their original
+        # order would bind every K_i / C_i to the WRONG member at construction
+        # (authenticating / reconstructing under a silently-remapped member
+        # mapping). A provided key vector is carried WITH its member; an omitted
+        # one is later derived by canonical (sorted) index, which already agrees.
+        _cp = list(confirm_pub) if confirm_pub is not None else None
+        _fp = list(feldman_pub) if feldman_pub is not None else None
+        _ek = list(enc_keys) if enc_keys is not None else None
+        # VALIDATE caller-supplied per-member vector lengths BEFORE indexing
+        # (round-22 thread 3936620332): the one-key-per-member contract is
+        # checked against the roster first, so a short vector raises a clear
+        # ValueError instead of an IndexError and a long vector is REJECTED
+        # instead of having its trailing keys silently discarded into a
+        # different-but-hashing-equivalent epoch.
+        for _label, _vec in (("confirm_pub", _cp), ("feldman_pub", _fp),
+                             ("enc_keys", _ek)):
+            if _vec is not None and len(_vec) != len(roster):
+                raise ValueError(
+                    "%s must provide exactly one element per roster member "
+                    "(%d supplied for %d members)"
+                    % (_label, len(_vec), len(roster)))
+        _pairs = [(_m, (None if _cp is None else _cp[_k]),
+                   (None if _fp is None else _fp[_k]),
+                   (None if _ek is None else _ek[_k]))
+                  for _k, _m in enumerate(roster)]
+        _pairs.sort(key=lambda _r: _r[0])
+        roster_tup = tuple(_r[0] for _r in _pairs)
+        if len(set(roster_tup)) != len(roster_tup):
+            # thread e6WbkN: duplicate roster keys would let one verification
+            # identity occupy multiple threshold indices -- reject before n and
+            # membership_commitment are derived.
+            raise ValueError("roster must contain distinct member keys")
+        self.roster = roster_tup
+        # Bind any caller-supplied per-member public keys to the canonical order
+        # resolved above; None keeps "derive by index" for the default paths.
+        self._confirm_pub_raw = (
+            tuple(_r[1] for _r in _pairs) if _cp is not None else None)
+        self._feldman_pub_raw = (
+            tuple(_r[2] for _r in _pairs) if _fp is not None else None)
+        self._enc_keys_raw = (
+            tuple(_r[3] for _r in _pairs) if _ek is not None else None)
+        self.membership_commitment = sha256(roster_bytes(self.roster))
+        # Commit ONLY the per-member PUBLIC CONFIRM verification keys K_i
+        # (Copilot this review: CONFIRM votes authenticate member-held SECRET
+        # keys; the epoch registers/commits only the public verification keys).
+        # `confirm_pub` is a tuple of n public keys K_i = G^{k_i}; the private
+        # k_i is held only by the member/authority (never public, never here).
+        self.confirm_pub = (
+            self._confirm_pub_raw if self._confirm_pub_raw is not None
+            else tuple(_validator_confirm_pub(GROUP_SK, i)
+                       for i in range(1, len(self.roster) + 1)))
+        if len(self.confirm_pub) != len(self.roster):
+            raise ValueError("confirm_pub must have one key per roster member")
+        # Reject DUPLICATE committed CONFIRM verification keys K_i (Copilot this
+        # review, thread ew-OgM, High). The CONFIRM vote authenticates the member
+        # via K_i but does NOT bind `member_index`, and `externalize()` counts
+        # indices (see the original diff at the CONFIRM threshold below). If the
+        # same public key occupied multiple roster indices, a single signature
+        # under that key could be copied into `t` CONFIRM entries and satisfy the
+        # roster threshold -- one signer minting t votes. Requiring the K_i to be
+        # pairwise-distinct makes each counted roster index represent a DISTINCT
+        # signer, so reaching `t` requires `t` genuinely-distinct signers.
+        if len(set(self.confirm_pub)) != len(self.confirm_pub):
+            raise ValueError("confirm_pub must contain distinct member keys")
+        # Validate every committed CONFIRM verification key K_i as a NON-IDENTITY
+        # element of the order-q subgroup (Copilot this review, High). If a K_i
+        # were out-of-group or the identity (e.g. K_i = 1), an observer could
+        # choose any valid s and set R = G^s so that K_i^c = 1 and the member's
+        # CONFIRM vote verifies without that member ever signing -- minting votes
+        # for keys the member never committed to. We reject at construction,
+        # exactly as for `authority_key`.
+        for _ki in self.confirm_pub:
+            if len(_ki) != 32:
+                raise ValueError("confirm_pub element must be 32 bytes")
+            _k_int = int.from_bytes(_ki, "big")
+            if not (1 < _k_int < _GRP_P
+                    and pow(_k_int, _GRP_Q, _GRP_P) == 1):
+                raise ValueError(
+                    "confirmed CONFIRM key K_i must be a non-identity order-q "
+                    "group element (1 < K_i < p and K_i^q == 1 mod p)")
+        # COMMIT each member's PUBLIC Feldman commitment C_i = G^{f(i)} -- the
+        # order-q public image of the member's long-lived polynomial share f(i)
+        # (Copilot this review, thread evw9Z, High). These are PUBLIC (never
+        # secret), but they MUST be committed into the epoch identity so that a
+        # peer verifying a partial signature can MATCH the carrier-supplied C_i
+        # against the epoch-committed value. Without committing them, a Byzan-
+        # tine rostered sender could supply ANY subgroup element as C_i --
+        # including the identity `C_i = 1`, which turns the partial check
+        # `G^{s_i} == N_i * C_i^c` into `G^{s_i} == N_i` (no secret contribution,
+        # satisfied by `(s_i=1, N_i=G)`) and poisons reconstruction. The epoch
+        # commits exactly one C_i per roster member and the boundary rejects a
+        # carrier whose C_i is not the epoch-committed one for that member.
+        n_feld = len(self.roster)
+        self.feldman_pub = (
+            self._feldman_pub_raw if self._feldman_pub_raw is not None
+            else tuple(_feldman_commit(GROUP_SK, threshold, n_feld, i)
+                       for i in range(1, n_feld + 1)))
+        if len(self.feldman_pub) != len(self.roster):
+            raise ValueError("feldman_pub must have one commitment per member")
+        for _ci in self.feldman_pub:
+            if len(_ci) != 32:
+                raise ValueError("feldman_pub element must be 32 bytes")
+            _c_int = int.from_bytes(_ci, "big")
+            if not (1 < _c_int < _GRP_P
+                    and pow(_c_int, _GRP_Q, _GRP_P) == 1):
+                raise ValueError(
+                    "committed Feldman commitment C_i must be a non-identity "
+                    "order-q group element (1 < C_i < p and C_i^q == 1 mod p)")
+        # COMMIT each member's public encrypted-share ENCRYPTION key E_j
+        # (round-22 thread 3936844318, High): the AVSS ciphertext for member j
+        # is bound to E_j, so the key vector must be REGISTERED IN E INDEX ORDER
+        # and committed into the epoch hash -- otherwise peers cannot
+        # authenticate which encryption key belongs to which roster member and
+        # the same epoch hash could be interpreted under different E_j
+        # mappings. The exact same one-key-per-member and per-element-width
+        # validation applies as to confirm_pub / feldman_pub.
+        self.enc_keys = (
+            self._enc_keys_raw if self._enc_keys_raw is not None
+            else tuple(_validator_enc_key(GROUP_SK, i)
+                       for i in range(1, len(self.roster) + 1)))
+        if len(self.enc_keys) != len(self.roster):
+            raise ValueError("enc_keys must have one key per roster member")
+        for _e in self.enc_keys:
+            if len(_e) != 32:
+                raise ValueError("enc_keys element must be 32 bytes")
+            _e_int = int.from_bytes(_e, "big")
+            if not (1 < _e_int < _GRP_P
+                    and pow(_e_int, _GRP_Q, _GRP_P) == 1):
+                raise ValueError(
+                    "committed encryption key E_j must be a non-identity "
+                    "order-q subgroup element (1 < E_j < p and E_j^q == 1 "
+                    "mod p)")
+        if len(set(self.enc_keys)) != len(self.enc_keys):
+            raise ValueError(
+                "enc_keys must be pairwise DISTINCT (VEST / ECDSA-p256 "
+                "point-preserving, compact 32-byte encoding): two roster "
+                "members sharing an encryption key are indistinguishable to a "
+                "dealer and break the one-key-per-individual binding")
+        # Prove the committed Feldman commitments are the evaluations of ONE
+        # degree-(t-1) polynomial whose constant commitment equals the committed
+        # `authority_key` (Copilot this review, thread ew-Ogf, High). Without
+        # this, an epoch could pass activation with individually-valid but
+        # POLYNOMIALLY-INCONSISTENT `C_i` (e.g. produced by different secrets):
+        # its individually-valid partials would reconstruct a proof that fails
+        # under the committed group key `authority_key`, permanently stalling
+        # apply. We validate over the PUBLIC committed values only, exactly as an
+        # activation-time verifier would: (a) Lagrange-interpolate the committed
+        # constant G^{f(0)} from the first `t` points and require it equals
+        # `authority_key`; (b) for EVERY remaining point i in (t, n], replace
+        # point t by i and re-interpolate, requiring the SAME `authority_key` --
+        # proving every point lies on that same degree-(t-1) curve. This uses NO
+        # secret and keeps the committed pins byte-identical for a consistent
+        # roster (the default `_feldman_commit` path already lies on one curve).
+        n_feld = len(self.roster)
+        if threshold <= n_feld:
+            pts = list(zip(range(1, n_feld + 1), self.feldman_pub))
+            base_t = [pts[k] for k in range(0, threshold)]
+            got0 = _lagrange_constant_commitment(base_t, index0=0)
+            want = int.from_bytes(self.authority_key, "big") % _GRP_P
+            if got0 != want:
+                raise ValueError(
+                    "feldman_pub constant commitment G^{f(0)} != authority_key: "
+                    "the committed Feldman points are not evaluations of a single "
+                    "degree-t-1 polynomial sharing the committed group key")
+            # every additional point (i > t a.k.a. index >= threshold) must lie
+            # on that same curve: interpolate over {0..t-2, i} (i.e. substitute
+            # point i for the dropped point threshold-1).
+            for i in range(threshold, n_feld + 1):
+                subset = [pts[k] for k in range(0, threshold - 1)] + [pts[i - 1]]
+                if _lagrange_constant_commitment(subset, index0=0) != want:
+                    raise ValueError(
+                        "feldman_pub point C_%d does not lie on the committed "
+                        "degree-t-1 polynomial (constant != authority_key)" % i)
+        self.activation = activation
+        self.retirement = retirement
+        # Reject a malformed activation window at construction (Copilot this
+        # review, thread evw-k): an empty (`activation == retirement`) or
+        # reversed (`activation >= retirement`) window can never be active and
+        # would fail closed indefinitely at transition. Fail fast here rather
+        # than emitting a permanently-inactive committed epoch.
+        if not (activation < retirement):
+            raise ValueError(
+                "activation window must satisfy activation < retirement "
+                "(a non-empty, non-reversed active range)")
+        if not (1 <= threshold <= len(self.roster)):
+            # thread e6VduY: a malformed threshold (0 or > n) can never be a
+            # sound epoch -- 0 would emit a proof with no shares, > n could
+            # never resolve. Reject at construction.
+            raise ValueError("threshold must satisfy 1 <= threshold <= n")
+        self.threshold = threshold
+        # Byzantine bound f and its TWO validity conditions, both committed into
+        # the epoch identity.
+        #
+        # (1) HONEST-INTERSECTION (cross-message uniqueness, thread eW_rR):
+        #     `2*t - n > f` guarantees any two size-t reconstructing subsets
+        #     overlap in at least one HONEST member even with f Byzantine members
+        #     anywhere -- so two conflicting same-slot proofs are impossible.
+        # (2) AVAILABILITY (Copilot this review): `t <= n - f` guarantees the
+        #     `n - f` honest members can actually gather `t` valid shares. If
+        #     `t > n - f`, then with the f tolerated Byzantine members withholding
+        #     (Layer B has NO fallback key), fewer than t honest shares exist and
+        #     ledger apply stalls indefinitely.
+        # The DEFAULT f is the largest value that satisfies BOTH bounds:
+        #     f = min(2*t - n - 1, n - t).
+        # For (n=8, t=7) the availability bound is binding -- n - t = 1 -- so a
+        # declared f = 1 gives t <= n - f = 7 and the honest-intersection bound
+        # holds. NOTE (round-29 foqq9): t <= n - f is only the SHARE-GATHERING
+        # bound; the committed flat qset also needs every finalizing QUORUM to
+        # leave >= t INTACT releasers, i.e. q >= t + f with an honest quorum
+        # (q <= n - f), which for (8,7,1) cannot hold (q would need to be both
+        # >= 8 and <= 7) -- so such an epoch is REJECTED by the topology gate
+        # unless a NON-FLAT committed qset provably satisfies C1b (see
+        # `_topology_contract_violations`). A caller who FORCES a higher f (e.g.
+        # f = 5) gets it PRESERVED (never silently re-clamped down) and then an
+        # honest FAIL-CLOSED rejection when `t <= n - f` is violated (7 <= 3 is
+        # false). The clamp is applied to the DEFAULT only, never to a
+        # configured/declared f (Copilot this review).
+        n = len(self.roster)
+        default_f = max(0, min(2 * threshold - n - 1, n - threshold))
+        self.byzantine_bound = (default_f if byzantine_bound is None
+                                else byzantine_bound)
+        if not (0 <= self.byzantine_bound < threshold <= n):
+            raise ValueError("byzantine bound must satisfy 0 <= f < t <= n")
+        if not (2 * threshold - n > self.byzantine_bound):
+            # Reject any (t, n, f) that does NOT guarantee an honest intersection
+            # between every two threshold subsets (thread eW_rR).
+            raise ValueError(
+                "threshold must satisfy 2*t - n > f for honest-intersection "
+                "(cross-message uniqueness)")
+        if not (self.byzantine_bound <= n - threshold):
+            # Reject any (t, n, f) whose honest members cannot gather t shares:
+            # with f Byzantine members withholding, only n-f honest shares exist,
+            # so we need t <= n-f for availability (no fallback key in Layer B).
+            raise ValueError(
+                "threshold must satisfy t <= n - f for AVAILABILITY "
+                "(the n-f honest members must be able to gather t shares)")
+        # Round-26 committed SCP quorum-set graph (tacticalnoot 5549653283;
+        # round-29 foqq9 strengthened the activation gate). `scp_qset` is
+        # `(q, members)`: the flat homogeneous quorum set the epoch RELIES ON
+        # for SCP finalizability of its closes. Default = `(threshold +
+        # byzantine_bound, all n members)` -- round-29 foqq9: a size-t quorum is
+        # NOT enough, because the finalizing quorum can CONTAIN the f Byzantine
+        # members (they WITHHOLD their release sub-shares), leaving only q - f
+        # honest releasers; the smallest sound flat quorum is therefore `q = t
+        # + f` (and liveness needs `q <= n - f`, i.e. `t + 2f <= n`, else the
+        # gate fires). The whole point of committing it here is that liveness
+        # is now a property of a PINNED graph, not of a "flat n,t,f assumption"
+        # floating next to a CONFIRM certificate.
+        if scp_qset is None:
+            q, members = threshold + self.byzantine_bound, tuple(
+                range(1, n + 1))
+        else:
+            try:
+                q, members = int(scp_qset[0]), tuple(int(m) for m in scp_qset[1])
+            except (TypeError, ValueError, IndexError):
+                raise ValueError(
+                    "scp_qset must be (int quorum_threshold, iterable of "
+                    "member indices 1..n)")
+        if not (1 <= q <= n):
+            raise ValueError(
+                "committed SCP quorum threshold q must satisfy 1 <= q <= n")
+        members = tuple(sorted(set(members)))
+        if len(members) == 0 or members[0] < 1 or members[-1] > n:
+            raise ValueError(
+                "committed SCP qset members must be non-empty indices in 1..n")
+        if q > len(members):
+            raise ValueError(
+                "committed SCP quorum threshold q cannot exceed |members| of "
+                "the committed qset graph")
+        self.scp_qset = (q, members)
+        self.scp_qset_hash = sha256(_flat_qset_bytes(q, members))
+        # Activation-time TOPOLOGY CONTRACT gate: a committed epoch constructor
+        # REJECTS (== fails at activation) any qset graph whose SAT enumeration
+        # of every admitted Byzantine set B (|B| <= f) finds a violation of
+        # C0/C1/C2 (see `_topology_contract_violations`). The flat default is
+        # exactly the closed availability bound t <= n - f, so VALID epochs
+        # construct and only a genuinely malformed/unlive topology is rejected
+        # here -- this is the model's stand-in for the Rust checker refusing to
+        # activate the boundary.
+        tpl_violations = _topology_contract_violations(
+            n, threshold, self.byzantine_bound, q, members)
+        if tpl_violations:
+            _v0, _detail = tpl_violations[0]
+            raise ValueError(
+                "committed SCP qset topology rejected at activation: %s (%r) "
+                "under every admitted Byzantine set must satisfy C0/C1/C2 of the "
+                "topology contract" % (_v0, _detail))
+        self.verifier_rule = verifier_rule
+        if not is_valid_event_mapping(event_mapping):
+            # Thread 3930443019: an invalid committed event_mapping (one missing
+            # a MANDATORY consumer, APPLY or PRNG) must be REJECTED AT ACTIVATION
+            # -- not silently hashed into a live epoch. APPLY/PRNG genuinely
+            # require post-lock hidden entropy (an unstalled apply cannot proceed
+            # without a seed), so a mapping omitting either is an INVALID epoch and
+            # can never become active (see is_valid_event_mapping / thread
+            # 3929943643). Enforcing here (in the descriptor constructor / hash
+            # path) makes the CAP's "rejected at activation" a property of the
+            # boundary epoch itself, not a test-only helper call.
+            raise ValueError(
+                "event_mapping must enable both mandatory consumers APPLY and PRNG "
+                "(only NOMINATION may be opted out); got: "
+                + event_mapping.decode("ascii", "replace") if event_mapping else ""
+            )
+        self.root_rule = root_rule
+        self.event_mapping = event_mapping
+        self.scheme = scheme
+        self.hash = sha256(
+            b"Epoch"
+            + struct.pack(">B", format_version) + lp(scheme)
+            + hash32(authority_key) + hash32(self.membership_commitment)
+            # Commit the per-member verification-key vectors IN ROSTER INDEX
+            # ORDER (Copilot this review, thread evw-VYA / evwVYA, High):
+            # encoding them as SORTED sets would discard the positional mapping
+            # from roster index to confirm_pub / feldman_pub, so two permuted
+            # key vectors would hash identically even though verification for
+            # each member_index differs -- letting the same epoch identity mean
+            # different things on different nodes. Here each vector is committed
+            # as `u32(n) || concat(Hash[32])` in EXACT member order (index-1),
+            # so a permutation of the key vector is a DIFFERENT epoch hash.
+            + hash32(sha256(u32(len(self.confirm_pub))
+                            + b"".join(hash32(k) for k in self.confirm_pub)))
+            + hash32(sha256(u32(len(self.feldman_pub))
+                            + b"".join(hash32(k) for k in self.feldman_pub)))
+            # Commit the ordered ENCRYPTED-SHARE encryption-key vector E_j in
+            # roster-index order (round-22 3936844318): the AVSS ciphertexts a
+            # qualified dealer published are verified under these exact keys.
+            + hash32(sha256(u32(len(self.enc_keys))
+                            + b"".join(hash32(k) for k in self.enc_keys)))
+            # Round-26: commit the exact SCP quorum-set graph the epoch RELIES
+            # ON (`scp_qset` = (q, members), canonicalized by _flat_qset_bytes).
+            # This pins the qset graph into the epoch identity, so a RELEVANT
+            # qset change (different q or different member list) produces a NEW
+            # epoch hash and therefore a NEW epoch -- the topology is never
+            # assumed implicitly (tacticalnoot 5549653283).
+            + hash32(self.scp_qset_hash)
+            + struct.pack(">QQ", activation, retirement)
+            + struct.pack(">I", threshold)
+            + struct.pack(">I", self.byzantine_bound)
+            + lp(verifier_rule)
+            + lp(root_rule) + lp(event_mapping))
+
+    @property
+    def n(self) -> int:
+        return len(self.roster)
+
+    def active_at(self, slot: int) -> bool:
+        return self.activation <= slot < self.retirement
+
+
+def roster_bytes(roster) -> bytes:
+    """Canonical sorted roster encoding as Core XDR `<opaque Hash[32]<>` (a
+    variable-length array). XDR prefixes a variable-length array with the
+    ELEMENT COUNT `n` (a uint32), not the byte length: the wire is `u32(n)`
+    followed by `n` fixed-width 32-byte elements, each `Hash[32]` with no
+    per-element length prefix. (A byte-length prefix of `32*n` would be the
+    XDR encoding of a single `opaque<3968>` blob, NOT of `<Hash[32]>` -- a
+    native implementation would derive a different membership commitment and
+    epoch hash. Copilot this review.) `membership_commitment = H(roster_bytes)`.
+    This is what `from_epoch` re-derives, so substituted (n, t, roster)
+    mappings are a different commitment and cannot verify under the epoch."""
+    ordered = sorted(roster)
+    return struct.pack(">I", len(ordered)) + b"".join(hash32(k) for k in ordered)
+
+
+# ---- Round-26 TOPOLOGY CONTRACT (tacticalnoot 5549653283) ---------------------
+# The epoch COMMITS the exact SCP quorum-set graph the liveness/release argument
+# relies on (a homogeneous flat qset `(q, members)` by default, mirroring the
+# CAP's n-member validator set), and the activation-side SAT checker enumerates
+# EVERY admitted Byzantine set `B` (|B| <= f) and requires:
+#   (C0) B is NOT itself an SCP quorum under the committed graph  -- no value can
+#        be finalized by Byzantine voters alone (Garcia-Perez/Losa quorum-avoidance);
+#   (C1) per admitted B: SCP can still finalize (an HONEST quorum exists) and EVERY
+#        quorum Q of the committed graph leaves |Q n Intact(B)| >= t intact releasers
+#        -- a Byzantine-containing finalizing quorum WITHHOLDS the releases of its
+#        Byzantine seats, so quorum SIZE is insufficient (round-29 foqq9); a
+#        topologically-live close therefore has >= t honest share-holders no matter
+#        which quorum the scheduler finalizes through;
+#   (C2) |Roster n B| < t  -- no admitted Byzantine set reaches reconstruction.
+# The flat default (q = t + f over all n, round-29 foqq9) makes (C1b) closed-form
+# q - f >= t and (C1a) n - f >= q, i.e. the flound-tightening `t + 2f <= n`; the
+# old `q = t` default FAILED (C1b): with q = t a t-member quorum can contain the f
+# Byzantine voters and leave only t - f < t honest releasers (the reviewer's
+# (n,t,f,q) = (10,7,3,7) counterexample). This is the formal reframing of the old
+# "flat n,t,f + roster-CONFIRM certificate" liveness claim that tacticalnoot
+# granted may be dropped -- the liveness guarantee now lives in the COMMITTED qset
+# graph + SAT gate instead of a CONFIRM-certificate count. A relevant qset change
+# produces a NEW committed qset hash and therefore a NEW epoch hash: the qset graph
+# is pinned, and changing it rolls the epoch.
+def _flat_qset_bytes(q: int, members) -> bytes:
+    m = tuple(sorted(set(members)))
+    return u32(q) + u32(len(m)) + b"".join(u32(x) for x in m)
+
+
+def _is_qset_quorum(n: int, q: int, members, S) -> bool:
+    """True iff `S` (a non-empty set of member indices) is an SCP quorum under
+    the committed flat quorum set (q, members): for every v in S, S alone meets
+    v's quorum-set threshold (|S n members| >= q)."""
+    if not S:
+        return False
+    mset = frozenset(members)
+    return all(len(S & mset) >= q for _ in S)
+
+
+def _scp_finalizable(n: int, q: int, members, B) -> bool:
+    """True iff some intact (non-Byzantine) quorum Q can exist with fault set B,
+    i.e. there is Q != empty, Q n B == empty, and Q is a quorum under (q, members).
+    For n <= ~12 this is a short exhaustive subset search (the model's stand-in
+    for Core's Rust SAT solver); the default homogeneous qset has a closed form."""
+    intact = frozenset(i for i in range(1, n + 1) if i not in B)
+    if len(intact) < q:
+        return False
+    if set(members) == set(range(1, n + 1)):
+        # flat qset over the whole validator set: Intact itself is a quorum.
+        return True
+    import itertools
+    for r in range(q, len(intact) + 1):
+        for Q in itertools.combinations(sorted(intact), r):
+            if _is_qset_quorum(n, q, members, set(Q)):
+                return True
+    return False
+
+
+def _min_quorum_size(n: int, q: int, members):
+    """SMALLEST SCP quorum in the committed flat qset graph (None if no quorum
+    exists). ROUND-28 foQhl introduced this as the C1 binding case (every
+    ACTUAL finalizable quorum must carry >= t releasers). ROUND-29 foqq9
+    SUPERSEDES it inside the topology gate (see `_topology_contract_violations`):
+    measuring QUORUM SIZE is necessary but not sufficient, because a finalizing
+    quorum can CONTAIN Byzantine members that WITHHOLD their releases -- so the
+    gate now requires, per admitted Byzantine set, that EVERY quorum leaves >= t
+    INTACT members (`|Q n Intact(B)| >= t`), which for the flat default is the
+    bound `q >= t + f`, strictly stronger than min-quorum >= t."""
+    import itertools
+    mset = frozenset(members)
+    for size in range(1, n + 1):
+        for Q in itertools.combinations(range(1, n + 1), size):
+            S = set(Q)
+            if _is_qset_quorum(n, q, members, S):
+                return size
+    return None
+
+
+def _avss_gate_flat_ok(n: int, t: int, f: int, q: int, members) -> [bool, None]:
+    """Round-29 foqq9 fast path: when the committed qset is the HOMOGENEOUS FLAT
+    graph over all n members (the model's default and all the gate's constructors
+    use), the topology contract has a closed form and needs no subset
+    enumeration:
+        C0 (byzantine-quorum): f < t  =>  no admitted |B| = b <= f is a quorum
+            (a quorum needs q >= t+1 > f), i.e. f < t is the flat C0 bound;
+        C1a (liveness)              : every admitted B leaves an INTACT quorum
+            (Intact = all except B itself)  <=>  n - b >= q for all b <= f,
+            tightest at b = f  =>  n - f >= q;
+        C1b (release per quorum)    : the SMALLEST quorum a scheduler can
+            finalize through is q members; the worst case packs them so that as
+            many of the f Byzantine seats as possible are inside the quorum
+            (a Byzantine-containing quorum WITHHOLDS their releases), so the
+            minimum INTACT releasers inside a finalizing quorum is max(q - f,
+            t)  -- every quorum leaves >= t intact releases iff q - f >= t;
+        C2 (byzantine-coalition-size): |Roster n B| = n - b >= n - f >= t+1 > t.
+    Together the honest flat default `q = t + f` with `t + 2f <= n` is sound,
+    and the reviewer's (10,7,3,7) FAILS (q - f = 4 < t = 7). Returning True means
+    the graph is flat sound; False means the flat graph violates the contract;
+    None means the graph is NOT the homogeneous flat graph (caller must
+    enumerate)."""
+    if tuple(sorted(set(members))) != tuple(range(1, n + 1)):
+        return None
+    if q >= n or q <= 0 or f < 0 or t < 0:
+        return False
+    if f >= t:                       # C0: an admitted B can be its own quorum
+        return False
+    if n - f < q:                    # C1a: no honest quorum survives fault f
+        return False
+    if q - f < t:                    # C1b: a q-quorum can contain f Byzantine
+        return False
+    return True
+
+
+def _topology_contract_violations(n: int, t: int, f: int, q: int, members):
+    """Return a list of (rule, detail) violations of the round-26 topology
+    contract, enumerating EVERY admitted Byzantine set B (|B| <= f) exactly as
+    Core's Rust activation SAT checker would. Empty list == activation allowed.
+
+    ROUND-29 foqq9 (394275440x, High) found the round-28 form still unsound: the
+    round-28 C1 bound `min-quorum >= t` measured quorum SIZE and implicitly
+    assumed the finalizing quorum is all-honest. A quorum can CONTAIN Byzantine
+    members (they vote the value into externalization and then WITHHOLD their
+    randomness releases), so the guarantee must be measured over INTACT members
+    INSIDE every finalizing quorum, under every admitted B:
+
+        C1a (liveness): for every B, at least one HONEST quorum exists
+            (`_scp_finalizable`) -- otherwise the epoch can never externalize a
+            close under that fault class and stalls permanently.
+        C1b (release): for every B and EVERY quorum Q of the committed graph
+            (intact or Byzantine-containing), |Q n Intact(B)| >= t.
+
+    The reviewer's counterexample is (n,t,f,q) = (10,7,3,7): min-quorum = 7 = t
+    passes round-28, yet a 7-member quorum can CONTAIN the 3 Byzantine voters
+    and leave only 4 < 7 honest releasers. For the homogeneous flat default
+    graph (members == all n) the gate takes the CLOSED-FORM fast path
+    (`_avss_gate_flat_ok`) -- C1a == n - f >= q, C1b == q - f >= t, C1c ==
+    f < t -- and the honest default `q = t + f` is exactly -- and only -- the
+    strength the round-28 min-quorum rule promised but did not deliver.
+    """
+    flat_ok = _avss_gate_flat_ok(n, t, f, q, members)
+    if flat_ok is True:
+        return []
+    if flat_ok is False or f == 0 or n <= 6:
+        # Flat graph is provably sound OR the graph is non-flat / small: run the
+        # exhaustive per-B enumeration (the model's stand-in for the Rust SAT
+        # solver) so the reported violation matches a real quorum pattern.
+        pass
+    import itertools
+    violations = []
+    for size in range(0, f + 1):
+        for B in itertools.combinations(range(1, n + 1), size):
+            B = set(B)
+            intact = frozenset(i for i in range(1, n + 1) if i not in B)
+            if flat_ok is not True:
+                # Non-flat graph (or flat_graph that failed its own closed form):
+                # keep the FULL per-B / per-quorum SAT check so a crafted
+                # sub-threshold or non-flat graph is still rejected at activation
+                # (round-29 fpkD5: the None case MUST NOT fall through to the
+                # closed-form flat labels, which assume members == all n and
+                # would accept an unlive qset whose members exclude a finalizer).
+                if not _scp_finalizable(n, q, members, B):
+                    violations.append(("no-honest-quorum-under-fault",
+                                       ("byzantine", len(B), "q", q,
+                                        "intact", len(intact))))
+                for r in range(q, n + 1):
+                    for Q in itertools.combinations(range(1, n + 1), r):
+                        S = set(Q)
+                        if not _is_qset_quorum(n, q, members, S):
+                            continue
+                        if len(S & intact) < t:
+                            violations.append((
+                                "quorum-below-honest-release",
+                                ("byzantine", len(B), "quorum", len(S),
+                                 "intact-in-quorum", len(S & intact),
+                                 "threshold", t)))
+                if _is_qset_quorum(n, q, members, B):
+                    violations.append(("byzantine-quorum", B))
+                if len(B) >= t:
+                    violations.append(("byzantine-coalition-size", len(B)))
+    return violations
+
+
+class LockedClose:
+    """Canonical Core close-lock commitment C_s for a closed ledger `slot`.
+    Commits the externalized value bytes (via their SHA-256) with
+    epoch/network/slot/previousLedgerHash -- every semantic input that can
+    interact with the random result -- while excluding certificate/packet-path
+    metadata (dnFWo / dnFWi). `previous_ledger_hash` is the REAL predecessor
+    hash Core commits in StellarValue: an explicit input sourced from the
+    externalized value, never synthesized."""
+
+    __slots__ = ("epoch_hash", "network_id", "slot", "previous_ledger_hash",
+                 "value_bytes", "hash")
+
+    def __init__(self, epoch, slot: int, previous_ledger_hash: bytes,
+                 value_bytes: bytes, network_id: bytes = NETWORK):
+        self.epoch_hash = epoch.hash
+        self.network_id = network_id
+        self.slot = slot
+        self.previous_ledger_hash = previous_ledger_hash
+        self.value_bytes = value_bytes
+        self.hash = self._commit()
+
+    def _commit(self) -> bytes:
+        in_v1 = close_input(self.epoch_hash, self.network_id, self.slot,
+                            self.previous_ledger_hash,
+                            canonical_value_hash(self.value_bytes))
+        return sha256(b"CloseLock" + in_v1)
+
+    def validate(self) -> bool:
+        return self._commit() == self.hash
+
+    @classmethod
+    def rebuild(cls, epoch, slot: int, previous_ledger_hash: bytes,
+                value_bytes: bytes, network_id: bytes = NETWORK) -> "LockedClose":
+        """Self-consistent LockedClose under an ARBITRARY network id / explicit
+        predecessor (used to prove the resolver rejects cross-network or wrong-
+        predecessor closes, and that they never produce a root here)."""
+        obj = cls.__new__(cls)
+        obj.epoch_hash = epoch.hash
+        obj.network_id = network_id
+        obj.slot = slot
+        obj.previous_ledger_hash = previous_ledger_hash
+        obj.value_bytes = value_bytes
+        obj.hash = obj._commit()
+        return obj
+
+
+def canonical_proof(proof: bytes):
+    """Strict canonicalization: the proof is rejected unless it is the single
+    canonical byte string the epoch's verifier accepts. The canonical shape of
+    the model's Schnorr/VUF stand-in proof is EXACTLY 64 bytes of the form
+    `R||s` (R is a 32-byte group element, s a 32-byte scalar). Two accepted
+    encodings of the same mathematical proof MUST canonicalize to the SAME bytes
+    before either can influence R_s (Noot: proof malleability is a conformance
+    issue, never a second-future surface).
+
+    NOTE: shape-canonicalization is NOT verification. `verify()` additionally
+    checks the public-key Schnorr equation, so an arbitrary 64-byte value that
+    merely has the right length is REJECTED (Copilot line-519). The canonical
+    shape feeds authentication only; the ROOT is the NONCE-COMMITTED unique
+    function `R_s = H("Root", authority_key, epoch_hash, C_s, R, s)` of the
+    committed authority key + the close + the proof's committed nonce
+    commitment `R = P_s[:32]` AND its verified signature scalar `s = P_s[32:]`
+    (see `canonical_root`), so malleability of a valid signature's
+    ENCODING or scalar cannot split the root: the byte-identical canonical P_s
+    (N3/I3) gives the single, predictable root, and a proof sharing the committed
+    R collapses to the same root (VUF uniqueness, thread 3921067284)."""
+    if proof is None or len(proof) != 64:
+        return None
+    return proof
+
+
+def canonical_root(C_s: bytes, authority_key: bytes, epoch_hash: bytes,
+                   P_s: bytes = None):
+    """R_s -- the source root, derived from the VERIFIED canonical threshold
+    PROOF, binding BOTH the (public) round-1 nonce commitment `R = P_s[:32]` AND
+    the UNPREDICTABLE verified signature scalar `s = P_s[32:]`:
+    `R_s = H("Root", authority_key, epoch_hash, C_s, R, s)`.
+
+    This is the reconciled answer to two review rounds that pull in opposite
+    directions:
+      * Copilot 3929898690 / 3929943584 (round-15, High): S2 earliest-knowledge
+        sealing. If the root depended ONLY on the public `R`, then once the
+        round-1 nonce commitments `N_i` are broadcast the aggregate `R` is
+        public and an observer could compute the exact consumer root BEFORE the
+        proof scalar exists -- a pre-finality root oracle. Binding in the
+        verified scalar `s = r + c*d` closes this: `s` exists only once the
+        threshold has ACTUALLY produced it (it requires the secret `d`), so the
+        root is genuinely unpredictable until a VERIFIED proof is in hand. This
+        is exactly "derive the root from unpredictable post-boundary proof
+        material."
+      * Copilot 3921067284 (round-14b, High): uniqueness / non-malleability.
+        Deriving from `s` alone would be malleable (a holder of `d` could emit a
+        different proof with a different `r`). But `s` is bound TOGETHER WITH the
+        transcript-committed `R`: `R` is fixed by the authenticated round-1
+        nonce broadcast (a contributor cannot swap nonces between rounds without
+        an N_i mismatch that `verify_share` rejects), and for a FIXED committed
+        `R` and committed close the Schnorr equation `G^s == R * Y^c` forces a
+        SINGLE `s`. So two valid proofs for the same committed session have the
+        SAME `(R, s)` and hence the SAME root -- at most ONE root per
+        (epoch, C_s), the relation is a genuine function (VUF/BLS uniqueness) --
+        while a tampered `s` (same R) simply FAILS verification and yields NO
+        root. Both properties hold simultaneously: sealed (unpredictable until
+        verified proof) AND unique (one root per committed session).
+
+    `verify` calls this ONLY after the public-key check has authenticated the
+    proof; it never turns an arbitrary byte string into a root. `P_s` must be
+    provided (it is not optional); a caller that omits it gets no root -- mirroring
+    that no node can derive the root before it holds the valid proof."""
+    if P_s is None or len(P_s) != 64:
+        return None
+    R = P_s[:32]            # public round-1 nonce commitment (not secret-bearing)
+    s = P_s[32:]            # unpredictable verified scalar (secret-derived)
+    return sha256(b"Root" + authority_key + epoch_hash + C_s + R + s)
+
+
+class ThresholdAuthority:
+    """Genuinely thresholded release authority, derived ONLY from the epoch
+    (Noot). `from_epoch(epoch)` fixes the roster / n / t / group; construction
+    FAILS CLOSED if the caller tries to supply a differing n/t/roster. Each
+    member holds a SECRET share key derived from the authority seed
+    (setup/transport metadata -- never in the epoch hash).
+
+    Rules:
+      * share(i, cl): requires the close to belong to THIS epoch; durable
+        sign-once per member per event -- the same (epoch, slot, C_s) retry is
+        idempotent, a DIFFERENT C_s for the same slot is REFUSED (an SCP safety
+        failure can stall randomness, never mint two roots).
+      * verify_share / recover_proof: invalid, duplicate, out-of-epoch, or
+        wrong-close shares are DISCARDED INDIVIDUALLY and never poison
+        reconstruction -- if >= t other valid shares are present, the same
+        canonical P_s is recovered anyway.
+      * < t valid shares -> None (no proof at all). There is NO public
+        proof-emission function: an actor with fewer than t valid shares cannot
+        obtain any P_s accepted by the pure verifier."""
+
+    def __init__(self, epoch: EpochDescriptor, seed: bytes,
+                 signed: dict = None):
+        self.epoch = epoch
+        self.seed = seed
+        # Durable sign-once per event: (member_index, slot) -> C_s. Each member
+        # signs each ledger slot at most once; a competing C_s for the SAME slot
+        # is refused. Distinct future slots are independent (threads e6Vduq,
+        # e6Vdt1). `signed` is carried through restart() so a crash/restart
+        # authority re-derives identical shares and still refuses equivocation.
+        self._signed = signed if signed is not None else {}
+        # Authorization gate (thread eW_rk / Copilot 3917696297): share() only
+        # ever releases for a close that has been CONFIRM/EXTERNALIZE admitted
+        # by the producer source -- never for an arbitrary pre-lock close.
+        # `_released` maps C_s hash -> release witness; it is populated ONLY by
+        # the private `_authorize_release()`, invoked exclusively from the
+        # RandomnessSource boundary path. There is NO public `authorize_release`
+        # an external holder of this object can call.
+        self._released = {}
+        # Bound boundary capability (set by RandomnessSource.bind): the image
+        # commit H(b"CapCommit", cap) of the RELEASE capability derived from the
+        # source's boundary secret. Without a genuine bound cap the authority
+        # refuses every `_authorize_release` call, so an unpaired (attacker-held)
+        # authority can authorize nothing.
+        self._cap_check = None
+        # AUTHENTICATED per-(member, close) release registry (Copilot thread
+        # 3921067249, Medium): `share(i, cl)` is gated behind member i's OWN
+        # individually-crossed boundary -- NOT a caller-supplied set. This set
+        # records which (member_index, cl_hash) pairs have been independently
+        # authorized through the boundary's CONFIRM->EXTERNALIZE transition. A
+        # caller who only holds the authority object cannot conjure per-member
+        # release bits: each bit is populated exclusively by the boundary's own
+        # authenticated path (`_authorize_member_release`). This replaces the old
+        # caller-supplied `per_member_released` parameter which let any test or
+        # external caller assert arbitrary release sets -- a violation of the
+        # principle that release is boundary-authenticated, not caller-asserted.
+        self._per_member_released = set()
+        # AUTHENTICATED per-close ROUND-1 nonce-commitment registry: maps
+        # cl_hash -> {member_index: N_i_bytes}, N_i = G^{n_i}. This is the FROST
+        # round-1 transcript -- every CONTRIBUTOR's public nonce commitment is
+        # broadcast (via `publish_nonce`) BEFORE any round-2 partial is produced,
+        # so the close's aggregate nonce commitment R and challenge c are fixed
+        # once the commitments are public. `verify_share` / `recover_proof` read
+        # ONLY this committed set (or an explicitly-passed identical one) to build
+        # R and c -- a peer-verifier needs NO master secret and NO member nonce
+        # n_i, and it does NOT need any private live state that a fresh process
+        # never ran (Copilot this review, thread evw_VYO / evw-VYO, High). The
+        # nonce SECRETS n_i live only in the issuance path (`_share_for`) and are
+        # never stored here. The registry is authoritative and keyed by canonical
+        # roster index, so permuting the roster cannot silently change which N_i
+        # binds to which member.
+        self._r1 = {}
+
+    @classmethod
+    def from_epoch(cls, epoch: EpochDescriptor, seed: bytes,
+                   n_members=None, threshold=None, roster=None) -> "ThresholdAuthority":
+        """THE canonical constructor. n/t/roster come from the epoch; anything
+        caller-supplied that disagrees fails closed."""
+        if n_members is not None and n_members != epoch.n:
+            raise ValueError("n_members must be derived from the epoch")
+        if threshold is not None and threshold != epoch.threshold:
+            raise ValueError("threshold must be derived from the epoch")
+        if roster is not None and tuple(sorted(roster)) != epoch.roster:
+            raise ValueError("roster must be derived from the epoch")
+        return cls(epoch, seed)
+
+    def _nonce_material(self, cl_hash: bytes):
+        # Per-message (FROST-style) nonce machinery. The nonce is a fresh secret
+        # per (epoch, C_s): a degree t-1 polynomial g whose constant term r=g(0)
+        # is the aggregate nonce and whose evaluations n(i) are each member's
+        # secret NONCE share. Derived deterministically from the authority seed +
+        # epoch_hash + C_s so restart / durable sign-once re-derives the
+        # identical R without process memory (Copilot this review #3, High).
+        #
+        # THIS is the SECRET-ISSUANCE path: it is the ONLY place the master seed
+        # participates. The aggregate `R` and challenge `c` it yields are exactly
+        # the values a public verifier re-derives from the transported nonce
+        # commitments (see `_public_challenge`), so the final P_s is byte-
+        # identical whether computed here or by an ordinary peer with no secret.
+        nonce_seed = sha256(b"FrostNonce" + self.seed + self.epoch.hash + cl_hash)
+        coeffs = _frost_nonce_poly(nonce_seed, self.epoch.threshold, self.epoch.n)
+        r = coeffs[0]                       # g(0) -- aggregate secret nonce
+        R = pow(_GRP_G, r, _GRP_P).to_bytes(32, "big")
+        return coeffs, R
+
+    def _public_aggregate(self, cl_hash: bytes, comms: dict) -> bytes:
+        # PUBLIC per-close aggregate nonce commitment R = G^{g(0)}: the Lagrange
+        # combination (in the EXPONENT, on the group) of any >= t transported
+        # per-member nonce commitments N_i = G^{n_i}, where n_i = g(i). Because
+        # every n_i lies on the SAME degree-(t-1) nonce polynomial g, the sum
+        # `sum_j L_j(0) * n_j = g(0)` regardless of which t-subset is used, so R
+        # (and therefore the bound P_s) is byte-identical for every subset while
+        # being computable with NO master secret -- only public N_i commitments.
+        xs = list(comms.keys())
+        if len(xs) < 1:
+            return None
+        acc = 1
+        for i in xs:
+            xi = i % _GRP_Q
+            Ni = int.from_bytes(comms[i], "big") % _GRP_P
+            num = 1
+            den = 1
+            for j in xs:
+                if j == i:
+                    continue
+                xj = j % _GRP_Q
+                num = (num * ((-xj) % _GRP_Q)) % _GRP_Q
+                den = (den * ((xi - xj) % _GRP_Q)) % _GRP_Q
+            lam = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+            # N_i^{lambda}: acc *= Ni^lam (mod p); lam may be negative -> invert.
+            if lam < 0:
+                lam += _GRP_Q
+            acc = (acc * pow(Ni, lam, _GRP_P)) % _GRP_P
+        return acc.to_bytes(32, "big")
+
+    def _public_challenge(self, cl_hash: bytes, R: bytes) -> int:
+        # Public Fiat-Shamir challenge c = H(epoch_hash, C_s, R, Y, tag) applied
+        # mod q. Uses ONLY the (publicly derived) aggregate nonce commitment R
+        # and the committed authority key Y -- never the master secret. An
+        # ordinary peer can reproduce this exact value.
+        Y_bytes = self.epoch.authority_key
+        c = int.from_bytes(sha256(b"SpfChal" + self.epoch.hash + cl_hash
+                                  + R + Y_bytes + b"cap-0089-v1"), "big")
+        return c % _GRP_Q
+
+    def publish_nonce(self, member_index: int, cl: LockedClose) -> bytes:
+        """FROST ROUND-1: broadcast this member's public nonce commitment
+        `N_i = G^{n_i}` for `cl`, recorded in the authenticated per-close
+        registry `_r1[cl.hash][member_index]` and returned so any peer can
+        collect the round-1 transcript directly through the API (Copilot this
+        review, thread evw_VYO / evw-VYO, High). In a real two-round FROST every
+        contributor publishes round-1 commitments BEFORE any round-2 partial, so
+        the close's aggregate R and challenge c are fixed once the commitments
+        are public, and a peer verifying a partial never has to guess R from a
+        single carrier or an empty private state. The member's nonce SECRET n_i
+        never leaves `_share_for`; only the public `N_i = G^{n_i}` is committed
+        here."""
+        if not (1 <= member_index <= self.epoch.n):
+            raise ValueError("member index out of canonical roster")
+        if cl.epoch_hash != self.epoch.hash:
+            return None
+        # CONFIRM/release gate (Copilot round-15 3929898704, High): round-1
+        # nonce publication is NOT unconditional. An authority must NOT publish
+        # commitment material for an arbitrary candidate close before the lock --
+        # if it did, a caller holding the authority could request nonce
+        # commitments for t indices of ANY candidate close they pull, exposing the
+        # aggregate R and letting them compute the root pre-lock (a grinding
+        # oracle). So `publish_nonce` only fires once the close has reached the
+        # authenticated CONFIRM/release boundary (`_released[cl.hash]` set by the
+        # boundary-release path). A durable one-close-per-slot decision also
+        # applies: the same (member_index, slot) publishes once, and a competing
+        # C_s for the same slot is refused (mirrors the sign-once gate).
+        if self._released.get(cl.hash) is None:
+            return None
+        slot_key = (member_index, cl.slot)
+        if slot_key in self._signed:
+            if self._signed[slot_key] != cl.hash:
+                return None                     # same slot, competing C_s -> refuse
+        else:
+            self._signed[slot_key] = cl.hash
+        coeffs, _R = self._nonce_material(cl.hash)
+        n_i = _frost_share(coeffs, member_index) % _GRP_Q
+        N_i = pow(_GRP_G, n_i, _GRP_P).to_bytes(32, "big")
+        self._r1.setdefault(cl.hash, {})[member_index] = N_i
+        return N_i
+
+    def round1_nonces(self, cl: LockedClose) -> dict:
+        """The AUTHENTICATED round-1 nonce-commitment set for `cl` (the FROST
+        round-1 transcript). A peer that has participated in (or observed) the
+        broadcast reconstructs this from the public `N_i` values it received for
+        that close; it is the input that fixes R and c for verification. This is
+        the ONLY nonce material verification reads -- never private authority
+        state (Copilot this review, thread evw-VYO, High)."""
+        return dict(self._r1.get(cl.hash, {}))
+
+    def _share_for(self, member_index: int, cl_hash: bytes):
+        # The member's MESSAGE-DEPENDENT threshold partial signature
+        # `s_i = n(i) + c*f(i) mod q` (32 bytes), the actual value `recover_proof`
+        # Lagrange-combines into `s = r + c*d` (Copilot this review #3, High).
+        # Unlike a raw long-lived Shamir share f(i), this partial is bound to the
+        # specific cl_hash (via the fresh secret nonce n(i)), so gathering t
+        # partials from one close yields NO usable value for any other close and
+        # NEVER reveals f(i) or d -- combination produces only r+c*d for THIS
+        # message. `recover_proof` is the only consumer of these partials.
+        #
+        # Returns a SHARE CARRIER `(s_i, N_i, C_i)` (Copilot this review, High):
+        # the member's public nonce commitment N_i = G^{n_i} and public Feldman
+        # commitment C_i = G^{f(i)} travel WITH the partial so a peer can verify
+        # `G^{s_i} == N_i * C_i^c` without the master seed or any secret. The
+        # nonce secret n_i (and the long-lived f_i) are derived in this secret
+        # path and never leave it.
+        coeffs, R = self._nonce_material(cl_hash)
+        c = self._public_challenge(cl_hash, R)
+        f_i = _poly_share(self.seed, self.epoch.threshold, self.epoch.n,
+                          member_index) % _GRP_Q
+        n_i = _frost_share(coeffs, member_index) % _GRP_Q
+        s_i = (n_i + c * f_i) % _GRP_Q
+        N_i = pow(_GRP_G, n_i, _GRP_P).to_bytes(32, "big")
+        # The public Feldman commitment C_i = G^{f(i)} emitted in the carrier
+        # MUST be the epoch-COMMITTED one for this member (Copilot this review,
+        # thread evw9Z): `verify_share` matches the carrier's C_i against
+        # `self.epoch.feldman_pub[i-1]`, so an honest carrier transports exactly
+        # the committed value and a forged identity/subgroup C_i is rejected.
+        C_i = self.epoch.feldman_pub[member_index - 1]
+        return (s_i.to_bytes(32, "big"), N_i, C_i)
+
+    def _set_boundary_cap(self, cap: bytes) -> None:
+        """Bind a RELEASE capability derived from the source's boundary secret.
+        Called only by RandomnessSource.bind() (never by an external caller).
+        After binding, `_authorize_release` accepts a witness only if it was
+        minted with this exact capability."""
+        self._cap_check = sha256(b"CapCommit" + cap)
+
+    def bind_release_cap(self, cap: bytes) -> None:
+        """PUBLIC release-capability binding (round-23): installs the commit
+        H(b"CapCommit", cap) of the RELEASE capability derived from a
+        ConfirmExternalizeBoundary's secret -- exactly the value
+        RandomnessSource.bind() installs via `_set_boundary_cap`. A FRESH
+        authority (e.g. one reconstructing per-member release state against its
+        OWN fresh boundary) still cannot MINT capabilities or witnesses -- that
+        needs the boundary secret and lives only in the boundary's
+        record_confirm / externalize transitions -- so binding here only enables
+        VALIDATION of the boundary's genuine witnesses. No internal release
+        registry is carried between authorities: release bits are reproduced
+        through the authenticated transitions with boundary-minted witnesses."""
+        self._cap_check = sha256(b"CapCommit" + cap)
+
+    def _authorize_release(self, cl_hash: bytes, witness: bytes, cap: bytes) -> bool:
+        """PRIVATE release-authorization gate (Copilot 3917696297 + suppressed
+        line-506 note). The ONLY writer to `_released`, and reachable only from
+        RandomnessSource.proof() -- there is no public `authorize_release`.
+
+        NON-FORGEABILITY: an external caller holding this authority object, but
+        NOT the producer boundary, cannot conjure share eligibility. To pass,
+        `cap` must be the genuine RELEASE capability derived from the boundary
+        secret (its commit must match the bound `_cap_check`, so a fabricated
+        `cap'` is rejected), AND `witness` must equal the boundary-minted release
+        witness H(b"CEWitness", cap, epoch_hash, C_s). A caller who only holds
+        the authority knows `_cap_check` = H(cap_real) but not `cap_real` (a
+        preimage), so it cannot supply a matching (cap, witness) pair for its
+        chosen pre-lock close. Unpaired authorities (no `_cap_check`) authorize
+        nothing."""
+        if self._cap_check is None:
+            return False                       # unpaired: nothing can be released
+        if sha256(b"CapCommit" + cap) != self._cap_check:
+            return False                       # fabricated capability -> refuse
+        if sha256(b"CEWitness" + cap + self.epoch.hash + cl_hash) != witness:
+            return False                       # not the genuine boundary witness
+        if self._released.get(cl_hash) is not None:
+            return True                        # idempotent (durable once)
+        self._released[cl_hash] = witness
+        return True
+
+    def _authorize_member_release(self, member_index: int, cl_hash: bytes,
+                                  cap: bytes, witness: bytes):
+        """Boundary-authenticated per-member release gate (Copilot thread
+        3921067249; round-21 thread 3936363759). Records that member
+        `member_index` has independently crossed its OWN CONFIRM->EXTERNALIZE
+        boundary toward the close identified by `cl_hash`. `share(member_index,
+        cl)` consults this registry instead of accepting a caller-supplied set --
+        so a caller who only holds the authority object cannot conjure
+        per-member release bits; each bit is populated exclusively by the
+        boundary's authenticated path.
+
+        UNFORGEABLE BOUNDARY WITNESS (round-21 3936363759): a bit is accepted
+        ONLY if the caller presents the boundary-minted (cap, witness) pair:
+        `cap` is the RELEASE capability derived from the boundary secret (its
+        commit must match the bound `_cap_check`; the caller knows `_cap_check`
+        but, holding only the authority, not the secret's preimage), and
+        `witness` is the PER-MEMBER witness
+        `H("MREWitness", cap, epoch_hash, member_index, C_s)` that the boundary
+        mints ONLY for a member whose CONFIRM vote `externalize()` actually
+        verified. A caller who holds only the authority object therefore cannot
+        register a bit for a member whose CONFIRM vote was never verified --
+        it cannot mint `cap`/`witness` without the boundary secret, so
+        `share()` can never be enabled for an unverified member. The close must
+        already be boundary-released (`_released[cl_hash]` is set) for the
+        per-member bit to be meaningful."""
+        if member_index is None or not (1 <= member_index <= self.epoch.n):
+            return                              # out of canonical roster
+        if self._cap_check is None:
+            return                              # unpaired: nothing can be released
+        if sha256(b"CapCommit" + cap) != self._cap_check:
+            return                              # fabricated capability -> refuse
+        if (sha256(b"MREWitness" + cap + self.epoch.hash +
+                   u32(member_index) + cl_hash) != witness):
+            return                              # not the boundary-minted witness
+        if self._released.get(cl_hash) is None:
+            return                              # close not yet boundary-released
+        self._per_member_released.add((member_index, cl_hash))
+
+    def share(self, member_index: int, cl: LockedClose):
+        if not (1 <= member_index <= self.epoch.n):
+            raise ValueError("member index out of canonical roster")
+        if cl.epoch_hash != self.epoch.hash:
+            # An authority for epoch A cannot share over a close of epoch B.
+            return None
+        if cl.hash not in self._released:
+            # (thread eW_rk) share() is gated behind authorization: a close
+            # that was never CONFIRM/EXTERNALIZE admitted cannot be shared,
+            # so no pre-lock proof can be assembled by an external caller.
+            return None
+        if (member_index, cl.hash) not in self._per_member_released:
+            # (Copilot thread 3921067249, Medium) share(i, cl) is gated behind
+            # member i's OWN individually-crossed boundary -- authenticated
+            # per-member release state stored in `_per_member_released`, NOT a
+            # caller-supplied set. The carrier exists ONLY if this member
+            # individually crossed its OWN CONFIRM->EXTERNALIZE boundary toward
+            # the same C_s. The liveness red test uses this so SCP ledger
+            # finality and per-member release are modeled as two independent
+            # dimensions even though the private authority is boundary-authorized
+            # for this close.
+            return None
+        key = (member_index, cl.slot)
+        if key in self._signed:
+            if self._signed[key] != cl.hash:
+                # Same event slot, DIFFERENT C_s: refuse (durable sign-once).
+                return None
+        else:
+            self._signed[key] = cl.hash
+        # ROUND-2 PARTIAL BARRIER (Copilot round-15, thread 3929898725, High):
+        # a round-2 partial is emitted ONLY after the close's AUTHENTICATED
+        # ROUND-1 nonce-commitment set is COMPLETE -- i.e. at least `t` distinct
+        # committed nonce commitments for this close already exist in the
+        # authenticated round-1 registry. This fixes the ordering: `s_i` is
+        # computed and handed out only once the signer set / aggregate R /
+        # challenge are PUBLICLY FIXED (the >= t authenticated commitments), so a
+        # partial can never predate the fixed nonce basis it commits to and the
+        # first callers never receive a partial before the protocol's two-round
+        # barrier. The caller (the boundary release path) is responsible for
+        # publishing the round-1 commitments first; a partial request that
+        # arrives before the round-1 set reaches t is REFUSED (None).
+        if len(self._r1.get(cl.hash, {})) < self.epoch.threshold:
+            return None
+        carrier = self._share_for(member_index, cl.hash)
+        # The carrier's N_i MUST equal the already-committed round-1 value -- a
+        # contributor cannot return one N_i in round 1 and a different one in the
+        # partial (that would let it grind c per challenge).
+        if self._r1.get(cl.hash, {}).get(member_index) != carrier[1]:
+            return None                 # round-1/round-2 N_i mismatch: fail peer-bound
+        return carrier
+
+    def verify_share(self, member_index: int, cl: LockedClose,
+                     share_carrier, round1: dict = None) -> bool:
+        """Verify a member's MESSAGE-DEPENDENT partial without revealing f(i)
+        and WITHOUT the master seed (Copilot this review, High):
+        check `G^{s_i} == N_i * C_i^c (mod p)` using ONLY publicly transported
+        values --
+          * the member's public nonce commitment N_i = G^{n_i} (carrier[1]), and
+          * the member's public Feldman commitment C_i = G^{f(i)} (carrier[2]),
+        with the aggregate nonce commitment R and challenge c PUBLICLY derived
+        from the close's AUTHENTICATED ROUND-1 nonce-commitment set
+        (`_public_aggregate`/`_public_challenge`), which `round1` provides (or
+        `self.round1_nonces(cl)` supplies when not explicitly passed). An
+        ordinary peer whose live process has NEVER seen the master secret -- and
+        has NEVER run the rounds that produced the shares -- verifies exactly
+        this, using only the round-1 transcript + the carriers; no secret, share,
+        or nonce participates, and no private injected state is needed (Copilot
+        this review, thread evw-VYO, High). `share_carrier` is a
+        `(s_i, N_i, C_i)` triple, NOT a reusable long-lived Shamir share.
+        `round1` is the authenticated nonce-commitment set for `cl` ({index:
+        N_i}); the carrier's N_i must match `round1[member_index]`."""
+        if not (1 <= member_index <= self.epoch.n):
+            return False
+        if cl.epoch_hash != self.epoch.hash:
+            return False
+        if share_carrier is None or not isinstance(share_carrier, tuple) \
+                or len(share_carrier) != 3:
+            return False
+        s_i_b, N_i_b, C_i_b = share_carrier
+        if s_i_b is None or len(s_i_b) != 32 or N_i_b is None or len(N_i_b) != 32 \
+                or C_i_b is None or len(C_i_b) != 32:
+            return False
+        s_i = int.from_bytes(s_i_b, "big")
+        N_i = int.from_bytes(N_i_b, "big")
+        C_i = int.from_bytes(C_i_b, "big")
+        if not (1 <= N_i < _GRP_P) or pow(N_i, _GRP_Q, _GRP_P) != 1:
+            return False                                  # bad nonce commitment
+        if not (1 <= C_i < _GRP_P) or pow(C_i, _GRP_Q, _GRP_P) != 1:
+            return False                                # bad Feldman commitment
+        # COMMITTED-C_i BINDING (Copilot this review, thread evw9Z, High): the
+        # carrier-supplied C_i must byte-match the epoch-COMMITTED Feldman
+        # commitment for THIS member (`epoch.feldman_pub[member_index-1]`).
+        # A subgroup-valid but forged value -- in particular the identity
+        # `C_i = 1`, which would reduce the partial equation to `G^{s_i} == N_i`
+        # and count `(s_i=1, N_i=G)` as valid for ANY challenge -- is therefore
+        # rejected. A Byzantine rostered sender can no longer poison reconstruc-
+        # tion by transporting a C_i the epoch never committed for its index.
+        if C_i_b != self.epoch.feldman_pub[member_index - 1]:
+            return False                    # C_i not the epoch-committed one
+        # Copilot round-16 (thread 3934383263): a valid FROST partial
+        # s_i = n_i + c*f(i) mod q can legitimately be zero; rejecting it here
+        # would discard an honest share and break an otherwise-valid threshold
+        # reconstruction. Accept the full range [0, q).
+        if not (0 <= s_i < _GRP_Q):
+            return False
+        # PUBLIC AGGREGATE R from the close's AUTHENTICATED ROUND-1 nonce-
+        # commitment set -- NOT transient per-call state. `round1` (the supplied
+        # transcript) is authoritative when given; otherwise fall back to this
+        # authority's own committed round-1 registry. A verifier that computes R
+        # from a single carrier's N_i would get the WRONG aggregate; here we
+        # require at least `t` committed nonce commitments so the Lagrange
+        # interpolation recovers the true R = G^{g(0)} (Copilot this review,
+        # thread evw-VYO, High). The carrier's N_i is also bound to the committed
+        # round-1 value, so a contributor cannot swap nonces to grind c.
+        comms = dict(round1) if round1 is not None \
+            else self.round1_nonces(cl)
+        if comms.get(member_index) != N_i_b:
+            return False                     # N_i not the committed round-1 one
+        if len(comms) < self.epoch.threshold:
+            return False                     # not enough committed nonces yet
+        R_b = self._public_aggregate(cl.hash, comms)
+        if R_b is None:
+            return False
+        c = self._public_challenge(cl.hash, R_b)
+        # G^{s_i} == N_i * C_i^c (mod p)
+        return pow(_GRP_G, s_i, _GRP_P) == (N_i * pow(C_i, c, _GRP_P)) % _GRP_P
+
+    def released_members(self, cl: LockedClose):
+        """PUBLIC per-member release enumeration (round-22 3936844284): the
+        exact set of roster members whose CONFIRM->release record for `cl`
+        individually crossed the boundary, in ascending index order. This is a
+        per-member fact that the public model face can enumerate BEFORE any
+        >= t certificate exists -- the ROUND-2 BARRIER (t nonce commitments
+        must be public first) withholds the share() carrier below t, but the
+        release BITS themselves are per-member and readable."""
+        return tuple(sorted(m for (m, h) in self._per_member_released
+                            if h == cl.hash))
+
+    def recover_proof(self, subset, cl: LockedClose, round1: dict = None):
+        """subset: iterable of (member_index, share_carrier). Returns the
+        canonical P_s iff >= t VALID, distinct, in-roster message-dependent
+        partials for THIS exact close are present; invalid/duplicate/out-of-
+        epoch/wrong-close partials are discarded individually and never poison t
+        otherwise-valid partials.
+
+        GENUINE MESSAGE-DEPENDENT THRESHOLD RECONSTRUCTION, PEER-VERIFIABLE
+        (Copilot this review, High): the combined signing scalar `s = r + c*d` is
+        obtained by LAGRANGE-combining the supplied partials `s_i = n(i) + c*f(i)`
+        over GF(q) -- `s = sum_i L_i(0)*s_i = r + c*d` -- WITHOUT ever recovering
+        the long-lived group secret `d`, any member share `f(i)`, ANY nonce
+        secret `n(i)`, or the master seed. The aggregate nonce commitment R and
+        challenge c are derived PUBLICLY from the close's AUTHENTICATED ROUND-1
+        nonce-commitment set (`round1`, or `self.round1_nonces(cl)` when not
+        explicit; `_public_aggregate`/`_public_challenge`), so an ordinary peer
+        holding no secret -- and no private injected round-1 state -- reproduces
+        the byte-identical P_s from any >= t valid partials (Copilot this review,
+        thread evw-VYO, High). The partials are bound to cl_hash, so t partials
+        collected from one close are REUSELESS for any other close and cannot be
+        used to sign a pre-lock commitment. The final proof is `(R || s)` (64
+        bytes), byte-identical for every >= t subset (R = G^{g(0)} is invariant
+        under the subset choice)."""
+        if cl.epoch_hash != self.epoch.hash:
+            return None
+        t = self.epoch.threshold
+        n = self.epoch.n
+        comms = dict(round1) if round1 is not None else self.round1_nonces(cl)
+        valid = {}
+        for (member_index, carrier) in subset:
+            if (1 <= member_index <= n and member_index not in valid
+                    and self.verify_share(member_index, cl, carrier, round1=comms)):
+                valid[member_index] = carrier
+        if len(valid) < t:
+            return None                             # below t: no proof, stall
+        # PUBLIC aggregate R from the close's AUTHENTICATED ROUND-1 nonce set
+        # (`comms`, already derived above) -- the SAME basis the challenge c was
+        # fixed against -- so the proof's R matches the aggregate every verifier
+        # derives from the committed transcript, not a subset-dependent value.
+        R_b = self._public_aggregate(cl.hash, comms)
+        if R_b is None:
+            return None
+        s = 0
+        xs = list(valid.keys())
+        for i in xs:
+            xi = i % _GRP_Q
+            yi = int.from_bytes(valid[i][0], "big") % _GRP_Q
+            num = 1
+            den = 1
+            for j in xs:
+                if j == i:
+                    continue
+                xj = j % _GRP_Q
+                num = (num * ((-xj) % _GRP_Q)) % _GRP_Q
+                den = (den * ((xi - xj) % _GRP_Q)) % _GRP_Q
+            li = (num * pow(den, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+            s = (s + yi * li) % _GRP_Q
+        s %= _GRP_Q
+        return R_b + s.to_bytes(32, "big")
+
+    def restart(self) -> "ThresholdAuthority":
+        """Deterministic re-derivation from (epoch, seed) that CARRIES the
+        durable sign-once decisions: a crash/restart authority reproduces every
+        share and the same P_s/R_s with no new authority choice and no process
+        memory, while still refusing a competing C_s for any slot it already
+        signed (thread e6Vdt1 -- the crash window cannot mint an equivocation).
+        `signed` is passed through (its references are per-(epoch,seed) and the
+        re-derived authority stands in for the same device across restart)."""
+        new_auth = type(self)(self.epoch, self.seed, signed=self._signed)
+        new_auth._released = dict(self._released)
+        new_auth._cap_check = self._cap_check
+        new_auth._per_member_released = set(self._per_member_released)
+        new_auth._r1 = {k: dict(v) for k, v in getattr(self, "_r1", {}).items()}
+        return new_auth
+
+
+class UniqueThresholdProof:
+    """Abstract unique-threshold-proof interface -- the smallest audited Rust
+    seam. `verify` is PURE and archived-stable: it takes ONLY (epoch, C_s, P_s)
+    and returns the single canonical R_s or None. No source, no admission, no
+    process memory, no quorum-path fact (a year-later catchup node needs only
+    the descriptor + C_s + P_s). The candidate crypto (BLS/VUF) separately
+    proves: <t shares produce no proof; every >=t valid subset/permutation
+    recovers the byte-identical canonical P_s; strict verify/canonicalize ->
+    exactly one root; pre-lock secrecy under <t adversarial shares. This file
+    ASSERTS those contract invariants as executable checks (I1-I4) and never
+    pretends a placeholder hash is cryptographic proof: the proof bytes below
+    depend on the recovered group secret, which no public field can derive."""
+
+    @staticmethod
+    def verify(epoch: EpochDescriptor, C_s: bytes, P_s: bytes,
+               committed_R: [bytes, None] = None):
+        """PUBLIC archival verifier: verify(epoch, C_s, P_s) -> R_s | None.
+
+        The pure, archived-stable acceptance relation over the canonical proof.
+        It takes ONLY (epoch, C_s, P_s) -- no source, no admission memory, no
+        process memory, no quorum-path fact. `committed_R` (optional, round-29
+        foqqj) is the ROUND-1 nonce-commitment aggregate a verifier holds from
+        the close's public FROST transcript; when provided, a proof whose own
+        nonce commitment `R = P_s[:32]` disagrees with it is REJECTED even if
+        the signature scalar is Schnorr-valid -- two candidate proofs that both
+        satisfy the raw equation must yield EXACTLY ONE accepted root: the one
+        built on the transcript-committed nonce (one-future, thread foqqj).
+
+        It is a GENUINELY public verification bound to the epoch's committed
+        PUBLIC key (`epoch.authority_key`): it runs the Schnorr stand-in
+        signature check `G^s == R * Y^c (mod p)` and, only if that passes,
+        returns the one UNIQUE source root
+        `R_s = H("Root" || authority_key || epoch_hash || C_s || R || s)` where
+        `R = P_s[:32]` is the transcript-committed NONCE commitment and
+        `s = P_s[32:]` is the VERIFIED signature scalar -- the root binds BOTH
+        (round-22 thread 3936620432): R alone would be publicly computable from
+        the broadcast nonce commitments before finality (a pre-finality root
+        oracle), and s alone would be malleable; the pair is unpredictable until
+        a VERIFIED proof exists and unique for a fixed committed transcript
+        (VUF-style uniqueness, thread 3921067284). An arbitrary archive byte
+        string (a forged 64-byte value, a wrong-epoch proof, or a replayed
+        proof) is REJECTED -- it does not satisfy the equation under Y
+        (Copilot line-519: no longer does a bare canonical-length value derive
+        a root).
+
+        PROVENANCE-INDEPENDENT AUTHENTICATION + ANTI-GRINDING (Copilot this
+        review #2): `verify` AUTHENTICATES the proof against the committed public
+        key -- not against which authority produced it or whether THIS node
+        cached it -- so a valid proof received from another authority, or loaded
+        during catchup, resolves to the identical root (a fresh catchup node
+        needs only the descriptor + C_s + P_s). But the ROOT itself is derived
+        from the proof's transcript-committed NONCE `R = P_s[:32]`, so it is NOT
+        computable from public (authority_key, epoch_hash, C_s, R) before the
+        close's round-1 nonce broadcast commits `R` -- a
+        proposer cannot grind candidate closes to pick a favorable seed. Because
+        the honest `R` is the round-1-committed deterministic aggregate (unique per
+        C_s, N3/I3), one close yields one committed nonce and one root
+        (one-future), while no attacker that lacks the group secret can mint an
+        accepted proof to steer the root.
+
+        What it does NOT do -- and what a public verifier with no secret MUST
+        not do -- is *produce* the accepted proof. The proof is the secret-bound
+        Schnorr output needing the recovered group secret (`d = f(0)`), so this
+        verifier cannot and does not regenerate or forge it from public inputs
+        (Copilot 3917696336). In production the primitive's public-key check
+        (BLS pairing / RFC 9381 VUF equation) is the real math; the model's
+        Schnorr stand-in below is an honest, self-contained surrogate for that
+        seam (see the group-scheme note)."""
+        p = canonical_proof(P_s)
+        if p is None:
+            return None
+        if committed_R is not None and p[:32] != committed_R:
+            return None             # round-29 foqqj: valid-but-wrong-R rejected
+        if not _spf_verify(epoch.authority_key, epoch.hash, C_s, p):
+            return None
+        return canonical_root(C_s, epoch.authority_key, epoch.hash, p)
+
+
+def _mapping_labels(event_mapping: bytes) -> set:
+    # Split a committed `event_mapping` into its set of ENABLED consumer labels.
+    if event_mapping is None:
+        return {"PRNG", "APPLY", "NOMINATION"}       # unset => full default
+    if event_mapping in (b"", b"single-pulse:LockedClose->C_s/v1"):
+        return {"PRNG", "APPLY", "NOMINATION"}       # default full mapping
+    return set(p.strip().decode("ascii", "replace")
+               for p in event_mapping.split(b",") if p.strip())
+
+
+def is_valid_event_mapping(event_mapping: bytes) -> bool:
+    # Mandatory-consumer validation (Copilot round-15 thread 3929943643): APPLY
+    # and PRNG genuinely require post-lock hidden entropy (an unstalled apply
+    # cannot proceed without a seed), so EVERY accepted epoch MUST enable both.
+    # NOMINATION is the ONE opt-outable consumer. A committed mapping that omits
+    # APPLY or PRNG is INVALID and the epoch is rejected at activation.
+    #
+    # Copilot round-16 (thread 3934383303): the accepted grammar is now the
+    # CLOSED set -- APPLY and PRNG mandatory plus at most the optional NOMINATION.
+    # Unknown labels such as `APPLY,PRNG,OTHER` are REJECTED, so unsupported
+    # consumer names can never enter committed state (the epoch grammar is the
+    # normative interface, not a superset of it).
+    labels = _mapping_labels(event_mapping)
+    return {"APPLY", "PRNG"} <= labels <= {"APPLY", "PRNG", "NOMINATION"}
+
+
+def consumer_kdf(root: bytes, label: bytes, event_mapping: bytes = None) -> [bytes, None]:
+    # KDF(R_s, label): three distinct labelled consumers of ONE root (dnFWi;
+    # Noot round-15 / CAP "consumer-by-consumer requirement matrix").
+    # The committed `event_mapping` (a comma-separated set of ENABLED consumer
+    # labels in the epoch, e.g. b"PRNG,APPLY,NOMINATION") is now EXECUTABLE
+    # opt-out: a consumer whose label is NOT in the mapping releases NOTHING
+    # (returns None -- the application opted out of Layer-B randomness for that
+    # close rather than acting on UNKNOWN). Only an enabled consumer derives a
+    # value from the pulse, so "consumer is mandatory" is a real, testable
+    # property of the epoch, not a prose claim. The default full mapping enables
+    # all three.
+    # Copilot round-16 (thread 3934383355): when the root is UNKNOWN (None), an
+    # enabled consumer must NOT reach the hash concatenation and raise TypeError;
+    # return None so callers (e.g. nomination_priority) can stall or fall back
+    # exactly as specified.
+    if root is None:
+        return None
+    if label.decode("ascii", "replace") not in _mapping_labels(event_mapping):
+        return None                     # opted-out consumer: no value
+    return sha256(b"KDF" + root + label)
+
+
+def nomination_fallback_priority(epoch_hash: bytes, slot: int,
+                                 close_commitment: bytes,
+                                 canonical_value_hash: bytes,
+                                 network_id: bytes = NETWORK) -> bytes:
+    # CLOSED-FORM, canonical, UNSEEDED priority for the NEXT round's nomination
+    # candidates when the NOMINATION pulse is NOT deliverable (opted out via the
+    # committed event_mapping, or the root is UNKNOWN). Copilot round-15 thread
+    # 3930443124 requires an exact byte encoding / hash-to-priority formula, not
+    # a vague "canonical rotation" and not `None`.
+    #
+    # ROUND-30 fwY5z: the fallback is indexed on the CLOSED SOURCE close, never
+    # on the value being nominated. `slot` is the TARGET slot s being nominated
+    # (s == source_slot + 1); `close_commitment` is the SOURCE close C_{s-1};
+    # `canonical_value_hash` is the SOURCE close's canonical value hash. The
+    # target's own value C_s does NOT EXIST at nomination time and is not a
+    # parameter -- the function has no input that could reference it. It is a
+    # PURE FUNCTION of canonical, committed state -- epoch_hash, the target slot
+    # NUMBER (bound only as a domain separator, `struct.pack(">Q", slot)`), the
+    # protected source close C_{s-1}, and the source value hash -- separated by
+    # a dedicated label. It is deliberately NOT hidden entropy and NOT a second
+    # root: it is the single, deterministic way every implementation orders the
+    # next round's candidates during UNKNOWN, so there is exactly one priority
+    # in every case (threads 3929943621 / 3930443124). It never introduces a
+    # caller-chosen value and never invents a second consensus/nomination
+    # authority.
+    return sha256(b"NOMINATION-Fallback" + hash32(network_id) + hash32(epoch_hash)
+                  + struct.pack(">Q", slot) + hash32(close_commitment)
+                  + hash32(canonical_value_hash))
+
+def encode_release_carrier(entries: dict) -> bytes:
+    """Serialize a release registry to the SPECIFIED COMMITTED CARRIER (round-24
+    3939264494 / 3939264557): a self-describing byte string with canonical
+    ordering, carried in committed consensus state and re-read by EVERY honest
+    node. Format:
+        magic "cap-0089:release-registry/v1" || u32 count || for each entry:
+          cl_hash (32) || u16 len || payload  (0 = None / NOT released,
+                                              32 = R_s, 64 = P_s)."""
+    items = sorted((cl_hash, payload)
+                   for cl_hash, payload in (entries or {}).items())
+    body = bytearray(b"cap-0089:release-registry/v1")
+    body += struct.pack(">I", len(items))
+    for cl_hash, payload in items:
+        body += cl_hash
+        if payload is None:
+            body += struct.pack(">H", 0)
+        elif len(payload) == 32:
+            body += struct.pack(">H", 32) + payload
+        elif len(payload) == 64:
+            body += struct.pack(">H", 64) + payload
+        else:
+            raise ValueError("registry payload must be None, R_s (32B) or "
+                             "P_s (64B)")
+    return bytes(body)
+
+
+def decode_release_carrier(carrier: bytes) -> list:
+    """STRICT decoding of the committed carrier: a wrong magic, a truncated
+    header/entry/payload, an invalid length code, or TRAILING bytes all raise
+    ValueError -- a node NEVER invents registry entries from a corrupt carrier
+    (fail closed; the carrier is consensus state and must parse exactly)."""
+    if carrier is None or not isinstance(carrier, bytes):
+        raise ValueError("release-registry carrier must be bytes")
+    magic = b"cap-0089:release-registry/v1"
+    if not carrier.startswith(magic):
+        raise ValueError("not a cap-0089 release-registry carrier")
+    off = len(magic)
+    if len(carrier) < off + 4:
+        raise ValueError("truncated release-registry header")
+    n = struct.unpack(">I", carrier[off:off + 4])[0]
+    off += 4
+    entries = []
+    prev_key = None
+    for _ in range(n):
+        if len(carrier) < off + 32 + 2:
+            raise ValueError("truncated release-registry entry")
+        cl_hash = carrier[off:off + 32]
+        # round-28 3942590416 (foQhq): the carrier is SPECIFIED as canonically
+        # sorted, so a non-strictly-increasing key is a corrupt committed
+        # carrier, not a last-entry-wins convenience: `_roots[cl_hash]` is
+        # overwritten on admission, so duplicate/non-canonical ordering would
+        # let a Byzantine carrier silently pick WHICH payload wins and admit a
+        # registry whose decode differs between nodes. Every key that is NOT
+        # strictly greater than its predecessor RAISES (fail closed). The
+        # encoder already emits strictly-sorted bytes, so honest carriers
+        # decode identically.
+        if prev_key is not None and cl_hash <= prev_key:
+            raise ValueError(
+                "release-registry keys must be STRICTLY increasing "
+                "(canonical carrier order); duplicate or out-of-order cl_hash "
+                "rejected -- last-entry-wins is never admitted")
+        prev_key = cl_hash
+        off += 32
+        ln = struct.unpack(">H", carrier[off:off + 2])[0]
+        off += 2
+        if ln not in (0, 32, 64):
+            raise ValueError("invalid release-registry payload length")
+        if len(carrier) < off + ln:
+            raise ValueError("truncated release-registry payload")
+        payload = carrier[off:off + ln] if ln else None
+        off += ln
+        entries.append((cl_hash, payload))
+    if off != len(carrier):
+        raise ValueError("trailing bytes in release-registry carrier")
+    return entries
+
+
+class ReleaseRegistry:
+    """CONSENSUS-CARRIED release registry (round-22 threads 3936620399 /
+    3936620265): maps a finalized close hash -> the canonical root `R_s` (or
+    proof `P_s`) that the EXTERNALIZED VALUE carried.
+
+    This is the ONLY source an honest node uses to decide "is the root
+    released for this close?" -- a caller CANNOT conjure a bare boolean. The
+    registry is populated EXCLUSIVELY from the sealed consensus value (the
+    ballot's release/registry section and the frozen `LedgerHeader.ext`), never
+    from local overlay delivery of share bytes. Two nodes that both externalized
+    the same close therefore read the IDENTICAL registry entry (or absence) at
+    the same finality point: the pulse-vs-fallback choice is a pure function of
+    committed state, identical for every honest node, no matter how
+    asynchronously the proof bytes arrive.
+
+    `released(cl_hash)` is True iff the registry carries a NON-None root for
+    that close hash; `root_for(cl_hash)` returns the carried `R_s` bytes (the
+    pulse value) or None. **Round-31 fw_fL: the root is DERIVED INTERNALLY
+    from the carried threshold proof (`UniqueThresholdProof.verify`) -- there
+    is no authenticator/canonical-root callback a caller could forge, so a
+    bare 32-byte root-shaped payload is never admitted.**"""
+
+    def __init__(self, carrier, epoch=None):
+        """Build the registry ONLY by decoding the SPECIFIED COMMITTED CARRIER
+        (round-24 3939264494 / 3939264557) and verifying every entry against
+        (epoch, C_s). There is NO caller-supplied authenticator / canonical-root
+        callback (round-31 fw_fL): the ONLY way an entry is admitted is a
+        carried FULL PROOF `P_s` (64 bytes) that verifies INTERNALLY under the
+        epoch-committed threshold authority --
+        `UniqueThresholdProof.verify(epoch, cl_hash, payload)` -- whose returned
+        root BECOMES the registry's root for that close hash:
+
+          1. `decode_release_carrier(carrier)` parses the bytes STRICTLY (a
+             malformed carrier raises -- it is consensus state, not caller
+             input);
+          2. an entry whose payload is a 64-byte proof admitting a root under
+             (epoch, cl_hash) is ADMITTED -- the root is DERIVED from the
+             proof, NEVER supplied by the caller;
+          3. a bare 32-byte `R_s` payload, a truncated/garbage payload, a
+             proof that verifies under NO epoch, or an entry with no payload
+             is a FABRICATED consensus fact and is REJECTED -- `released()`
+             can only become True through internally-verified,
+             consensus-derived entries.
+
+        A caller therefore cannot conjure a release: no callback can inject a
+        fabricated canonical root (the old `authenticator = lambda _:
+        forged_root` parameter could mint a release from NO proof -- fw_fL
+        removes it), and each entry must present the ACTUAL threshold proof
+        that verifies under the committed (epoch, C_s). With `epoch=None`
+        NOTHING is admitted (fail closed)."""
+        entries = decode_release_carrier(carrier)
+        self._roots = {}
+        for cl_hash, payload in entries:
+            if payload is None:
+                continue                      # explicit non-release, never a root
+            if len(payload) == 64 and epoch is not None:
+                root = UniqueThresholdProof.verify(epoch, cl_hash, payload)
+                if root is not None:
+                    self._roots[cl_hash] = root
+            # else: no internal (epoch, C_s) tie -- a bare 32-byte root payload
+            # or any other byte string is a FABRICATED entry -> rejected.
+
+    def released(self, cl_hash: bytes) -> bool:
+        return cl_hash in self._roots and self._roots[cl_hash] is not None
+
+    def root_for(self, cl_hash: bytes) -> bytes:
+        return self._roots.get(cl_hash)
+
+
+def nomination_priority(root: bytes, event_mapping: bytes, epoch_hash: bytes,
+                        slot: int, close_commitment: bytes,
+                        canonical_value_hash: bytes,
+                        slot_finalized: bool, release_registry: ReleaseRegistry,
+                        network_id: bytes = NETWORK) -> bytes:
+    # ROUND-30 fwY5s/fwY5z: SOURCE-close -> TARGET-slot convention. The
+    # ONE-way, OBSERVER-INDEPENDENT, NEVER-None nomination priority (threads
+    # 3929943621 / 3930443124 / round-18 3935393898 / round-20 3936012529 /
+    # round-21 3936363900 / round-22 3936620399 / 3936620265). Selection is
+    # NEVER a function of locally-DELIVERED bytes and NEVER of whether THIS
+    # caller happens to hold the root at the call instant -- that would give two
+    # priorities for one slot (the pulse for a node that already has P_s, the
+    # fallback for a node that does not). `slot` is the TARGET slot s being
+    # NOMINATED; `close_commitment` and `canonical_value_hash` are the ALREADY-
+    # CLOSED SOURCE (predecessor) inputs C_{s-1} / H(V_{s-1}) -- the target
+    # close C_s does not exist yet and is NEVER an input to either branch. The
+    # decision is a PURE function of CONSENSUS FACTS, identical for every
+    # honest node:
+    #   * `slot_finalized`    -- the SOURCE close was SCP-finalized /
+    #     externalized (committed consensus state, same for every node);
+    #   * `release_registry`  -- the CONSENSUS-CARRIED RELEASE REGISTRY OF THE
+    #     SOURCE CLOSE: the source's canonical root R_{s-1} is released iff the
+    #     SOURCE'S OWN EXTERNALIZED VALUE / frozen LedgerHeader.ext carried it
+    #     (`release_registry.released(close_commitment)`). The registry is
+    #     committed state -- it is NEVER derived from whether the proof bytes
+    #     arrived at THIS node, and the caller cannot assert a bare boolean
+    #     (round-22 3936620399).
+    # `root` is therefore only the VALUE to derive the pulse from -- when the
+    # registry says the source root is released the canonical R_{s-1} is
+    # deterministically the same for every node and must be supplied (we assert
+    # it); it is NEVER a decision input. There is ONE rule for the entire
+    # target slot: the hidden-entropy pulse `KDF(R_{s-1}, NOMINATION)` when
+    # `slot_finalized` and the registry marks the SOURCE root released and
+    # NOMINATION is enabled by the committed `event_mapping`; otherwise the
+    # single closed-form fallback (a pure function of (epoch, target slot
+    # number, C_{s-1}, H(V_{s-1}))) -- in every case a concrete priority, NEVER
+    # None (thread 3936012529), so nodes cannot observe two values for one slot
+    # no matter how asynchronously the proof is delivered.
+    root_released = (release_registry is not None
+                     and release_registry.released(close_commitment))
+    if slot_finalized and root_released:
+        # ROUND-25 3939431532 (fgK83): the pulse root is DERIVED from the
+        # consensus-carried release registry -- never accepted verbatim from the
+        # CALLER. The registry authenticates the canonical R_s for this
+        # close_commitment, so a caller-supplied root that does not MATCH the
+        # registry's committed R_s is a caller/state error and is REJECTED
+        # (fail-closed), NEVER allowed to steer the pulse. The root is
+        # therefore, as with the rest of the priority rule, a pure function of
+        # consensus-carried (committed) state, identical for every honest node
+        # regardless of how its proof bytes happen to be delivered.
+        registry_root = release_registry.root_for(close_commitment)
+        if root != registry_root:
+            raise ValueError(
+                "caller-supplied root diverges from the consensus-carried "
+                "release registry root_for(close_commitment); a caller cannot "
+                "assert an arbitrary root to steer the nomination priority")
+        pulse = consumer_kdf(root, LABEL_NOM, event_mapping)
+        if pulse is not None:
+            return pulse                      # finalized + R_s released + enabled
+    # not (consensus-)finalized-with-released-root, or NOMINATION committed-opted-
+    # out -> the single closed-form fallback, a pure function of committed state,
+    # identical for every node (never None)
+    return nomination_fallback_priority(epoch_hash, slot, close_commitment,
+                                        canonical_value_hash, network_id)
+
+
+
+class ConfirmExternalizeBoundary:
+    """Modeled CONFIRM -> EXTERNALIZE transition -- the **sole producer** of a
+    release witness (Copilot 3917696297 + suppressed line-506 note + this
+    review's "caller-asserted boundary" note at the source).
+
+    The boundary is the AUTHORITY over the release edge: only the genuine
+    CONFIRM -> EXTERNALIZE transition makes `externalize()` mark a close as
+    released, and `has_externalized()` is the ONLY predicate `RandomnessSource`
+    consults for admission. A caller cannot assert it: `admit` takes no
+    caller-supplied `release_certificate` or `fully_validated` flag -- the fact
+    lives inside the boundary. In production this boundary is the real Core
+    CONFIRM->EXTERNALIZE edge; `boundary_secret` is the model's stand-in for the
+    authenticator only the participating validators can emit.
+
+    COPILOT THIS REVIEW #5 (High), SUPERSEDED BY THE ROUND-26 TOPOLOGY
+    CONTRACT (tacticalnoot 5549653283): the `>= t` distinct CONFIRM votes in a
+    release certificate are the RANDOMNESS-ROSTER RECONSTRUCTION THRESHOLD --
+    the per-member release/authentication edge for share-holders that genuinely
+    reached CONFIRM, and nothing more. The OLD liveness claim that "a cert with
+    >= t voters therefore has >= t HONEST releasers" (the flat n,t,f counting
+    argument the reviewer's round-25 counterexample refuted: up to f certified
+    voters may be Byzantine) is **DELIBERATELY DISCONTINUED** here. Liveness now
+    comes from the COMMITTED SCP quorum-set topology + the activation SAT gate
+    (C1: `SCP_FINALIZABLE(B) => |Roster n Intact(B)| >= t` for every admitted
+    Byzantine set B; see the Round-26 topology contract above), which guarantees
+    that any SCP-live close has >= t INTACT rostered releasers -- no
+    certificate-counting needed. `externalize()` still records the >= t
+    *rostered* members Core observed reach CONFIRM with full local validation;
+    WHICH value externalizes remains Core's trusted local CONFIRM->EXTERNALIZE
+    decision on the actual saved SCP envelopes / the epoch-committed qset graph.
+    The boundary edge (authentication of votes under epoch keys) and the SCP
+    quorum decision (committed topology + Core's local transition) are the two
+    deliberately-separate guarantees, exactly as the reviewers require."""
+
+    def __init__(self, epoch: EpochDescriptor, boundary_secret: bytes = None):
+        self.epoch = epoch
+        # Per-boundary secret, never serialized, never committed. A DIFFERENT
+        # boundary (or a crafted one) mints witnesses no other authority
+        # accepts, mirroring real per-process/per-validator finality evidence.
+        self._secret = (boundary_secret if boundary_secret is not None else
+                        sha256(b"cap-0089:boundary:secret:v1" + os.urandom(16)))
+        # PUBLIC per-member CONFIRM verification keys K_i (the epoch REGISTERS
+        # only these; the private k_i stays member-held). These are AUTHENTICATION
+        # keys for the CONFIRM->EXTERNALIZE edge only; they are never secrets and
+        # are registered here (like Core validators exchanging verification keys),
+        # so the boundary verifies a CONFIRM cert WITHOUT holding any member
+        # sub-secret and WITHOUT assuming an SCP quorum topology. An observer
+        # cannot mint a vote: it cannot compute any private k_i from K_i.
+        self._confirm_pub = {
+            i: self.epoch.confirm_pub[i - 1] for i in range(1, self.epoch.n + 1)}
+        # C_s.hash -> True iff the CONFIRM->EXTERNALIZE transition actually
+        # ran for that lock. Populated ONLY by `externalize` (the trusted Core
+        # edge; it never answers "which value is an SCP quorum", only "Core
+        # locally externalized THIS value behind >= t rostered CONFIRM votes").
+        self._externalized = {}
+        # C_s.hash -> sorted tuple of the DISTINCT member indices whose CONFIRM
+        # votes `externalize()` authenticated (>= t "rostered members Core saw
+        # reach CONFIRM"). `proof()` authorizes per-member release for THESE
+        # indices ONLY -- never for roster members absent from the verified
+        # CONFIRM certificate (Noot/Copilot round-15, thread 3929898761).
+        self._externalized_members = {}
+        # C_s.hash -> set of member indices whose CONFIRM vote was VERIFIED and
+        # RECORDED INDIVIDUALLY (round-22 thread 3936844284): `record_confirm`
+        # records each verified member's CONFIRM->EXTERNALIZE vote on its OWN,
+        # BEFORE any threshold certificate exists, and `externalize()` also
+        # records the members it verifies. A per-member release bit is therefore
+        # a fact about ONE member's individually-recorded vote -- not a property
+        # of a completed >= t certificate -- which is exactly what lets the
+        # enumeration exercise independent SUBTHRESHOLD releases through a
+        # genuine transition.
+        self._confirm_records = {}
+        # C_s.hash -> True iff Core's SCP QUORUM finalized this value. This is a
+        # DELIBERATELY INDEPENDENT signal from the roster's CONFIRM/release edge
+        # (Copilot round-16, thread 3934383407; tacticalnoot's 'second liveness
+        # authority'): SCP finality is Core's own quorum decision and does NOT
+        # imply t roster releases, and conversely t roster releases do not imply
+        # SCP finality. It is set ONLY by the explicit `finalize_scp` transition
+        # (never by a caller-asserted boolean), which is what lets the model
+        # represent the accepted protocol state `SCP-finalized + |released| < t
+        # => UNKNOWN` through genuine transitions rather than a disconnected flag.
+        self._scp_finalized = {}
+
+    def externalize(self, cl: LockedClose, confirm_cert: dict) -> bool:
+        # The genuine CONFIRM -> EXTERNALIZE edge. The transition type and full
+        # validation are FACTS OF THE EDGE, not caller flags the producer later
+        # re-asserts (Copilot this review #2). The CONFIRM cert here records the
+        # >= t DISTINCT, VALID ROSTERED member votes that Core observed reach
+        # CONFIRM with local full validation; each is verified under the
+        # member's public subkey K_i (committed to the epoch, #4). The SCP
+        # QUORUM that picked the externalized value is Core's trusted local
+        # transition on the real envelopes/quorum-sets -- NOT this numeric
+        # roster threshold, and NOT a caller-asserted flag (this review #5). A
+        # close becomes released ONLY when the trusted edge ran for that exact
+        # C_s; a bare boolean, votes that do not authenticate, or fewer than t
+        # distinct valid votes are REJECTED. accepted-commit is never
+        # authoritative; only entering EXTERNALIZE behind the trusted edge
+        # (with >= t rostered CONFIRMers able to reconstruct) releases a close.
+        if cl is None or not cl.validate():
+            return False
+        if cl.network_id != NETWORK:
+            return False
+        if cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        if not isinstance(confirm_cert, dict):
+            return False
+        valid = 0
+        verified = set()
+        for idx, vote in confirm_cert.items():
+            if not isinstance(idx, int) or not (1 <= idx <= self.epoch.n):
+                continue
+            if idx in verified:
+                continue
+            K_i = self._confirm_pub.get(idx)
+            if K_i is None:
+                continue
+            if _confirm_vote_verify(K_i, cl.epoch_hash, cl.hash, vote):
+                verified.add(idx)
+                valid += 1
+                # ALSO record the member INDIVIDUALLY (round-22 3936844284) so
+                # the threshold certificate and the per-member record stay the
+                # same source of truth.
+                self._confirm_records.setdefault(cl.hash, set()).add(idx)
+        if valid < self.epoch.threshold:
+            return False
+        self._externalized[cl.hash] = True
+        self._externalized_members[cl.hash] = tuple(sorted(verified))
+        return True
+
+    def record_confirm(self, member_index: int, cl: LockedClose, vote: bytes) -> bool:
+        # INDEPENDENT per-member CONFIRM-vote recording (round-22 thread
+        # 3936844284): a single member's CONFIRM->EXTERNALIZE vote is verified
+        # under ITS OWN epoch-committed public key K_i and recorded on its own,
+        # BEFORE any >= t threshold certificate exists. This is the transition
+        # an honest node uses to register "member i individually crossed toward
+        # C_s" and it is what `member_release_witness` consults: a release bit
+        # is mint-able for a member IFF its vote was individually recorded here
+        # -- so subthreshold release sets are real per-member facts, never a
+        # replay of some earlier completed boundary's certificate.
+        if cl is None or not cl.validate():
+            return False
+        if cl.network_id != NETWORK or cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        if not isinstance(member_index, int) or not (1 <= member_index <= self.epoch.n):
+            return False
+        K_i = self._confirm_pub.get(member_index)
+        if K_i is None:
+            return False
+        if not _confirm_vote_verify(K_i, cl.epoch_hash, cl.hash, vote):
+            return False
+        self._confirm_records.setdefault(cl.hash, set()).add(member_index)
+        return True
+
+    def has_externalized(self, cl: LockedClose) -> bool:
+        # Boundary-ENFORCED admission predicate. The source never accepts a
+        # caller-asserted boolean here; only the boundary knows whether this
+        # close really reached the CONFIRM->EXTERNALIZE edge.
+        return cl is not None and self._externalized.get(cl.hash, False)
+
+    def externalized_members(self, cl: LockedClose):
+        # The DISTINCT roster members whose CONFIRM votes `externalize()`
+        # authenticated for this close (>= t). This is the authoritative set for
+        # per-member release: an honest node releases for a member, and only a
+        # member, that individually crossed this boundary -- a member whose vote
+        # was NEVER in the verified CONFIRM certificate is withheld (thread
+        # 3929898761). Guarded by `has_externalized` so it is never callable for
+        # a non-externalized close.
+        if not self.has_externalized(cl):
+            return ()
+        return self._externalized_members.get(cl.hash, ())
+
+    def member_release_witness(self, cl: LockedClose,
+                               member_index: int) -> bytes:
+        """Boundary-minted, PER-MEMBER release witness (round-21 thread
+        3936363759; re-gated round-22 thread 3936844284). The boundary issues a
+        member's release witness `H("MREWitness", cap, epoch_hash, u32(
+        member_index), C_s)` ONLY if that member's CONFIRM vote was ACTUALLY
+        VERIFIED and RECORDED for this close -- either individually via
+        `record_confirm` (a SUBTHRESHOLD boundary that has not yet externalized
+        still records each member's crossing independently) or as part of the
+        certificate verified by `externalize()`. Combined with `cap`, it makes
+        per-member release bits unforgeable: a caller who holds only the
+        authority object cannot register a bit for a member whose CONFIRM vote
+        was never recorded, because the witness cannot be minted without the
+        boundary secret. An unrecorded member is refused (raises) rather than
+        silently issued, and NO completed threshold certificate is required --
+        the per-member record is the individual fact."""
+        if member_index not in self._confirm_records.get(cl.hash, set()):
+            raise ValueError(
+                "member %d has no individually-recorded verified CONFIRM vote "
+                "for this close; the boundary will not mint a release witness "
+                "for it"
+                % (member_index,))
+        return sha256(b"MREWitness" + self._cap() + cl.epoch_hash +
+                      u32(member_index) + cl.hash)
+
+    def finalize_scp(self, cl: LockedClose, scp_cert: dict = None) -> bool:
+        # The independent SCP-FINALITY edge (Copilot round-16, thread
+        # 3934383407; tacticalnoot's 'second liveness authority'). This models
+        # Core's OWN SCP quorum deciding that `cl` is the finalized externalized
+        # value -- a predicate INDEPENDENT of the roster's CONFIRM/release count.
+        # It does NOT authorize any randomness release by itself: release still
+        # requires the per-member CONFIRM->EXTERNALIZE edge (`externalize` /
+        # `_authorize_member_release`). Recording SCP finality here is what makes
+        # the accepted state `SCP-finalized + |released_roster| < t => UNKNOWN`
+        # genuinely representable: we can finalize a value Core picked even when
+        # the roster has not (yet) supplied t individual releases, and the
+        # resolver must then stall rather than fabricate a root.
+        if cl is None or not cl.validate():
+            return False
+        if cl.network_id != NETWORK or cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        # An SCP quorum certificate must be a non-empty dict of rostered
+        # member/slot quorum-slice entries (modeled minimally); the numeric
+        # roster threshold is NOT required here -- SCP finality is Core's
+        # quorum predicate, deliberately decoupled from t.
+        if not isinstance(scp_cert, dict) or not scp_cert:
+            return False
+        self._scp_finalized[cl.hash] = True
+        return True
+
+    def scp_finalized(self, cl: LockedClose) -> bool:
+        # INDEPENDENT SCP-finality predicate: Core's quorum finalized `cl`,
+        # regardless of how many roster members have individually released.
+        # Unlike `has_externalized` (which requires >= t roster CONFIRM votes to
+        # release), this is satisfied the moment Core's SCP quorum closed on the
+        # value -- so `scp_finalized(cl) and |released| < t` is a REAL, reachable
+        # state that the resolver maps to UNKNOWN.
+        return cl is not None and self._scp_finalized.get(cl.hash, False)
+
+    def _cap(self) -> bytes:
+        # RELEASE capability derived from the boundary secret + epoch. It is the
+        # SAME capability RandomnessSource.bind installs (commit) and proof()
+        # presents, so the witness the boundary mints and the witness the
+        # authority validates are derived from one key shared through the
+        # boundary secret -- unforgeable by an external caller.
+        return sha256(b"ReleaseCap" + self._secret + self.epoch.hash)
+
+    def witness(self, cl: LockedClose) -> bytes:
+        # UNFORGEABLE release witness: bound to the boundary capability, the
+        # epoch and the exact close. Requires KNOWING the boundary secret; an
+        # external caller holding only the authority sees its commit check but
+        # cannot preimage the capability/witness, and a fabricated byte string
+        # cannot equal this genuine witness (the source gate keeps only these).
+        return sha256(b"CEWitness" + self._cap() + cl.epoch_hash + cl.hash)
+
+
+class RandomnessSource:
+    """Producer-side release/admission interface. Shares are the transport of
+    the proof; an honest holder signs ONLY at the CONFIRM/EXTERNALIZE boundary
+    after local full validation, and durably once per event. The source keeps
+    ONE canonical slot lock: it admits the exact externalized close for a slot
+    and refuses a second, different close for the same slot (thread d9aC4).
+
+    Release authorization is an UNFORGEABLE capability produced ONLY by the
+    boundary path (Copilot 3917696297): `admit` is boundary-ENFORCED (it takes
+    NO caller-supplied `release_certificate`/`fully_validated` -- those were the
+    forgeable, caller-asserted inputs; the fact lives in `ConfirmExternalizeBoundary.
+    has_externalized`), `proof` is the ONLY place a close is recorded as
+    authorized on an authority, and `proof` no longer AUTO-BINDS whatever
+    authority a caller hands it -- an unbound (or mismatched) authority is simply
+    refused, so an attacker who pairs their own source+authority (but lacks the
+    genuine source-boundary pairing) can release nothing."""
+
+    def __init__(self, epoch: EpochDescriptor, boundary: ConfirmExternalizeBoundary = None,
+                 require_distribution_close: bool = False):
+        self.epoch = epoch
+        self._boundary = boundary if boundary is not None \
+            else ConfirmExternalizeBoundary(epoch)
+        self._admitted = {}      # C_s.hash -> release witness (boundary-minted)
+        self._slot_lock = {}     # slot -> C_s hash (ONE canonical close per slot)
+        self._genuine = {}       # C_s.hash -> GENUINE recovered proof (cached
+                                 # by proof()); resolve() accepts ONLY this one
+        # ROUND-31 fw_fl: when `require_distribution_close` is set, the boundary
+        # may still externalize a close, but the SOURCE will not ADMIT it until
+        # the corresponding AVSS DISTRIBUTION CLOSE was certified in public
+        # (`admit_distribution`). Keyed (epoch_hash, cl.hash) so the gate is
+        # per-close and no close can borrow another's certified distribution.
+        self._require_distribution_close = require_distribution_close
+        self._distribution_admitted = {}   # (epoch.hash, cl.hash) -> bool
+
+    def admit_distribution(self, cert_records, cl_hash: bytes,
+                           dealer_digest=None, f=None) -> bool:
+        """ROUND-31 fw_fl: certify that the AVSS DISTRIBUTION-CLOSE gate closed
+        for this source's epoch and a given close hash, using EXACTLY the same
+        public gate every honest node runs (`_avss_distribution_closes`:
+        >= `threshold + f` distinct, exactly-indexed material-OK certificates
+        verifying under `dealer_digest`). `f` is the protocol's AVSS fault
+        bound (the roster bound the distribution ran under, passed through like
+        every public gate call); it defaults to the epoch's committed
+        `byzantine_bound`. Returns and caches the verdict so `admit()` (and,
+        behind it, every release path) can consult a CONSENSUS-CERTIFIED,
+        PUBLICLY-VERIFIED distribution close instead of a caller assertion. A
+        batch of certificates minted over a DIFFERENT dealer digest (round-31
+        fw_fU) fails this helper exactly as it fails the gate everywhere
+        else."""
+        if not isinstance(cl_hash, bytes) or len(cl_hash) != 32:
+            return False
+        if f is None:
+            f = self.epoch.byzantine_bound
+        ok = _avss_distribution_closes(
+            cert_records, self.epoch, cl_hash, self.epoch.n, f, dealer_digest)
+        self._distribution_admitted[(self.epoch.hash, cl_hash)] = ok
+        return ok
+
+    def admit(self, cl: LockedClose) -> bool:
+        # BOUNDARY-ENFORCED admission (Copilot this review). No caller-supplied
+        # transition type or validation flag is accepted: admission is granted
+        # IFF the boundary genuinely performed the CONFIRM->EXTERNALIZE edge for
+        # this exact close. A caller-asserted `release_certificate==...`+
+        # `fully_validated=True` could previously be conjured by anyone holding
+        # RandomnessSource; now `admit(cl)` literally does nothing unless
+        # `boundary.has_externalized(cl)`.
+        if not self._boundary.has_externalized(cl):
+            return False
+        if not cl.validate():
+            return False
+        if cl.network_id != NETWORK:
+            return False
+        if cl.epoch_hash != self.epoch.hash:
+            return False
+        if not self.epoch.active_at(cl.slot):
+            return False
+        # ROUND-31 fw_fl: once the epoch REQUIRES a distribution close (ties the
+        # source's activation to the round-30 distribution gate, the model's
+        # counterpart of EpochDescriptor rejecting a topology-violating epoch),
+        # a close is NOT admitted -- hence NOT boundary-released, NOT has_valid_
+        # proof, no proof() -- until exactly that close's AVSS distribution
+        # close was certified in public. Closing only records; ADMISSION is the
+        # activation seam that consumes the close.
+        if self._require_distribution_close and not self._distribution_admitted.get(
+                (self.epoch.hash, cl.hash), False):
+            return False
+        existing = self._slot_lock.get(cl.slot)
+        if existing is not None and existing != cl.hash:
+            return False
+        # ONLY the boundary can mint this witness (it needs the secret).
+        self._admitted[cl.hash] = self._boundary.witness(cl)
+        self._slot_lock[cl.slot] = cl.hash
+        return True
+
+    def has_valid_proof(self, cl: LockedClose) -> bool:
+        return cl.hash in self._admitted
+
+    def genuine_proof(self, cl: LockedClose):
+        """The GENUINE recovered proof for an admitted close (cached by proof()).
+        In the PROTOCOL an attacker cannot forge this: it requires the recovered
+        group secret, which is produced only by the >= t holders at the
+        CONFIRM/EXTERNALIZE boundary, and the attestation is enforced through the
+        harness's ATTACKER SURFACE (see `AttackerView`), not claimed against
+        arbitrary Python source reading. The model itself documents this is a
+        structural harness: `< t` shares reconstruct nothing (the real secrecy is
+        the BLS/VUF primitive's), and `resolve()` authenticates proofs against the
+        committed public key, so a public-only formula or any non-canonical/forged
+        byte candidate is REJECTED even if it is canonical-looking (Copilot
+        3917696336)."""
+        return self._genuine.get(cl.hash)
+
+    def bind(self, authority: "ThresholdAuthority") -> None:
+        """Pair this source's boundary capability to an authority. Derives the
+        RELEASE capability from the boundary secret and installs its commit on
+        the authority. An external caller cannot do this: it needs the boundary
+        secret. Called once before a source produces proofs."""
+        cap = self._boundary._cap()
+        authority._set_boundary_cap(cap)
+    def proof(self, cl: LockedClose, authority: ThresholdAuthority = None):
+        if not self.has_valid_proof(cl):
+            return None
+        if authority is None:
+            return None
+        cap = self._boundary._cap()
+        # (Copilot this review / 3917696297) NO auto-bind: an unpaired authority
+        # is refused rather than silently paired on the caller's say-so. The
+        # source's capability commit must ALREADY be installed on `authority`
+        # (via an explicit `bind()`, which needs the boundary secret). An
+        # attacker who independently constructs their OWN source+authority is
+        # therefore bound to a capability the boundary secret did not mint:
+        # `_authorize_release` compares `sha256(CapCommit+cap)` against the
+        # authority's `_cap_check` and refuses.
+        if authority._cap_check is None:
+            return None
+        # (thread eW_rk / Copilot 3917696297) The source authorizes release on
+        # the boundary-admitted close -- the ONLY release-authorization path --
+        # THEN all n honest holders durably sign it; >= t valid shares
+        # reconstruct the single canonical proof. A close that was never
+        # admitted can neither be authorized nor shared.
+        if not authority._authorize_release(cl.hash, self._admitted[cl.hash], cap):
+            return None
+        # The boundary authorizes release per-member for the DISTINCT indices
+        # that ACTUALLY authenticated in the verified CONFIRM certificate
+        # (>= t) -- NOT for every roster member (Copilot round-15 thread
+        # 3929898761, High). A member absent from the certificate is withheld
+        # even though the close is boundary-released: per-member release is a
+        # strict function of which members independently crossed the boundary.
+        # `_authorize_member_release` additionally requires the close to already
+        # be boundary-released (`_released`), so no member is authorized before
+        # the release gate.
+        auth_members = self._boundary.externalized_members(cl)
+        cap = self._boundary._cap()
+        for i in auth_members:
+            authority._authorize_member_release(
+                i, cl.hash, cap,
+                self._boundary.member_release_witness(cl, i))
+        # FROST ROUND-1 FIRST: publish each authenticated member's nonce
+        # commitment (gated on CONFIRM by `publish_nonce`) so the aggregate R and
+        # challenge c are publicly FIXED before ANY round-2 partial is emitted.
+        # `share()` enforces the round-2 barrier (>= t committed nonces), so this
+        # ordering is what lets the subsequent round-2 collection proceed at all
+        # (Copilot round-15, threads 3929898704 / 3929898725).
+        for i in auth_members:
+            authority.publish_nonce(i, cl)
+        holder_shares = [(i, authority.share(i, cl))
+                         for i in auth_members]
+        recovered = authority.recover_proof(holder_shares, cl)
+        if recovered is not None:
+            self._genuine[cl.hash] = recovered
+        return recovered
+
+
+def resolve(epoch: EpochDescriptor, cl: LockedClose, source: RandomnessSource,
+            proof) -> dict:
+    """Full state machine (LIVE release admission + provenance-independent
+    archival resolution). Returns only the B4 authority surface: {event_hash,
+    outcome, source_root?}.
+
+    Gate 0 (integrity):         LockedClose hash must re-derive.
+    Gate 1 (epoch+network):     close bound to THIS epoch/network and active.
+    Gate 2 (boundary + proof):  source must have boundary-admitted the EXACT
+        close AND the proof must pass the PURE archived verifier. No proof ->
+        UNKNOWN (stalled apply); invalid proof -> REJECTED.
+
+    The `source` argument is the LIVE producer: it supplies the boundary-
+    admitted release fact (whether this close really reached the CONFIRM->
+    EXTERNALIZE edge through the genuine boundary path). A catchup / archival
+    replayer that only holds {epoch, C_s, P_s} MUST NOT be forced to re-execute
+    that live boundary -- it uses `resolve_archival` (provenance-independent),
+    which applies the SAME pure verifier without consulting any source state
+    (Copilot this review, thread evw-0)."""
+    if not cl.validate():
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    if (cl.epoch_hash != epoch.hash or cl.network_id != NETWORK
+            or not epoch.active_at(cl.slot)):
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    if proof is None:
+        return {"event_hash": cl.hash.hex(), "outcome": "UNKNOWN"}
+    if not source.has_valid_proof(cl):
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    return resolve_archival(epoch, cl, proof)
+
+
+def resolve_archival(epoch: EpochDescriptor, cl: LockedClose, proof) -> dict:
+    """PROVENANCE-INDEPENDENT archival resolution (Copilot this review, thread
+    evw-0): a catchup / historical node holding ONLY {epoch, C_s, P_s} from the
+    ledger -- and never having executed the live CONFIRM->EXTERNALIZE boundary,
+    so it has NO transient `_admitted` release record -- resolves the close
+    exactly like the live `resolve`. It applies ONLY the pure, archived-stable
+    public verifier (`UniqueThresholdProof.verify`: authenticate P_s against the
+    committed `epoch.authority_key`, return the unique root), which never reads
+    any source/admission/process memory. Live release ADMISSION (whether this
+    particular close was boundary-released) is a SEPARATE fact that lives only
+    on the live producer path; it is not part of resolving an already-recorded
+    proof, so an archival replayer is never wrongly rejected just because the
+    transient `_admitted` entry does not exist in its fresh process. Same gates
+    (integrity / epoch+network / pure proof verification) as `resolve`."""
+    if not cl.validate():
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    if (cl.epoch_hash != epoch.hash or cl.network_id != NETWORK
+            or not epoch.active_at(cl.slot)):
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    if proof is None:
+        # ABSENT proof -> UNKNOWN: the close is stalled awaiting delivery of
+        # the release material -- a RETRYABLE state, not a verdict on any
+        # material (round-25 3939431532, fgK88).
+        return {"event_hash": cl.hash.hex(), "outcome": "UNKNOWN"}
+    if not isinstance(proof, (bytes, bytearray)):
+        # PRESENT but MALFORMED proof material -> REJECTED: a wrong-typed /
+        # non-byte proof is not an absent proof; it is DETERMINISTIC invalid
+        # input and must keep the deterministic REJECTED verdict (never a
+        # retryable UNKNOWN) -- the three-state contract is ROOT (verified
+        # canonical), UNKNOWN (nothing delivered yet), REJECTED (invalid
+        # material, not retryable).
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    # Gate 2: PROVENANCE-INDEPENDENT authentication. The pure archival verifier
+    # needs only (epoch, C_s, P_s): it authenticates P_s against the committed
+    # `authority_key` (public Schnorr equation) and returns the unique root
+    # H("Root", authority_key, epoch_hash, C_s). A proof produced by ANOTHER
+    # authority, or loaded during catchup (never cached by THIS node as
+    # `genuine_proof`), is accepted -- a non-producing consumer can derive the
+    # root -- while a forged/public-only/random proof still fails the equation
+    # and is REJECTED (negative-synthesis gate). As with the live path, a
+    # missing proof is UNKNOWN (stalled apply).
+    root = UniqueThresholdProof.verify(epoch, cl.hash, proof)
+    if root is None:
+        return {"event_hash": cl.hash.hex(), "outcome": "REJECTED"}
+    return {"event_hash": cl.hash.hex(), "outcome": "ROOT",
+            "source_root": root.hex()}
+
+
+def epoch_for_transition(predecessor_state: bytes,
+                         committed: dict, slot: int):
+    """Noot #5: the epoch applied for a slot is a pure function of the
+    PREDECESSOR canonical state -- committed[predecessor_state] is the exact
+    epoch window set frozen in that predecessor's ledger. Exactly one committed
+    epoch active at `slot` is selected; ZERO or TWO (overlap) FAIL CLOSED
+    (None). Never reads local quorum sets or membership bookkeeping."""
+    cands = [e for e in committed.get(predecessor_state, ()) if e.active_at(slot)]
+    if len(cands) == 1:
+        return cands[0]
+    return None
+
+
+def main():
+    failed = 0
+    passed = 0
+
+    def check(name, ok):
+        nonlocal failed, passed
+        print(("PASS  " if ok else "FAIL  ") + name)
+        passed += 1
+        if not ok:
+            failed += 1
+
+    def mk_roster(n):
+        # NodeID-ascending canonical member list (Copilot round-20 thread
+        # 3936012458): the roster is committed in canonical NodeID order so that
+        # caller-supplied per-member key vectors are positionally bound to a
+        # NON-AMBIGUOUS member ordering (position i in `confirm_pub` /
+        # `feldman_pub` is the key of roster[i], identical for every node, and
+        # the constructor's zip-sort is a verified no-op instead of a silent
+        # re-detachment of keys from members).
+        return sorted(sha256(b"member-verify:%d" % i) for i in range(1, n + 1))
+
+    def boundary_release(src, cl, n_votes=None):
+        # Wraps the REAL transition: the genuine CONFIRM->EXTERNALIZE edge runs
+        # `externalize` BEFORE `admit`. Only then does the source hold a release
+        # witness. `externalize` is the authority over the transition: it takes a
+        # QUORUM-CERT of >= t signed member CONFIRM votes (each verified under a
+        # per-member public subkey K_i committed to the epoch's roster) -- THERE
+        # IS NO caller-asserted boolean (Copilot this review #2/#4). By default
+        # the helper emits a FULL threshold of genuine votes for the SOURCE's own
+        # epoch (the honest validators who reached CONFIRM); passing n_votes <
+        # threshold yields an incomplete cert and the boundary REJECTS (mirrors a
+        # close that did not actually reach the externalize quorum).
+        src_epoch = src.epoch
+        # Default: EVERY honest rostered member's authentic CONFIRM vote is in the
+        # certificate (all n validators reached CONFIRM for the same value), so
+        # `externalize()` records all n as authenticated and `proof()` authorizes
+        # per-member release for all n. Passing n_votes (== threshold, or less)
+        # yields a partial cert, and then ONLY the members WITH valid votes in it
+        # are per-member-released -- the strict-function-of-the-cert property
+        # (thread 3929898761) instead of a blanket all-n grant.
+        n_votes = src_epoch.n if n_votes is None else n_votes
+        cert = {i: _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                                 cl.epoch_hash, cl.hash)
+                for i in range(1, n_votes + 1)}
+        if src._boundary.externalize(cl, cert):
+            return src.admit(cl)
+        return False
+
+    def eval_unbound(attacker_src, attacker_auth, cl, adversary_pub_proof=None):
+        # O2/non-commitment red test with the boundary ENFORCED: an attacker who
+        # holds ONLY (epoch, a source, an authority) -- but never the genuine
+        # source-boundary pairing -- can admit nothing and obtain NO proof. If an
+        # adversary_pub_proof is supplied it must fail the pure verifier.
+        admitted = attacker_src.admit(cl)            # boundary-enforced: no fact
+        pr = attacker_src.proof(cl, attacker_auth)   # unbound -> refused (None)
+        if adversary_pub_proof is not None:
+            rejected = UniqueThresholdProof.verify(epoch, cl.hash,
+                                                   adversary_pub_proof) is None
+        else:
+            rejected = True
+        return (not admitted) and (pr is None) and rejected
+
+    N_MEMBERS = 8
+    roster = mk_roster(N_MEMBERS)
+    # The epoch's committed authority/public key is the Schnorr stand-in public
+    # key Y = G^d mod p derived from the recovered GROUP SECRET G. `verify`
+    # binds every accepted proof to this committed key, so the genuine
+    # threshold-recovered proofs verify and arbitrary bytes are rejected.
+    epoch_pub = group_pub_from_seed(GROUP_SK, 5, N_MEMBERS)
+    # A canonical VALID authority key for construction tests that must SUCCEED:
+    # a non-identity order-q subgroup element (Copilot this review #1, High). A
+    # raw 32-byte hash is only ~1/2 likely to be in the subgroup, so tests that
+    # expect construction to succeed must pass a genuine group key, not a hash.
+    vkey = group_pub_from_seed(GROUP_SK, 5, N_MEMBERS)
+    epoch = EpochDescriptor(
+        format_version=1,
+        authority_key=epoch_pub,
+        roster=roster,
+        activation=12300, retirement=13000,
+        threshold=5,
+        root_rule=b"unique-threshold/v1",
+        event_mapping=b"single-pulse:LockedClose->C_s/v1")
+    source = RandomnessSource(epoch)
+    auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    source.bind(auth)
+    slot = epoch.activation + 1
+    prev_hash = sha256(u32(slot - 1) + b"real-predecessor-committed-core")
+
+    # ---------- R1: epoch rule hash binds every rule -------------------------
+    epoch_v2 = EpochDescriptor(
+        format_version=1, authority_key=epoch.authority_key,
+        roster=epoch.roster, activation=epoch.activation,
+        retirement=epoch.retirement, threshold=epoch.threshold + 1,
+        byzantine_bound=1, scp_qset=(7, tuple(range(1, epoch.n + 1))),
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping)
+    check("R1 epoch rule-hash: changing ANY rule (here threshold) yields a NEW "
+          "epoch hash", epoch_v2.hash != epoch.hash)
+    check("R1 epoch rule-hash: a re-derived epoch from the SAME canonical bytes "
+          "re-derives the IDENTICAL hash (archival replay is stable)",
+          EpochDescriptor(format_version=epoch.format_version,
+                          authority_key=epoch.authority_key,
+                          roster=epoch.roster, activation=epoch.activation,
+                          retirement=epoch.retirement, threshold=epoch.threshold,
+                          root_rule=epoch.root_rule,
+                          event_mapping=epoch.event_mapping).hash == epoch.hash)
+    check("R1 the roster is COMMITTED by the epoch: a substituted roster is a "
+          "DIFFERENT epoch (freeze-the-team-before-the-draw, in the hash)",
+          EpochDescriptor(format_version=epoch.format_version,
+                          authority_key=epoch.authority_key,
+                          roster=mk_roster(N_MEMBERS + 1),
+                          activation=epoch.activation,
+                          retirement=epoch.retirement, threshold=epoch.threshold,
+                          root_rule=epoch.root_rule,
+                          event_mapping=epoch.event_mapping).hash != epoch.hash)
+
+    # ---------- R2: ThresholdAuthority is epoch-bound (no caller n/t/roster) --
+    def raises(fn):
+        try:
+            fn()
+            return False
+        except ValueError:
+            return True
+
+    check("R2 ThresholdAuthority::from_epoch fails CLOSED on caller-supplied "
+          "n/t/roster that disagrees with the epoch (threshold is a property of "
+          "the locked authority, not an argument to the caller)",
+          raises(lambda: ThresholdAuthority.from_epoch(epoch, GROUP_SK, n_members=3))
+          and raises(lambda: ThresholdAuthority.from_epoch(epoch, GROUP_SK,
+                                                           threshold=1))
+          and raises(lambda: ThresholdAuthority.from_epoch(epoch, GROUP_SK,
+                                                           roster=mk_roster(5))))
+    check("R2 malformed thresholds are rejected at epoch construction (thread "
+          "e6VduY): threshold=0 would emit a proof with zero shares and "
+          "threshold>n could never resolve -- both are unsound epochs and raise",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=0,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000,
+              threshold=len(roster) + 1,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1")))
+    dup_roster = [roster[0], roster[0]] + [sha256(b"member-verify:dup")] * 3
+    check("R2 duplicate roster keys are rejected at epoch construction (thread "
+          "e6WbkN): one verification identity would occupy multiple threshold "
+          "indices, violating 1:1 membership -- such a roster raises ValueError "
+          "before n / membership_commitment are derived",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=dup_roster, activation=12300, retirement=13000,
+              threshold=3, root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1")))
+    # Copilot re-review thread 3930443019: a committed event_mapping missing a
+    # MANDATORY consumer (APPLY or PRNG) must be rejected at EPOCH CONSTRUCTION /
+    # HASH PATH, not merely by a test-only validator -- otherwise an invalid
+    # mapping could become an active modeled epoch. Only NOMINATION is
+    # opt-outable.
+    check("Invalid event_mapping (missing mandatory APPLY/PRNG) is rejected at "
+          "epoch construction (Copilot 3930443019): EpochDescriptor raises for a "
+          "mapping that omits APPLY or PRNG, and accepts a mapping that keeps "
+          "both and opts only NOMINATION out",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"PRNG,NOMINATION"))                       # APPLY omitted
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"APPLY,NOMINATION"))                       # PRNG omitted
+          and not raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"APPLY,PRNG")))                           # NOM opt-out valid
+    # Copilot this review #1 (High): the committed authority key must be a
+    # non-identity order-q subgroup element. Y=1 would let anyone satisfy
+    # G^s == R*Y^c with Y^c=1 and forge proofs; an out-of-subgroup key is
+    # malformed. Both must raise at construction -- the subgroup check is a
+    # FIRST-CLASS soundness gate, and a raw random 32-byte hash is not
+    # automatically in-subgroup.
+    identity_key = (1).to_bytes(32, "big")
+    out_of_group = (_GRP_P + 1).to_bytes(32, "big")        # >= p: not a residue
+    non_residue = None
+    # find a 32-byte value that is NOT in the order-q subgroup (pow(v,q,p)!=1):
+    for probe in range(0x10000):
+        cand = probe.to_bytes(32, "big")
+        value = int.from_bytes(cand, "big")
+        if 1 < value < _GRP_P and pow(value, _GRP_Q, _GRP_P) != 1:
+            non_residue = cand
+            break
+    check("R2 authority_key subgroup validation (Copilot this review #1, High): "
+          "an identity key (Y=1), an out-of-group value (>= p), or a NON-"
+          "residue (Y^q != 1 mod p -- not in the order-q subgroup) is REJECTED "
+          "at construction, so Y=1 cannot be used to forge proofs (G^s==R*Y^c "
+          "with Y^c=1) and malformed keys can never be committed as a valid "
+          "authority",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=identity_key,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=out_of_group,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=non_residue,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1").authority_key
+          is not None)
+    # Copilot this review #1 (High): the committed per-member CONFIRM
+    # verification keys must ALSO be non-identity order-q subgroup elements. A
+    # K_i = 1 (or out-of-group K_i) would let an observer choose any valid s and
+    # set R = G^s so that K_i^c = 1 and the member's CONFIRM vote verifies
+    # without that member ever signing -- minting votes for members who never
+    # reached CONFIRM. Both the default-derived keys and any caller-supplied
+    # confirm_pub go through the same gate.
+    good_confirm_pub = tuple(_validator_confirm_pub(GROUP_SK, i)
+                             for i in range(1, N_MEMBERS + 1))
+    bad_confirm_identity = (1).to_bytes(32, "big")
+    bad_confirm_out = (_GRP_P + 1).to_bytes(32, "big")
+    check("R2 confirm_pub subgroup validation (Copilot this review #1, High): "
+          "a per-member CONFIRM key that is the identity (K_i=1), out-of-group "
+          "(>= p), or a NON-residue (K_i^q != 1 mod p) is REJECTED at epoch "
+          "construction, so an observer cannot forge a member's CONFIRM vote via "
+          "K_i^c = 1, and the committed order-q keys pass",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=(identity_key,) + good_confirm_pub[1:]))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=(out_of_group,) + good_confirm_pub[1:]))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=(non_residue,) + good_confirm_pub[1:]))
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=good_confirm_pub).confirm_pub == good_confirm_pub)
+    dup_confirm = list(good_confirm_pub)
+    dup_confirm[1] = dup_confirm[0]      # same valid key at indices 1 and 2
+    check("R2 duplicate CONFIRM keys are rejected (Copilot this review, thread "
+          "ew-OgM, High): a single verification key K_i occupying MULTIPLE roster "
+          "indices would let one signature be copied into t CONFIRM entries and "
+          "satisfy the roster threshold (externalize counts indices, and the "
+          "CONFIRM vote has no member_index binding) -- one signer minting t "
+          "votes. The descriptor must reject so each counted index represents a "
+          "DISTINCT signer",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              confirm_pub=tuple(dup_confirm))))
+    # Copilot this review, thread ew-Ogf (High): the committed Feldman points must
+    # be evaluations of ONE degree-(t-1) polynomial whose constant commitment
+    # equals `authority_key`. A set of individually-valid but POLYNOMIALLY-
+    # INCONSISTENT C_i (e.g. one member's C_i not on the others' curve) would
+    # pass the old per-element subgroup check, yet its partials reconstruct a
+    # proof that fails under `authority_key` -- permanently stalling apply. The
+    # epoch must be rejected at activation.
+    good_feldman = tuple(_feldman_commit(GROUP_SK, 5, N_MEMBERS, i)
+                         for i in range(1, N_MEMBERS + 1))
+    rogue_feldman = list(good_feldman)
+    # Move member 8's commitment onto a DIFFERENT curve: regenerate C_8 from an
+    # unrelated polynomial image (still a valid order-q element, off-curve).
+    rogue_feldman[7] = pow(_GRP_G, 0x1f2e3d4c5a6b7c8d, _GRP_P).to_bytes(32, "big")
+    check("R2 Feldman polynomial consistency (Copilot this review, thread ew-Ogf, "
+          "High): EVERY committed C_i must lie on the single degree-t-1 polynomial "
+          "whose constant commitment equals `authority_key`. A set whose points are "
+          "individually order-q elements yet NOT on one curve (member 8 placed on a "
+          "different curve) is REJECTED at construction -- otherwise the partials "
+          "would reconstruct a proof failing under the committed group key and "
+          "permanently stall apply. A consistent set is accepted and its constant "
+          "commitment matches the authority key",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              feldman_pub=tuple(rogue_feldman)))
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=roster, activation=12300, retirement=13000, threshold=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              feldman_pub=good_feldman).feldman_pub == good_feldman)
+    check("R2 honest-intersection Byzantine bound (thread eW_rR): an epoch whose "
+          "threshold violates 2*t - n > f is rejected -- two t-subsets could "
+          "overlap only in Byzantine members and mint two same-slot proofs. "
+          "With n=8, t=2 (2t-n= -4, no honest intersection even with f=0) the "
+          "descriptor must raise ValueError",
+          raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=2, root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=5, byzantine_bound=2,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          # AVAILABILITY fail-closed (Copilot this review): a caller-forced f is
+          # PRESERVED (never re-clamped down) and then rejected when t <= n-f is
+          # violated. n=8, t=7 with a forced f=5 must REJECT (7 <= 3 is false),
+          # while a forced f=1 under n=8, t=6 is valid (q = t+f = 7 <= n-f = 7,
+          # the round-29 foqq9 flat bound).
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=7, byzantine_bound=5,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=6, byzantine_bound=1,
+              root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1").byzantine_bound == 1
+          # round-29 foqq9: (n=8, t=7) CANNOT be an honest FLAT epoch -- q must
+          # be >= t+f = 8 for C1b yet <= n-f = 7 for C1a -- so the flat default
+          # is REJECTED at activation (no sound flat qset exists).
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey,
+              roster=mk_roster(8), activation=12300, retirement=13000,
+              threshold=7, root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1"))
+          and epoch.byzantine_bound == 1)  # n=8,t=5 => default f = 2t-n-1 = 1
+    rogue_auth = ThresholdAuthority.from_epoch(epoch, sha256(b"rogue-seed"))
+
+    # ---------- Single-pulse primitives ---------------------------------------
+    cl_a = LockedClose(epoch, slot, prev_hash, sha256(b"externalized-value-A"))
+    cl_b = LockedClose(epoch, slot, prev_hash, sha256(b"externalized-value-B"))
+
+    rogue_source = RandomnessSource(epoch)
+    rogue_source.bind(rogue_auth)
+    boundary_release(rogue_source, cl_a)
+    # `proof()` is called on the rogue path so `_released` is populated and
+    # `share` becomes reachable for that rogue authority; the check below then
+    # shows the rogue-produced carrier (different polynomial) is NOT a valid
+    # share under the canonical authority, and the committed-C_i binding
+    # (thread evw9Z) means the rogue authority can no longer emit ANY proof for
+    # this epoch.
+    rogue_proof = rogue_source.proof(cl_a, rogue_auth)
+    rogue_share = rogue_auth.share(1, cl_a)
+
+    check("R2 same epoch hash, substituted member mapping: a share produced by a "
+          "different (seed/secret) authority for the same epoch is NOT a valid "
+          "share of the canonical authority; with no valid shares, recover is "
+          "None; and (thread evw9Z) the committed-C_i binding means the "
+          "rogue-seed authority cannot produce ANY proof for this epoch",
+          rogue_share is not None
+          and rogue_proof is None
+          and not auth.verify_share(1, cl_a, rogue_share)
+          and auth.recover_proof([(1, rogue_share)], cl_a) is None)
+
+    # ---------- R2b / thread evw-VYA: index-order key-vector commitment -------
+    # The epoch commits confirm_pub / feldman_pub in ROSTER INDEX ORDER, so a
+    # PERMUTATION of either vector must change epoch.hash (the positional mapping
+    # from member_index to verification key is part of the identity). Build an
+    # otherwise-identical epoch with members 1 and 2 of each committed vector
+    # swapped and assert its hash differs AND that the permuted reordering does
+    # not bind the same member to a different key.
+    perm_confirm = list(epoch.confirm_pub)
+    perm_confirm[0], perm_confirm[1] = perm_confirm[1], perm_confirm[0]
+    permuted_epoch = EpochDescriptor(
+        format_version=1, authority_key=vkey, roster=epoch.roster,
+        activation=epoch.activation, retirement=epoch.retirement,
+        threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
+        scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        confirm_pub=tuple(perm_confirm))
+    check("R2b / thread evw-VYA (High): the epoch commits confirm_pub and "
+          "feldman_pub in ROSTER INDEX ORDER (not sorted), so permuting a key "
+          "vector yields a DIFFERENT epoch hash -- same roster, same members, "
+          "different positional binding -- and a verifier can no longer hold one "
+          "epoch identity with incompatible per-index meanings across nodes "
+          "(confirm keys are unconstrained, so a positional permutation of "
+          "confirm_pub is a VALID identity that differs by hash)",
+          permuted_epoch.hash != epoch.hash
+          and permuted_epoch.membership_commitment == epoch.membership_commitment
+          and permuted_epoch.confirm_pub[0] == epoch.confirm_pub[1]
+          and permuted_epoch.feldman_pub == epoch.feldman_pub)
+
+    # ---------- R26 / tacticalnoot 5549653283: committed SCP qset topology ----
+    # The epoch COMMITS the exact SCP quorum-set graph it relies on
+    # (`scp_qset = (q, members)`, default (threshold + byzantine_bound, all n) --
+    # the smallest SOUND flat honest graph, round-29 foqq9). The activation SAT
+    # gate (C0/C1a/C1b/C2, see `_topology_contract_violations`) is evaluated in
+    # the CONSTRUCTOR, so a malformed or unlive topology is REJECTED at
+    # activation, and a relevant qset change produces a DIFFERENT epoch hash
+    # (the qset graph is pinned: a qset change rolls the epoch).
+    check("R26 topology: the epoch COMMITS the SCP qset graph it relies on -- "
+          "the default is the flat honest graph (q = threshold + byzantine_bound "
+          "= t + f over all n members, round-29 foqq9: the smallest flat quorum "
+          "that provably leaves >= t intact releasers even when the finalizing "
+          "quorum CONTAINS the f Byzantine voters); a RELEVANT change (a "
+          "different quorum threshold q) yields a DIFFERENT epoch hash (the "
+          "topology is pinned; a qset change rolls the epoch), and a "
+          "non-topological sibling change (members list order) canonicalizes to "
+          "the SAME committed graph",
+          epoch.scp_qset == (epoch.threshold + epoch.byzantine_bound,
+                             tuple(range(1, epoch.n + 1)))
+          and _flat_qset_bytes(epoch.scp_qset[0], epoch.scp_qset[1])
+          == _flat_qset_bytes(epoch.scp_qset[0], tuple(range(1, epoch.n + 1)))
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey, roster=roster,
+              activation=epoch.activation, retirement=epoch.retirement,
+              threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
+              scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+              root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+              scp_qset=(epoch.threshold + epoch.byzantine_bound,
+                        tuple(range(1, epoch.n + 1))))
+          .scp_qset_hash == epoch.scp_qset_hash
+          and EpochDescriptor(
+              format_version=1, authority_key=vkey, roster=roster,
+              activation=epoch.activation, retirement=epoch.retirement,
+              threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
+              scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+              root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+              scp_qset=(epoch.threshold + epoch.byzantine_bound + 1,
+                        tuple(range(1, epoch.n + 1))))
+          .hash != epoch.hash)
+    # C0: a Byzantine set that is ITSELF a quorum must be rejected at activation.
+    # With the default flat qset (q = t + f over all n, round-29 foqq9) an
+    # admitted B (|B| <= f < t < q) can never be a quorum; a crafted graph where
+    # q <= f lets a small Byzantine set reach its own quorum and finalize a value
+    # on its own -- the checker refuses to activate it.
+    check("R26 topology C0: activation REJECTS a committed qset graph under "
+          "which an admitted Byzantine set B (|B| <= f) is ITSELF an SCP quorum "
+          "-- a Byzantine-only value can never be finalized (Garcia-Perez/Losa "
+          "quorum-avoidance); the default flat qset (q=t+f over all n) always "
+          "passes because f < t means no admitted B reaches q",
+          not _is_qset_quorum(8, 5, tuple(range(1, 9)), {1})
+          and _is_qset_quorum(8, 1, tuple(range(1, 9)), {1})
+          and raises(lambda: EpochDescriptor(
+              format_version=1, authority_key=vkey, roster=roster,
+              activation=12300, retirement=13000, threshold=5,
+              byzantine_bound=1, root_rule=b"unique-threshold/v1",
+              event_mapping=b"single-pulse:LockedClose->C_s/v1",
+              scp_qset=(1, tuple(range(1, 9))))
+              and True))
+    # C1: the SAT gate enumerates EVERY admitted Byzantine set B and EVERY
+    # quorum Q of the COMMITTED graph, and requires |Q n Intact(B)| >= t (round-
+    # 29 foqq9). The reviewer's round-28 example (n=8, t=5, f=1, q=4) fires
+    # (the 4-of-8 quorum {1,2,3,4} finalizes but only 4 members -- and with the
+    # Byzantine voter withholding, only 3 < t -- release); the round-29
+    # tightening additionally rejects q = t = 5 (a 5-member quorum can CONTAIN
+    # the Byzantine voter: 4 < t intact releasers), and accepts only the sound
+    # flat default q >= t + f = 6 (no quorum leaves fewer than 5 intact). The
+    # reviewer's (n,t,f,q) = (10,7,3,7) counterexample fired by min-quorum >= t
+    # yet still FAILS the round-29 gate (a 7-member quorum can contain the 3
+    # Byzantine voters -> 4 < 7 honest releasers).
+    check("R26 topology C1/C2: the SAT activation gate quantifies over the "
+          "ACTUAL finalizable quorums AND the Byzantine members INSIDE every "
+          "quorum -- for every admitted B and EVERY quorum Q of the committed "
+          "graph |Q n Intact(B)| >= t (round-29 foqq9: a Byzantine-containing "
+          "quorum WITHHOLDS its Byzantine seats' releases) and |Roster n B| < t; "
+          "the flat honest default (n=8, t=5, f=1, q=6 = t+f) activates -- no "
+          "finalizing quorum leaves fewer than t=5 intact releasers -- while a "
+          "DEGRADED committed qset (q=3 < t; the reviewer's q=4 with a 4-of-8 "
+          "finalizer; or q=t=5, where a 5-quorum containing the Byzantine voter "
+          "leaves 4 < t) FIRES C1 at activation, and the round-29 reviewer's "
+          "(n,t,f,q) = (10,7,3,7) also FIRES (a 7-quorum can contain all 3 "
+          "Byzantine voters -> 4 < 7 releases)",
+          not _topology_contract_violations(
+              8, 5, 1, 6, tuple(range(1, 9)))
+          and not _topology_contract_violations(
+              8, 5, 1, 7, tuple(range(1, 9)))
+          and bool(_topology_contract_violations(
+              8, 5, 1, 3, tuple(range(1, 9)))) is True
+          and bool(_topology_contract_violations(
+              8, 5, 1, 4, tuple(range(1, 9)))) is True
+          and bool(_topology_contract_violations(
+              8, 5, 1, 5, tuple(range(1, 9)))) is True
+          and bool(_topology_contract_violations(
+              10, 7, 3, 7, tuple(range(1, 11)))) is True)
+
+    # ---------- R27 / 0xEmpty (Discord, CAP-0089) + tacticalnoot 5549584433:
+    # "implicit global n/f/t vs SCP's local quorum-slice model". The reviewer's
+    # two objections, made EXECUTABLE:
+    #   (a) "the set that finalizes a ledger can differ from the set the shares
+    #       were dealt to": a close CAN be finalized by a strict 4-of-8 subset
+    #       quorum of the share-dealt roster. The CAP neutralizes this at
+    #       ACTIVATION, not with arithmetic: the C1 gate measures the ACTUAL
+    #       finalizing quorums -- a committed graph whose SMALLEST finalizable
+    #       quorum is 4 members is REJECTED at activation (a 4-member finalizer
+    #       carries 4 < t releasers; one Byzantine voter withholding -> only 3 <
+    #       t release -- the exact hole the reviewer pinned), and with the
+    #       round-29 foqq9 tightening a committed graph with min-quorum = t is
+    #       ALSO rejected (a t-member quorum can CONTAIN the f Byzantine voters
+    #       and leave t - f < t honest releasers -- the reviewer's (10,7,3,7));
+    #       a graph activates only when EVERY finalizing quorum leaves >= t
+    #       INTACT releasers (the flat sound bound is q = t + f).
+    #   (b) "t CONFIRM voters can include f Byzantine ones, so you'd need t+f
+    #       voters to guarantee t honest": a threshold-sized cert externalizes a
+    #       close, but a Byzantine subset of the certified voters WITHHOLDS its
+    #       release share -- recover_proof over the remaining t-f honest carriers
+    #       (< t) returns None, so resolve() -> UNKNOWN (apply stalls), never a
+    #       root. The CAP does NOT adopt t+f: it adopts the committed topology --
+    #       C1 bounds every finalizing quorum to >= t members (all honest inside
+    #       the quorum), so liveness never depended on believing the
+    #       certificate's voter count (the old cert-counting claim is
+    #       discontinued; round-26 topology contract).
+    #   (c) quorum-slice MUTATION across epochs: a RELEVANT graph change --
+    #       different threshold q OR different member list -- yields a NEW epoch
+    #       hash (epoch roll); a pure member-list permutation canonicalizes to
+    #       the SAME committed graph (same hash).
+    _r27_q4_quorum = _is_qset_quorum(8, 4, tuple(range(1, 9)), frozenset({1, 2, 3, 4}))
+    _r27_q4_f1_rejected = bool(_topology_contract_violations(8, 5, 1, 4, tuple(range(1, 9))))
+    _r27_q4_f4_rejected = bool(_topology_contract_violations(8, 5, 4, 4, tuple(range(1, 9))))
+    _r27_q6_f1_ok = not _topology_contract_violations(8, 5, 1, 6, tuple(range(1, 9)))
+    _r27_q5_f1_rejected = bool(_topology_contract_violations(8, 5, 1, 5, tuple(range(1, 9))))
+    _r27_q6_f4_rejected = bool(_topology_contract_violations(8, 5, 4, 6, tuple(range(1, 9))))
+    _r27_10_7_3_7_rejected = bool(_topology_contract_violations(
+        10, 7, 3, 7, tuple(range(1, 11))))
+    check("R27-a (0xEmpty, round-28 refined by round-29 foqq9): 'the set that "
+          "finalizes a ledger can differ from the set the shares were dealt to' "
+          "AND 'a quorum can CONTAIN Byzantine members' are NEUTERED AT "
+          "ACTIVATION, not patched with arithmetic -- a strict 4-of-8 SUBSET "
+          "quorum of the share-dealt roster is REJECTED at activation (the "
+          "finalizer carries 4 < t=5 releasers, and with one Byzantine voter "
+          "withholding only 3 < t CONFIRM-participants are guaranteed); the "
+          "round-29 foqq9 tightening ALSO rejects q=t=5 under (n=8,t=5,f=1): a "
+          "5-member quorum can CONTAIN the Byzantine voter and leave only 4 < t "
+          "intact releasers; the HONEST committed graph (q=t+f=6) activates -- "
+          "EVERY finalizing quorum, even one containing the Byzantine seat, "
+          "leaves >= t=5 INTACT releasers -- and is C1-IMMUNE; while a WIDENED "
+          "fault class (f=4) is inherently unsound flat (no honest quorum can "
+          "exist: q <= n - f fails) and fires. The round-29 reviewer's own "
+          "(n,t,f,q) = (10,7,3,7) counterexample -- min-quorum 7 = t passes yet "
+          "a 7-member quorum containing the 3 Byzantine voters leaves only 4 < 7 "
+          "honest releasers -- FIRES at activation: identity may differ and "
+          "quorums may contain Byzantine members; the >= t intact-releaser count "
+          "never weakens",
+          _r27_q4_quorum
+          and _r27_q4_f1_rejected is True
+          and _r27_q4_f4_rejected is True
+          and _r27_q6_f1_ok
+          and _r27_q5_f1_rejected is True
+          and _r27_q6_f4_rejected is True
+          and _r27_10_7_3_7_rejected is True)
+    _r27h_src = RandomnessSource(epoch)
+    _r27h_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    _r27h_src.bind(_r27h_auth)
+    boundary_release(_r27h_src, cl_a, n_votes=epoch.threshold)   # EXACTLY t voters
+    _r27h_canonical = _r27h_src.proof(cl_a, _r27h_auth)          # publishes nonces,
+                                                                 # computes P_s
+    _r27h_cert_voters = tuple(range(1, epoch.threshold + 1))     # the t CONFIRMers
+    _r27h_f_withholding = epoch.byzantine_bound                  # Byzantine: vote
+                                                                 # but WITHHOLD share
+    _r27h_honest_t = epoch.threshold - _r27h_f_withholding       # t - f insured
+    _r27h_withheld_shares = [
+        (i, _r27h_auth.share(i, cl_a)) for i in
+        _r27h_cert_voters[:_r27h_honest_t]]
+    _r27h_t_shares = [(i, _r27h_auth.share(i, cl_a)) for i in _r27h_cert_voters]
+    check("R27-b (0xEmpty / tacticalnoot 5549584433): 't CONFIRM voters can "
+          "include f Byzantine ones, so you'd need t+f voters to guarantee t "
+          "honest' -- a THRESHOLD-SIZED cert (exactly t=5 genuine CONFIRM votes) "
+          "externalizes the close, but a Byzantine subset of the certified voters "
+          "WITHHOLDS its release share: recover_proof over the remaining t-f=4 "
+          "honest carriers (< t) returns None (resolve -> UNKNOWN; apply stalls; "
+          "NEVER a root) while the full t honest carriers recover the canonical "
+          "P_s -- Byzantine withholding is delayed availability, never a false "
+          "value, and the guarantee of >= t eventual HONEST releases comes from "
+          "the COMMITTED TOPOLOGY (C1 round-26, round-28 foQhl, round-29 foqq9: "
+          "EVERY finalizing quorum Q of the committed qset graph leaves "
+          "|Q n Intact(B)| >= t intact releasers under every admitted B -- the "
+          "flat sound default is q = t + f), "
+          "NOT from believing the certificate's voter count",
+          all(v is not None for (_, v) in _r27h_t_shares)
+          and _r27h_auth.recover_proof(_r27h_withheld_shares, cl_a) is None
+          and _r27h_auth.recover_proof(_r27h_t_shares, cl_a) == _r27h_canonical)
+    _r27_partial_graph = EpochDescriptor(
+        format_version=1, authority_key=vkey, roster=roster,
+        activation=epoch.activation, retirement=epoch.retirement,
+        threshold=5, byzantine_bound=1,
+        scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        scp_qset=(6, tuple(range(1, 8))))  # members 1..7 only (the excluded
+                                           # roster member 8 is a share-dealt
+                                           # non-finalizer): SOUND because the
+                                           # surviving qset-member count after
+                                           # ANY admitted fault is m - f = 6 = q
+                                           # (a partial member set with m - f < q
+                                           # would be a NO-HONEST-QUORUM topology
+                                           # and REJECTED at activation,
+                                           # round-29 fpkD5)
+    _r27_moved_graph = EpochDescriptor(
+        format_version=1, authority_key=vkey, roster=roster,
+        activation=epoch.activation, retirement=epoch.retirement,
+        threshold=epoch.threshold, byzantine_bound=epoch.byzantine_bound,
+        scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        scp_qset=(epoch.threshold + epoch.byzantine_bound, tuple(
+            reversed(tuple(range(1, epoch.n + 1))))))  # pure member-list permutation
+    check("R27-c (0xEmpty): quorum-slice MUTATION across epochs is handled by the "
+          "COMMIT, not by an implicit convention -- a committed qset graph whose "
+          "member list EXCLUDES a share-dealt rostered member (a finalizer whose "
+          "identity differs from the share-dealt set, on purpose), while keeping "
+          "the partial member set SOUND (m - f >= q, so an admitted fault still "
+          "leaves a valid quorum -- a partial graph with m - f < q is a NO-HONEST-"
+          "QUORUM topology and is REJECTED at activation, round-29 fpkD5), is still "
+          "C1-safe and activatable but yields a DIFFERENT epoch hash; a partial "
+          "member set of (8,6,1) with m = 7 and q = 7 = t + f would be UNLIVE "
+          "(faulting a qset member leaves 6 < 7) and is correctly rejected, so "
+          "the excluded-member graph needs q <= m - f = 6 (here t=5, q=6); "
+          "and a pure member-list PERMUTATION "
+          "canonicalizes (sorted/set) to the SAME committed graph and the SAME "
+          "epoch hash -- the topology is exactly the committed bytes, never a "
+          "deployment convention, and any node can re-derive it",
+          _r27_partial_graph.scp_qset == (6,
+                                          tuple(range(1, 8)))
+          and _r27_partial_graph.hash != epoch.hash
+          and _r27_moved_graph.scp_qset_hash == epoch.scp_qset_hash
+          and _r27_moved_graph.hash == epoch.hash
+          and bool(_topology_contract_violations(8, 5, 1, 6,
+                                                 tuple(range(1, 7))))
+          and not _topology_contract_violations(8, 5, 1, 6,
+                                                tuple(range(1, 8))))
+
+    # ---------- R3 / Noot #5: predecessor-state epoch selection --------------
+    wrong_prev = sha256(u32(slot - 1) + b"an-alien-predecessor")
+    cl_wrong_prev = LockedClose(epoch, slot, wrong_prev,
+                                sha256(b"externalized-value-A"))
+    check("R3 previousLedgerHash is the REAL Core predecessor hash: changing "
+          "ONLY that committed predecessor changes C_s and therefore the "
+          "canonical proof/root (a vector Noot asked for; no cross-reorg "
+          "randomness)",
+          cl_wrong_prev.hash != cl_a.hash and prev_hash != wrong_prev)
+
+    committed = {sha256(b"prev-canonical-state"): (epoch,)}
+    selected = epoch_for_transition(sha256(b"prev-canonical-state"), committed,
+                                    epoch.activation + 1)
+    check("N5 epoch-for-slot is a pure function of the PREDECESSOR canonical "
+          "state: exactly one committed epoch window matching -> the epoch is "
+          "selected; never local qsets or membership bookkeeping",
+          selected is epoch
+          and epoch_for_transition(sha256(b"prev-canonical-state"), committed,
+                                   slot) is epoch)
+    check("N5 fail-closed selection: a DIFFERENT predecessor (no committed "
+          "epoch window) yields NO selection, and a slot outside every window "
+          "also yields none -- zero or two candidates both fail closed",
+          epoch_for_transition(sha256(b"some-other-predecessor"), committed,
+                               slot) is None
+          and epoch_for_transition(sha256(b"prev-canonical-state"), committed,
+                                   epoch.retirement + 1) is None)
+    other_win_pub = group_pub_from_seed(GROUP_SK, 3, 5)
+    other_win = EpochDescriptor(
+        format_version=1, authority_key=other_win_pub,
+        roster=mk_roster(5), activation=epoch.activation - 50,
+        retirement=epoch.retirement + 50, threshold=3,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping)
+    overlap = {sha256(b"prev-canonical-state"): (epoch, other_win)}
+    check("N5 fail-closed overlap: two committed epochs whose windows BOTH cover "
+          "the slot select NOTHING (no caller/config/cache picks one of them)",
+          epoch_for_transition(sha256(b"prev-canonical-state"), overlap, slot) is None)
+
+    # ---------- Single pulse: closed ledger -> one C_s -> one proof -> one root
+    auth_b = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    src_b = RandomnessSource(epoch)
+    src_b.bind(auth_b)
+    boundary_release(src_b, cl_b)
+    pb_b = src_b.proof(cl_b, auth_b)
+    check("single-pulse binding: different externalized bytes -> distinct C_s "
+          "as well as distinct proof/root under the same epoch+network+predecessor",
+          cl_a.hash != cl_b.hash
+          and UniqueThresholdProof.verify(epoch, cl_b.hash, pb_b)
+          != UniqueThresholdProof.verify(epoch, cl_a.hash, pb_b)
+          and pb_b is not None)
+    check("dnFV6 no undefined outcome class: C_s is EXACTLY "
+          "H(CloseLock||RandomnessCloseInputV1(in_v1)); there is NO second "
+          "independently encoded challenge -- the primitive evaluates the "
+          "already-canonical C_s directly (no caller byte can mint an "
+          "undefined-outcome draw)",
+          cl_a.validate() and not hasattr(cl_a, "challenge")
+          and NO_CALLER_OUTCOME_CLASS == frozenset())
+
+    # ---------- Release boundary: CONFIRM/EXTERNALIZE + fully validated ------
+    # Copilot (this review): the release fact is NOT caller-asserted. A source
+    # admits a close only when its boundary GENUINELY ran CONFIRM->EXTERNALIZE;
+    # there is no public way to stamp a close released. accepted-commit /
+    # "fully_validated" are no longer caller booleans -- they live inside the
+    # transition.
+    src_early = RandomnessSource(epoch)          # boundary never ran for cl_a
+    early_ok = src_early.admit(cl_a)             # boundary-enforced -> False
+    check("dnFVg release boundary: no CONFIRM/EXTERNALIZE for a close means "
+          "nothing can be admitted -- in particular an accepted-commit/prepared "
+          "close (which is not the externalize edge) cannot authorize a proof or "
+          "share, and the close stays UNKNOWN (stalled apply)",
+          not early_ok
+          and not src_early._boundary.has_externalized(cl_a)
+          and src_early.proof(cl_a, auth) is None
+          and resolve(epoch, cl_a, src_early, None)["outcome"] == "UNKNOWN")
+    alien_stage = RandomnessSource(epoch)
+    # A bare/incomplete CONFIRM cert (< t votes) is REJECTED by the edge: there
+    # is no caller boolean, only a quorum-cert that must authenticate and reach
+    # the threshold (Copilot this review #2).
+    stage_boundary = alien_stage._boundary
+    weak_cert = {i: _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                                  cl_a.epoch_hash, cl_a.hash)
+                 for i in range(1, epoch.threshold)}        # t-1 votes only
+    bogus_cert = {1: b"\x00" * 64}                          # unauthenticated
+    not_validated = (not stage_boundary.externalize(cl_a, weak_cert)
+                     and not stage_boundary.externalize(cl_a, bogus_cert)
+                     and not stage_boundary.has_externalized(cl_a)
+                     and not boundary_release(alien_stage, cl_a, n_votes=0))
+    check("dnFVg release boundary: the CONFIRM/EXTERNALIZE transition itself "
+          "rejects a value whose quorum-cert is absent, INCOMPLETE (< t distinct "
+          "valid votes) or unauthenticated (externalize returns False; no "
+          "witness, no proof, no share) -- there is NO caller-asserted "
+          "`fully_validated` boolean",
+          not_validated
+          and not alien_stage._boundary.has_externalized(cl_a)
+          and alien_stage.proof(cl_a, auth) is None)
+    ok_boundary = boundary_release(source, cl_a)
+    proof_a = source.proof(cl_a, auth)
+    root_a = UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a)
+    check("dnFVg release boundary + proof/root split: after CONFIRM/EXTERNALIZE "
+          "with full local validation a proof is reconstructed from >=t shares, "
+          "and that proof is a distinct authenticator -- NOT the root",
+          ok_boundary and proof_a is not None
+          and proof_a != root_a and root_a is not None)
+    # Per-member release is a STRICT function of the verified CONFIRM certificate
+    # (Copilot round-15, thread 3929898761, High): `proof()` authorizes release
+    # ONLY for the DISTINCT members whose votes `externalize()` authenticated --
+    # NEVER every roster member. A partial-but-valid cert (>= t votes) releases
+    # exactly those members; a roster member whose vote was never in the cert is
+    # withheld even though the close itself is boundary-released.
+    partial_src = RandomnessSource(epoch)
+    boundary_release(partial_src, cl_a, n_votes=epoch.threshold)  # t votes only
+    partial_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    partial_src.bind(partial_auth)
+    _ = partial_src.proof(cl_a, partial_auth)                     # authorizes 1..t
+    allowed = set(range(1, epoch.threshold + 1))
+    denied = set(range(epoch.threshold + 1, N_MEMBERS + 1))
+    check("Per-member release = strict function of the authenticated CONFIRM cert "
+          "(Copilot round-15 3929898761): after a threshold-sized cert, ONLY the "
+          "certified members are released (a t-subset reconstructs the canonical "
+          "proof) while a roster member whose vote was absent from the cert is "
+          "withheld -- a caller cannot get a blanket all-n release from one "
+          "boundary admission",
+          all(partial_auth.share(i, cl_a) is not None for i in allowed)
+          and all(partial_auth.share(i, cl_a) is None for i in denied)
+          and partial_auth.recover_proof(
+              [(i, partial_auth.share(i, cl_a)) for i in allowed], cl_a) == proof_a)
+    # ROUND-1 PUBLICATION IS CONFIRM-GATED (Copilot round-15, thread 3929898704,
+    # High): an authority must NOT publish nonce commitments for an arbitrary
+    # candidate close before the lock -- if it did, a caller holding the
+    # authority could import t indices of ANY candidate close and expose the
+    # aggregate R / computable root pre-lock (a grinding oracle). `publish_nonce`
+    # returns None for a fresh (not-yet-released) close of the same epoch, and
+    # refuses a competing C_s for an already-locked slot (durable one-close-per-
+    # slot), while firing normally once the close reaches the CONFIRM boundary.
+    fresh = RandomnessSource(epoch)
+    fresh_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    fresh.bind(fresh_auth)
+    prelock_cl = cl_a        # same epoch; boundary never ran -> not released
+    prelock_pub = fresh_auth.publish_nonce(1, prelock_cl)   # CONFIRM-gated -> None
+    prelock_set = fresh_auth.round1_nonces(prelock_cl)      # nothing published
+    # Once the close reaches the CONFIRM boundary AND the release path runs,
+    # round-1 publication fires (proof() published the authenticated members'
+    # nonces). The key property: BEFORE the lock there is no commitment material
+    # at all, so no aggregate R / pre-computable root can be exposed by a caller
+    # that holds only the authority.
+    check("Round-1 publication is CONFIRM-gated (Copilot round-15 3929898704): a "
+          "pre-lock close yields NO nonce commitment (no aggregate R can be "
+          "exposed before the lock) and the round-1 registry stays empty -- "
+          "publication only ever fires behind the authenticated CONFIRM/release "
+          "boundary (observed by the fact that the ROUND-1 phase within proof() "
+          "is the same CONFIRM-gated op)",
+          prelock_pub is None and prelock_set == {})
+    # ROUND-2 PARTIAL BARRIER (Copilot round-15, thread 3929898725, High): a
+    # round-2 partial is refused until the close's AUTHENTICATED ROUND-1 set is
+    # complete (>= t committed nonces), so a partial can never predate the fixed
+    # signer set / aggregate R / challenge it commits to. We take a close that
+    # IS fully released, then wipe only the round-1 registry to test the barrier
+    # in isolation: a share request below t committed nonces is refused, and once
+    # t nonces are published the partial is emitted.
+    barrier_src = RandomnessSource(epoch)
+    barrier_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    barrier_src.bind(barrier_auth)
+    boundary_release(barrier_src, cl_a)                       # released (all n)
+    _ = barrier_src.proof(cl_a, barrier_auth)                 # sets _released/per-member
+    barrier_auth._per_member_released.clear()                 # isolate the member bit
+    barrier_auth._r1.pop(cl_a.hash, None)                     # isolate the round-1 set
+    _bnd = barrier_src._boundary
+    barrier_auth._authorize_member_release(  # member 1's verified bit (boundary-minted)
+        1, cl_a.hash, _bnd._cap(),
+        _bnd.member_release_witness(cl_a, 1))
+    # Not enough round-1 nonces yet (< t): share() refuses.
+    before_r1 = barrier_auth.share(1, cl_a)
+    for i in range(1, epoch.threshold + 1):
+        barrier_auth.publish_nonce(i, cl_a)                   # now >= t nonces
+    after_r1 = barrier_auth.share(1, cl_a)
+    check("Round-2 partial barrier (Copilot round-15 3929898725): a partial is "
+          "refused until the authenticated round-1 set reaches threshold (the "
+          "signer set / R / challenge are publicly fixed first), then emitted",
+          before_r1 is None and after_r1 is not None)
+    check("dnFVg an UNadmitted close is REJECTED, never ROOT",
+          resolve(epoch, cl_b, source, pb_b)
+          == {"event_hash": cl_b.hash.hex(), "outcome": "REJECTED"})
+
+    # ---------- Noot #3: genuine threshold theorem ----------------------------
+    t = epoch.threshold
+    full_shares = [(i, auth.share(i, cl_a)) for i in range(1, N_MEMBERS + 1)]
+    below = auth.recover_proof(full_shares[:t - 1], cl_a)
+    check("N3 threshold: t-1 valid shares recover NO proof (nothing below t can "
+          "reconstruct the canonical P_s)", below is None)
+    recovered = {}
+    all_same = True
+    for combo in itertools.combinations(range(1, N_MEMBERS + 1), t):
+        sub = [(i, auth.share(i, cl_a)) for i in combo]
+        p = auth.recover_proof(sub, cl_a)
+        recovered[frozenset(combo)] = p
+        if p != proof_a:
+            all_same = False
+    check("N3 threshold: every one of %d distinct valid t-subsets (and any "
+          "permutation) recovers the SAME canonical P_s -- byte-identical; no "
+          "subset flavors the proof" % len(recovered),
+          len(recovered) == len(list(itertools.combinations(
+              range(1, N_MEMBERS + 1), t))) and all_same and len(recovered) >= 2)
+    plus = auth.recover_proof(full_shares[:t + 1], cl_a)
+    full = auth.recover_proof(full_shares, cl_a)
+    check("N3 threshold: t+1 and full sets ALSO recover the identical canonical "
+          "P_s", plus == proof_a and full == proof_a)
+    junk = [(3, auth.share(3, cl_a))]                        # duplicate member 3
+    junk += [(N_MEMBERS + 9, sha256(b"out-of-roster"))]      # out of roster
+    junk += [(6, auth.share(6, cl_b))]                       # wrong close
+    junk += [(2, sha256(b"waste:2"))]                        # invalid share
+    mixed_epoch = [(i, auth.share(i, cl_a)) for i in range(1, t + 1)] + junk
+    check("N3 threshold: invalid/duplicate/out-of-roster/wrong-close shares are "
+          "DISCARDED individually and never poison t otherwise valid shares -- "
+          "same canonical P_s with junk present",
+          auth.recover_proof(mixed_epoch, cl_a) == proof_a
+          and auth.recover_proof(junk, cl_a) is None)
+    check("N3 threshold: a t-subset of a DIFFERENT close's shares cannot forge "
+          "cl_a's proof (share is close-bound)",
+          auth.recover_proof([(i, auth.share(i, cl_b)) for i in range(1, t + 1)],
+                             cl_a) is None)
+    # ======== Distributed FROST: verify/recover run WITHOUT the master secret
+    # (Copilot this review, High - evMSO / evw-VYO). A verifier-only authority
+    # constructed from the SAME epoch but a SHAM seed (it holds NO group secret,
+    # NO share, NO nonce) must verify honest carriers and reconstruct the
+    # byte-identical canonical proof purely from the AUTHENTICATED ROUND-1 nonce-
+    # commitment set {i -> N_i} and the N_i / C_i carried in each share --
+    # contacting none of `self.seed`, `f(i)`, or `n(i)`. In a real two-round FROST
+    # every contributor broadcasts its round-1 `N_i` BEFORE any round-2 partial,
+    # so the verifier receives that transcript through the normal API
+    # (`publish_nonce`) and passes it as `round1` -- it does NOT inject private
+    # per-process state (the prior test literally wrote into `_published_nonces`,
+    # which a fresh peer would never have; thread evw-VYO flags this). The
+    # SHAM-seed peer therefore has a genuinely empty private registry and only
+    # the public round-1 transcript, exactly like a fresh catchup/other-node.
+    verifier_only = ThresholdAuthority.from_epoch(epoch, sha256(b"peer-verifier-only"))
+    r1 = {}
+    for i in range(1, N_MEMBERS + 1):
+        r1[i] = auth.publish_nonce(i, cl_a)      # honest round-1 broadcast (public API)
+    # Each carrier's N_i MUST match the committed round-1 value, and the peer
+    # verifies with the committed transcript.
+    peer_accepted = all(verifier_only.verify_share(i, cl_a, carrier, round1=r1)
+                        for (i, carrier) in full_shares)
+    peer_proof = verifier_only.recover_proof(full_shares, cl_a, round1=r1)
+    check("N3/threshold distributed-FROST peer verifiability (Copilot this "
+          "review, High): an authority holding NO master seed -- the same epoch, "
+          "a SHAM seed, and NO injected private nonce state, only the public "
+          "round-1 transcript -- verifies every honest public N_i/C_i carrier "
+          "and reconstructs the byte-identical canonical P_s, so verification is "
+          "authentically distributed (committed public commitments only, no "
+          "secret, no per-process hack)",
+          peer_accepted and peer_proof == proof_a)
+    check("N3/threshold two-round round-1 binding (thread evw-VYO, High): a "
+          "peer that NEVER gathered the round-1 transcript cannot verify (the "
+          "close's aggregate R/c is not guessable from a lone carrier), and a "
+          "carrier whose N_i differs from the committed round-1 value is REJECTED "
+          "-- a contributor cannot swap its nonce between rounds to grind the "
+          "challenge",
+          (not ThresholdAuthority.from_epoch(epoch, sha256(b"no-r1-peer")).verify_share(
+               1, cl_a, full_shares[0][1], round1={1: full_shares[0][1][1]})
+           and not verifier_only.verify_share(1, cl_a,
+                (full_shares[0][1][0], sha256(b"wrong-r1-nonce"), full_shares[0][1][2]),
+                round1=r1)))
+    check("N3/threshold distributed-FROST forged carriers (Copilot this review, "
+          "High): a replayed/wrong-owner carrier is REJECTED by the secret-free "
+          "verifier -- including the identity-Feldman attack `C_i = 1` (which "
+          "would reduce the partial equation to `G^{s_i} == N_i` and count "
+          "`(s_i=1, N_i=G)` as valid for any challenge) and any C_i that is NOT "
+          "the epoch-committed one -- so a Byzantine rostered sender cannot "
+          "poison reconstruction, and the accepted set stays clean",
+          not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
+                                                   full_shares[0][1][1],
+                                                     (1).to_bytes(32, "big")))
+          and not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
+                                                       full_shares[0][1][1],
+                                                       sha256(b"wrong-feldman")),
+                                             round1=r1)
+          and not verifier_only.verify_share(1, cl_a, (full_shares[0][1][0],
+                                                       sha256(b"wrong-nonce"),
+                                                       full_shares[0][1][2]),
+                                             round1=r1)
+          and not verifier_only.verify_share(
+              1, cl_a, (sha256(b"forged-s"), r1[1],
+                        full_shares[0][1][2]), round1=r1))
+    cl_foreign = LockedClose(other_win, slot, prev_hash,
+                             sha256(b"externalized-value-A"))
+    check("N3 mixed-epoch rejected: an authority instantiated for epoch A cannot "
+          "share over (or reconstruct a proof for) a close of epoch B",
+          auth.share(1, cl_foreign) is None
+          and auth.recover_proof([], cl_foreign) is None)
+    check("N1 authorization never flavors the pulse: the proof recovered from "
+          "any >=t share subset equals the resolver's admitted proof -- the same "
+          "close, same P_s, same root, whatever the witness/release path",
+          full == proof_a and canonical_root(cl_a.hash, epoch.authority_key,
+                                             epoch.hash, full) == root_a)
+
+    # ---------- Liveness theorem: SCP-finalizable => randomness-reconstructible
+    # (tactical-noot round-12 red test, REVISED round-13 to stop assuming the
+    # theorem). The prior version was circular: it defined every |E| >= t roster
+    # subset as "an SCP-finalizing view" and pulled every member's share from ONE
+    # globally-released authority, so the roster-disjoint externalization that can
+    # violate the theorem was excluded by construction. This revision models TWO
+    # INDEPENDENT dimensions and exercises the disjoint case explicitly:
+    #   (a) SCP ledger finality (which real FBA quorum-set topology determines) --
+    #       represented by `scp_finalized`: True iff the normal SCP externalize ran;
+    #   (b) each roster member's OWN local CONFIRM->EXTERNALIZE release bit --
+    #       represented by a PER-MEMBER independent release set E, where member i
+    #       releases exactly when IT crossed ITS OWN boundary toward C_s, NEVER via
+    #       one shared authority. The CAP does NOT claim t is an SCP quorum (line
+    #       448 / S1-S3 object contract): t is the RANDOMNESS-reconstruction
+    #       threshold, an independent release edge the CAP ADDS on top of SCP.
+    # We then prove:
+    #   * ROSTER-DISJOINT SCP finality does NOT release shares: if SCP externalized
+    #     via a quorum containing < t roster members (so the per-member release set
+    #     E has |E| < t, even though scp_finalized == True), recover yields NO proof
+    #     -- a disjoint quorum stalls randomness. This is the scenario that can
+    #     violate a sloppy theorem, and here it is genuinely exercised and shown to
+    #     produce UNKNOWN (which is exactly why the CAP ADDS the roster-threshold
+    #     release rule rather than trusting SCP finality).
+    #   * ROSTER-THRESHOLD release => reconstructible: once >= t roster members have
+    #     INDEPENDENTLY crossed toward the same C_s (same per-member local view;
+    #     2*t-n>f forces that common C_s), their individually-released shares
+    #     reconstruct the UNIQUE P_s/root.
+    members = list(range(1, N_MEMBERS + 1))
+    # Per-member independent release bits for cl_a: member i is released iff
+    # i in E. Round-22 thread 3936844284: each release bit is driven through a
+    # FRESH boundary's `record_confirm` transition (a per-member, individually
+    # verified CONFIRM vote -- never a replay of the shared source boundary that
+    # already externalized cl_a) and the bit is registered on a FRESH authority
+    # (same epoch seed -> identical shares), so the public API enumerates
+    # exactly the members that individually-crossed, INCLUDING subthreshold
+    # sets below t.
+    def roster_released_shares(E):
+        rel_bnd = ConfirmExternalizeBoundary(
+            epoch, boundary_secret=source._boundary._secret)
+        au = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+        # round-23 thread 3939109855: NO internal release registry is copied
+        # from `auth`. The fresh authority is bound to the SAME boundary
+        # capability through the PUBLIC `bind_release_cap`, and the close-level
+        # release + each member's release bit are reproduced through the
+        # boundary-minted witnesses only -- the same authenticated transitions
+        # (`_authorize_release` / `_authorize_member_release`) that the source's
+        # own `proof()` path runs with boundary witnesses.
+        au.bind_release_cap(rel_bnd._cap())
+        if not au._authorize_release(cl_a.hash, rel_bnd.witness(cl_a),
+                                     rel_bnd._cap()):
+            raise AssertionError("close-level release witness was not accepted")
+        for i in E:
+            vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                                 epoch.hash, cl_a.hash)
+            if not rel_bnd.record_confirm(i, cl_a, vote):
+                raise AssertionError(
+                    "independent CONFIRM vote of member %d was not recorded" % i)
+            au._authorize_member_release(
+                i, cl_a.hash, rel_bnd._cap(),
+                rel_bnd.member_release_witness(cl_a, i))
+        # FROST ROUND-1 FIRST (round-2 barrier): publish the round-1 nonce
+        # commitment for each released member (CONFIRM-gated) so the close's
+        # aggregate R / challenge are fixed BEFORE any round-2 partial; then
+        # collect the member's partial. This mirrors the two-round ordering.
+        for i in E:
+            au.publish_nonce(i, cl_a)
+        return [(i, c) for i in E for c in [au.share(i, cl_a)]
+                if c is not None]
+    # (a)-(b) model: SCP finality and per-member release are INDEPENDENT
+    # (Copilot round-16, thread 3934383407; tacticalnoot's 'second liveness
+    # authority'). 'SCP finality' is Core's OWN SCP-quorum decision -- modeled as
+    # a DEDICATED, authenticated transition (finalize_scp with an SCP quorum
+    # certificate), NOT the roster's reconstruction threshold t, and NOT a
+    # caller-asserted boolean. Randomness release remains the roster's per-member
+    # CONFIRM->EXTERNALIZE edge. A ROSTER-DISJOINT finalization -- Core's quorum
+    # closed on `cl_a` (scp_finalized == True) while the roster supplied only
+    # 2 < t individual releases -- therefore yields NO reconstructible proof:
+    # the accepted state 'SCP-finalized + |released_roster| < t -> UNKNOWN' is
+    # reached through genuine transitions, not a disconnected flag.
+    # A DEDICATED, FRESH boundary mounts the SCP-finality demonstration, so the
+    # roster CONFIRM edge for `cl_a` has GENUINELY never run on IT (shared
+    # `source` already released cl_a earlier in this suite; the fresh boundary
+    # starts empty). This is what lets us show SCP finality and roster release
+    # vary independently.
+    scp_bnd = ConfirmExternalizeBoundary(epoch)
+    disjoint_externalized = scp_bnd.finalize_scp(
+        cl_a, scp_cert={tuple(range(1, N_MEMBERS + 1)): b"core-quorum"})
+    disjoint_release = [1, 2]             # only 2 < t=5 roster members released
+    disjoint_recovered = auth.recover_proof(
+        roster_released_shares(disjoint_release), cl_a)
+    # Copilot round-16 (thread 3934383407): assert the two dimensions are GENUINELY
+    # independent -- on the FRESH boundary, SCP finality (Core's quorum, via
+    # finalize_scp) is recorded for `cl_a` while the roster's own CONFIRM edge
+    # never ran (has_externalized == False, |E| < t). This proves the model can
+    # represent the accepted 'SCP-finalized + |released| < t -> UNKNOWN' state
+    # through real transitions, not a disconnected boolean: the resolver stalls
+    # (recover -> None) rather than fabricating a root.
+    scp_independent = (scp_bnd.scp_finalized(cl_a)
+                       and not scp_bnd.has_externalized(cl_a))
+    check("Liveness / SCP-finality is INDEPENDENT of roster release (Copilot "
+          "round-16 thread 3934383407): finalize_scp records Core's quorum "
+          "decision for `cl_a` (scp_finalized == True) while the roster's own "
+          "CONFIRM edge never crossed (has_externalized == False, |E| < t), so "
+          "the accepted state 'SCP-finalized + |released_roster| < t -> UNKNOWN' "
+          "is reached through genuine transitions and recovery stalls (not a "
+          "disconnected boolean)",
+          scp_independent and disjoint_recovered is None)
+    # (thread ew-Og4, Medium) consume `disjoint_externalized` explicitly: it is
+    # NOT a re-test of t-of-n reconstruction. It asserts that an SCP-finalized
+    # close yields NO randomness when (and only when) the per-member roster release
+    # set stays below t -- i.e. SCP finality alone, absent the roster's own release
+    # edge, releases nothing. We also assert that even WITH the roster having
+    # < t releases the close is SCP-finalized (so the two dimensions truly
+    # vary independently and the disjoint case is genuinely exercised).
+    # Exhaustive independence check: enumerate EVERY per-member release subset E
+    # and require -- WITHOUT assuming finality tracks |E| -- that recover matches
+    # the canonical proof IFF |E| >= t (roster threshold), and yields None IFF
+    # |E| < t (below the release edge), for EVERY value of SCP finality
+    # (disjoint_externalized True in the disjoint branch, False in the
+    # not-yet-finalized branch below).
+    all_consistent = True
+    for k in range(0, N_MEMBERS + 1):
+        for E in itertools.combinations(members, k):
+            rec = auth.recover_proof(roster_released_shares(E), cl_a)
+            scp_finalized = disjoint_externalized if k < epoch.threshold else True
+            # Consensus-bound consumption: t <= n - f guarantees a finalizing
+            # quorum can carry >= t releases whenever the roster itself crossed;
+            # and 2t - n > f guarantees two >= t release sets overlap in honest
+            # members, so any two such sets yield the SAME canonical P_s.
+            if k >= epoch.threshold:
+                if rec != full:                       # roster-threshold => P_s
+                    all_consistent = False
+            else:
+                if rec is not None:                   # sub-threshold => no P_s
+                    all_consistent = False
+                elif rec is None and not scp_finalized:
+                    pass  # not-yet-finalized: also no randomness (independence)
+    check("Liveness theorem (tacticalnoot, revised round-14): the randomness "
+          "roster is NOT an SCP quorum (t is the reconstruction threshold only, "
+          "per S1-S3). SCP ledger finality and per-member release are modeled as "
+          "two INDEPENDENT dimensions and are now GATED per member: share(i) "
+          "exists iff member i individually crossed ITS OWN boundary toward the "
+          "same C_s (authenticated per-member release state, Copilot thread "
+          "3921067249 -- NOT a caller-supplied set), so E is a real per-member "
+          "release set,"
+          "not a filter over a globally pre-authorized authority. A ROSTER-"
+          "DISJOINT SCP externalization -- scp_finalized==True (the close WAS "
+          "ledger-finalized, consumed from disjoint_externalized) yet only |E| < t "
+          "roster members individually released -- yields NO reconstructible "
+          "proof: the scenario that would violate a sloppy theorem is genuinely "
+          "exercised and shown to stall UNKNOWN (which is why the CAP ADDS the "
+          "roster-threshold release rule rather than trusting SCP finality); "
+          "once >= t members independently release for the SAME C_s, their "
+          "shares reconstruct the unique P_s/root",
+          disjoint_recovered is None
+          and disjoint_externalized
+          and all_consistent)
+    # (Copilot thread 3921067249, Medium) authenticated-per-member gate: a caller
+    # who only holds the authority object CANNOT conjure per-member release bits.
+    # `share` has NO caller-supplied release-set parameter; only the boundary's
+    # authenticated `_authorize_member_release` can register a bit. A member that
+    # was never individually authorized yields no carrier even though the close
+    # is boundary-released, and a caller cannot force one by fabricating a set.
+    import inspect
+    share_sig = inspect.signature(auth.share)
+    no_caller_set = "per_member_released" not in share_sig.parameters
+    auth._per_member_released.clear()
+    _bnd = source._boundary
+    auth._authorize_member_release(          # only member 1 crossed (verified)
+        1, cl_a.hash, _bnd._cap(),
+        _bnd.member_release_witness(cl_a, 1))
+    released_1 = auth.share(1, cl_a)
+    withheld_2 = auth.share(2, cl_a)                  # never authorized -> None
+    check("Boundary-authenticated per-member release (Copilot thread 3921067249): "
+          "share() takes NO caller-supplied release-set -- per-member release bits "
+          "are stored AUTHENTICATED (populated only by the boundary) and consulted "
+          "internally, so an external caller cannot assert arbitrary per-member "
+          "release; a member that did not individually cross is withheld even for "
+          "a boundary-released close",
+          no_caller_set and released_1 is not None and withheld_2 is None)
+    # round-22 thread 3936844284: INDEPENDENT SUBTHRESHOLD releases are recorded
+    # per member through the `record_confirm` transition on a FRESH boundary --
+    # one that NEVER reached a threshold certificate (or any externalize) for
+    # cl_a -- and the per-member enumeration is driven through THAT transition:
+    # members 1 and 2 individually recorded => EXACTLY their carriers appear;
+    # member 3 (never recorded) contributes nothing; recovery below t stalls.
+    rel_bnd2 = ConfirmExternalizeBoundary(
+        epoch, boundary_secret=source._boundary._secret)
+    au2 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    # round-23 3939109855: public capability binding + authenticated release
+    # reproduction (no internal registry copied).
+    au2.bind_release_cap(rel_bnd2._cap())
+    if not au2._authorize_release(cl_a.hash, rel_bnd2.witness(cl_a),
+                                  rel_bnd2._cap()):
+        raise AssertionError("close-level release witness was not accepted")
+    for i in (1, 2):
+        vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                             epoch.hash, cl_a.hash)
+        if not rel_bnd2.record_confirm(i, cl_a, vote):
+            raise AssertionError("record_confirm refused member %d" % i)
+        au2._authorize_member_release(
+            i, cl_a.hash, rel_bnd2._cap(),
+            rel_bnd2.member_release_witness(cl_a, i))
+    for i in (1, 2):
+        au2.publish_nonce(i, cl_a)
+    sub_enum = au2.released_members(cl_a)      # PUBLIC per-member enumeration
+    sub_carriers_s = [i for i in (1, 2, 3) if au2.share(i, cl_a) is not None]
+    check("Liveness / independent SUBTHRESHOLD releases through record_confirm "
+          "(round-22 3936844284): a FRESH boundary that never externalized cl_a "
+          "records members 1 and 2 INDIVIDUALLY (|E| = 2 < t), the per-member "
+          "enumeration released_members(cl_a) exposes EXACTLY {1, 2} -- member "
+          "3 (never recorded) contributes no release bit and no carrier -- and "
+          "the FRESH boundary's completed-context certificate is never the "
+          "source of the bits (has_externalized == False); the ROUND-2 BARRIER "
+          "withholds physical round-2 carriers below t (share() -> None for "
+          "every member), so subthreshold release is a genuine per-member "
+          "transition and subthreshold recovery provably stalls",
+          sub_enum == (1, 2)
+          and sub_carriers_s == []
+          and not rel_bnd2.has_externalized(cl_a)
+          and au2.share(3, cl_a) is None
+          and auth.recover_proof(
+              [(i, au2.share(i, cl_a)) for i in (1, 2)], cl_a) is None)
+    # Roster-threshold release under the per-member model recovers the canonical
+    # proof, matching the boundary-admitted one (not circular: independent bits).
+    threshold_set = members[: epoch.threshold]
+    thr_recovered = auth.recover_proof(roster_released_shares(threshold_set), cl_a)
+    check("Liveness theorem / roster-threshold reconstruction (round-14): once "
+          ">= t members have each INDEPENDENTLY crossed their OWN boundary toward "
+          "the SAME C_s (per-member release bit, so the shared SCP-finalized "
+          "envelope contributes nothing by itself), the unique recovered P_s equals "
+          "the boundary-admitted proof_a and the canonical root -- locus operator "
+          "and disjoint_externalized are consumed, and a roster-DISJOINT SCP "
+          "quorum that did not cross the roster release edge contributes no "
+          "randomness",
+          thr_recovered == full == proof_a
+          and disjoint_recovered is None
+          and disjoint_externalized)
+
+    # ---------- Durable sign-once per event (Noot) ----------------------------
+    au_n3 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    n3_bnd = ConfirmExternalizeBoundary(
+        epoch, boundary_secret=source._boundary._secret)
+    # round-23 3939109855: public capability binding + authenticated release
+    # reproduction (no internal registry copied).
+    au_n3.bind_release_cap(n3_bnd._cap())
+    if not au_n3._authorize_release(cl_a.hash, n3_bnd.witness(cl_a),
+                                    n3_bnd._cap()):
+        raise AssertionError("close-level release witness was not accepted")
+    for i in range(1, t + 1):
+        vote = _confirm_vote(_validator_confirm_sk(GROUP_SK, i),
+                             epoch.hash, cl_a.hash)
+        if not n3_bnd.record_confirm(i, cl_a, vote):
+            raise AssertionError("N3 record_confirm refused member %d" % i)
+        au_n3._authorize_member_release(
+            i, cl_a.hash, n3_bnd._cap(),
+            n3_bnd.member_release_witness(cl_a, i))
+    for i in range(1, t + 1):
+        au_n3.publish_nonce(i, cl_a)
+    again2 = au_n3.share(1, cl_a)
+    au_n3b = au_n3.restart()
+    check("N3 durable sign-once: the same (epoch, slot, C_s) retry is IDEMPOTENT "
+          "-- a restarted authority re-derives the SAME share and reconstructs "
+          "the SAME canonical P_s/R_s with no new authority choice",
+          again2 is not None
+          and again2 == au_n3b.share(1, cl_a)
+          and au_n3b.recover_proof([(i, au_n3b.share(i, cl_a))
+                                    for i in range(1, t + 1)], cl_a) == proof_a)
+    cl_a_alt = LockedClose(epoch, slot, prev_hash,
+                           sha256(b"externalized-value-ALT"))
+    auth_m = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    # Release-closer for the authority is ONLY the source boundary path, so
+    # admit via a source bound to auth_m; a competing same-slot close needs its
+    # own source (slot-lock: one canonical close per slot) but SHARES the same
+    # authority's durable `_signed`/`_released` state.
+    src_m = RandomnessSource(epoch)
+    src_m.bind(auth_m)
+    boundary_release(src_m, cl_a)
+    src_m.proof(cl_a, auth_m)
+    alt_src_m = RandomnessSource(epoch)
+    alt_src_m.bind(auth_m)
+    boundary_release(alt_src_m, cl_a_alt)
+    alt_src_m.proof(cl_a_alt, auth_m)
+    auth_m.share(1, cl_a)
+    refused = auth_m.share(1, cl_a_alt)          # same event, different C_s
+    check("N3 durable sign-once: a member that already signed the event refuses "
+          "a DIFFERENT C_s for the SAME slot -- two roots from one member are "
+          "impossible; an SCP safety failure stalls randomness, it cannot mint "
+          "two roots", refused is None
+          and auth_m.share(1, cl_a) == auth.share(1, cl_a))
+    # e6Vduq: sign-once is keyed by (member, slot) -> C_s, so ONE durable
+    # authority can sign DISTINCT future slots (a normal ledger sequence) and
+    # refuses only competing C_s for the SAME slot.
+    cl_s2 = LockedClose(epoch, slot + 1, sha256(b"next-prev"),
+                        sha256(b"externalized-value-B"))
+    auth_f = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    src_f1 = RandomnessSource(epoch)
+    src_f1.bind(auth_f)
+    boundary_release(src_f1, cl_a)
+    src_f1.proof(cl_a, auth_f)
+    src_f2 = RandomnessSource(epoch)
+    src_f2.bind(auth_f)
+    boundary_release(src_f2, cl_s2)
+    src_f2.proof(cl_s2, auth_f)
+    auth_f.share(1, cl_a)
+    s1 = auth_f.share(1, cl_a)
+    s2 = auth_f.share(1, cl_s2)                   # different slot is allowed
+    refused_s2 = auth_f.share(1, LockedClose(
+        epoch, slot + 1, sha256(b"next-prev"),
+        sha256(b"externalized-value-B-ALT")))
+    check("N3 durable sign-once keyed by (member, slot): one authority signs "
+          "DISTINCT future slots (a real ledger sequence) and refuses only a "
+          "competing C_s for the SAME already-signed slot -- consecutive closed "
+          "ledgers are not accidentally serialized into one event (thread "
+          "e6Vduq). The SHARE is MESSAGE-DEPENDENT (FROST/Feldman: a partial "
+          "s_i = n(i) + c*f(i) is bound to its cl_hash by a fresh secret nonce), "
+          "so s1 != s2 and neither is reusable for the other close -- a peer "
+          "holding t partials from one slot cannot forge the next slot's "
+          "pre-lock proof (Copilot this review #3, High) -- while the same-close "
+          "re-emission is idempotent (s1 reproducible) and the durable _signed "
+          "lock still refuses a competing C_s at a signed slot",
+          s1 == auth_f.share(1, cl_a) and s2 is not None and s1 != s2
+          and refused_s2 is None
+          and auth_f.recover_proof([(1, s1)], cl_s2) is None)
+    # e6Vdt1: restart CARRIES the durable sign-once locks, so a crash window
+    # cannot equivocate -- after restart the member still refuses the alternate
+    # C_s for any slot it already signed.
+    auth_r = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    src_r = RandomnessSource(epoch)
+    src_r.bind(auth_r)
+    boundary_release(src_r, cl_a)
+    src_r.proof(cl_a, auth_r)
+    alt_src_r = RandomnessSource(epoch)
+    alt_src_r.bind(auth_r)
+    boundary_release(alt_src_r, cl_a_alt)
+    alt_src_r.proof(cl_a_alt, auth_r)
+    auth_r.share(1, cl_a)                         # sign before crash
+    auth_rb = auth_r.restart()                     # crash + deterministic restart
+    post_crash_ok = auth_rb.share(1, cl_a)         # same event: idempotent
+    post_crash_refused = auth_rb.share(1, cl_a_alt)  # opposite event: refused
+    check("N3 crash-window sign-once: restart() carries the durable locks -- "
+          "the SAME event re-signs idempotently after a crash and a DIFFERENT "
+          "C_s for an already-signed slot is still refused, so an authority "
+          "cannot restart to mint an equivocation (thread e6Vdt1)",
+          post_crash_ok == s1 and post_crash_refused is None)
+
+    # ---------- B2: C_s binds the EXACT value bytes --------------------------
+    prng_a, appl_a, nom_a = (consumer_kdf(root_a, LABEL_PRN, epoch.event_mapping),
+                             consumer_kdf(root_a, LABEL_APPLY, epoch.event_mapping),
+                             consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping))
+    check("dnFWi single pulse, three labelled consumers: PRNG/APPLY/(next) "
+          "NOMINATION are distinct KDF labels over ONE root -- not three "
+          "independent draws",
+          len({prng_a, appl_a, nom_a}) == 3
+          and consumer_kdf(root_a, LABEL_PRN, epoch.event_mapping) == prng_a)
+    # Noot round-15 "consumer-by-consumer requirement matrix": the committed
+    # `event_mapping` is an EXECUTABLE application opt-out. When an epoch commits
+    # a mapping that enables only SOME consumers, the opted-out consumers release
+    # NOTHING (None) from the same root, so "consumer is mandatory" is a real,
+    # testable property -- not a prose claim. Copilot round-15 thread 3929943643
+    # tightened this: APPLY and PRNG are MANDATORY in every accepted epoch, so
+    # the single opt-outable consumer is NOMINATION, and a mapping that omits
+    # APPLY or PRNG is INVALID (epoch rejected at activation).
+    #
+    # --- Valid opt-out: NOMINATION disabled, APPLY/PRNG still mandatory. ---
+    optout_map = b"PRNG,APPLY"          # NOMINATION opted out; APPLY/PRNG kept
+    # CONSENSUS-CARRIED release registries (round-22 3936620399 / 3936620265;
+    # round-31 fw_fL: entry roots are DERIVED INTERNALLY from the carried
+    # threshold proof -- no authenticator callback exists):
+    # the pulse-vs-fallback decision is a pure function of the EXTERNALIZED
+    # value's release registry -- `rel_reg`: cl_a's root is in the sealed/
+    # frozen value (released; the carried P_s = `full` verifies internally to
+    # the root); `rel_reg_pf`: a second proof-carrying registry used to assert
+    # the root/registry consistency raise; `unrel_reg`: the frozen value
+    # carried NO root for cl_a (not released).
+    rel_reg = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: full}), epoch=epoch)
+    rel_reg_pf = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: full}), epoch=epoch)
+    unrel_reg = ReleaseRegistry(
+        encode_release_carrier({}), epoch=epoch)
+    check("Valid event_mapping keeps both mandatory consumers (APPLY, PRNG) "
+          "and opts NOMINATION out (Copilot 3929943643): APPLY/PRNG still "
+          "derive their distinct KDF labels while NOMINATION falls back to its "
+          "closed-form canonical priority, and the mapping passes "
+          "is_valid_event_mapping",
+          is_valid_event_mapping(optout_map)
+          and consumer_kdf(root_a, LABEL_APPLY, optout_map) is not None
+          and consumer_kdf(root_a, LABEL_PRN, optout_map) is not None
+          and consumer_kdf(root_a, LABEL_NOM, optout_map) is None
+          and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, rel_reg) is not None)
+    # --- Closed-form NOMINATION fallback priority (thread 3930443124). ---
+    fb1 = nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                       canonical_value_hash(cl_a.value_bytes))
+    fb2 = nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                       canonical_value_hash(cl_a.value_bytes))
+    check("Closed-form NOMINATION fallback (Copilot 3930443124): an opted-out "
+          "NOMINATION never returns None -- it yields a deterministic, "
+          "reproducible priority that is a pure function of committed canonical "
+          "state and distinct from the hidden-entropy pulse",
+          fb1 is not None and fb1 == fb2
+          and fb1 != consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping)
+          and nomination_priority(root_a, optout_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, rel_reg) == fb1)
+    # --- Round-18 thread 3935393898 (High): nomination priority is
+    # OBSERVER-INDEPENDENT. It is a pure function of canonical, committed state --
+    # NOT of whether the root/proof was DELIVERED to this node at the call
+    # instant. Two honest nodes with the same finalized close (same canonical root
+    # R_s) must select the SAME priority: the KDF pulse KDF(R_s, NOMINATION), never
+    # the fallback that a lagging node would reach by passing root=None. The
+    # transition is consensus-bound (`slot_finalized` from the externalized close),
+    # never delivery-bound. ---
+    full_nom_map = b"APPLY,PRNG,NOMINATION"
+    pulse_nom = consumer_kdf(root_a, LABEL_NOM, full_nom_map)
+    check("Observer-independent nomination priority (round-18 3935393898): a "
+          "finalized close yields the SAME canonical KDF pulse for the nomination "
+          "slot whether the root bytes are already delivered or not -- no "
+          "pulse-vs-fallback fork on delivery, no second per-node priority",
+          pulse_nom is not None
+          and nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, rel_reg) == pulse_nom)
+    # --- Round-21 thread 3936363900 / round-22 3936620399: ONE consensus-
+    # determined rule for the entire slot. The pulse-vs-fallback decision is a
+    # pure function of the CONSENSUS facts `(slot_finalized, R_s-released)`,
+    # where "released" is read from the CONSENSUS-CARRIED `ReleaseRegistry` --
+    # NOT from "the caller happens to hold the proof". A node that has not yet
+    # received the proof bytes still has the SAME consensus facts (the registry
+    # inside the externalized value), so it computes the SAME priority; proof
+    # delivery is asynchronous and is NOT a committed consensus transition, so
+    # it cannot change the slot's priority. No branch reads "root is None" as a
+    # decision input anymore (a None root with a registry carrying the root is a
+    # state error that raises, never a fallback). ---
+    check("One consensus-determined nomination rule for the entire slot (round-21 "
+          "3936363900 / round-22 3936620399): 'root present/pulse' vs 'root "
+          "absent/fallback' is NOT a per-node delivery fork -- the DECISION is "
+          "`(slot_finalized, registry.released())`, a pure function of the "
+          "committed release registry carried in the EXTERNALIZED VALUE, so a "
+          "finalized close whose canonical root is carried in the sealed value "
+          "yields the SAME pulse for every node and a finalized close whose "
+          "canonical root is absent from the registry yields the SAME fallback "
+          "for every node, never two priorities and never None",
+          nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
+                              cl_a.hash,
+                              canonical_value_hash(cl_a.value_bytes),
+                              True, rel_reg) == pulse_nom
+          and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, unrel_reg)
+          == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                          canonical_value_hash(cl_a.value_bytes))
+          and raises(lambda: nomination_priority(
+              None, full_nom_map, epoch.hash, cl_a.slot, cl_a.hash,
+              canonical_value_hash(cl_a.value_bytes), True, rel_reg_pf)))
+    # --- Round-24 3939264494: the registry is ADMITTED ONLY from the SPECIFIED
+    # COMMITTED CARRIER, every entry tied to (epoch, C_s) by an INTERNALLY
+    # VERIFIED carried proof (round-31 fw_fL: the old `authenticator` callback
+    # is GONE -- `authenticator = lambda _: forged_root` could mint a release
+    # from NO proof; with no callback at all a bare root-shaped payload is
+    # never admitted). ---
+    good_carrier = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: full}), epoch=epoch)
+    fabricated = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: sha256(b"fabricated-root")}),
+        epoch=epoch)
+    adversarial_epoch = EpochDescriptor(
+        format_version=epoch.format_version,
+        authority_key=group_pub_from_seed(sha256(b"cap-0089:rogue"),
+                                          epoch.threshold, N_MEMBERS),
+        roster=epoch.roster,
+        activation=epoch.activation, retirement=epoch.retirement,
+        threshold=epoch.threshold, root_rule=epoch.root_rule,
+        event_mapping=epoch.event_mapping, enc_keys=epoch.enc_keys,
+        feldman_pub=tuple(_feldman_commit(sha256(b"cap-0089:rogue"),
+                                          epoch.threshold, N_MEMBERS, i)
+                          for i in range(1, N_MEMBERS + 1)))
+    rogue_epoch = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: full}),
+        epoch=adversarial_epoch)
+    # A BARE 32-BYTE ROOT-shaped payload (the exact forged-authenticator shape):
+    # with no authenticator callback there is no (epoch, C_s) tie for it, so it
+    # is NEVER admitted (round-31 fw_fL).
+    bare_root = ReleaseRegistry(
+        encode_release_carrier({cl_a.hash: root_a}), epoch=epoch)
+    # --- Round-30 fwY5s/fwY5z: the source-close -> target-slot relationship
+    # --- is EXPLICIT, and the branch is one proof-independent rule. ----------
+    # Nomination for TARGET slot s consumes ONLY the already-closed SOURCE
+    # close s-1: its canonical root (if the SOURCE close's OWN consensus-
+    # carried release registry marks it released) else the closed-form fallback
+    # whose inputs are (epoch, TARGET slot NUMBER s, the SOURCE commitment
+    # C_{s-1}, the SOURCE canonical value hash). The target's own value C_s
+    # does NOT EXIST yet and is NOT a parameter of either branch -- the
+    # fallback signature has no target-value input (fwY5z), so a proposer can
+    # never pick between a pulse-priority branch and an absent branch for its
+    # own nominee: the branch is a pure function of the closed source's
+    # committed registry, exactly ONE balloted value per slot, with no
+    # presence/absence carrier alternative to select (fwY5s).
+    _fb_next = nomination_fallback_priority(epoch.hash, cl_a.slot + 1,
+                                            cl_a.hash,
+                                            canonical_value_hash(cl_a.value_bytes))
+    _fb_later = nomination_fallback_priority(epoch.hash, cl_a.slot + 2,
+                                             cl_a.hash,
+                                             canonical_value_hash(cl_a.value_bytes))
+    check("Round-30 fwY5s/fwY5z: the target slot's nomination derives ONLY "
+          "from the CLOSED SOURCE close (s-1) -- the pulse branch uses the "
+          "SOURCE root KDF(R_{s-1}, NOMINATION) read from the SOURCE close's "
+          "own consensus-carried registry (same pulse for every node, whether "
+          "or not P_{s-1} is currently on the wire), and the fallback branch "
+          "takes ONLY (epoch, target slot number, C_{s-1}, H(value_{s-1})): "
+          "the target's own value C_s does not exist yet and is NOT an input, "
+          "so there is no 'pulse if I hold the proof / absent-branch if I do "
+          "not' proposer selection (fwY5s: one balloted value per slot, branch "
+          "fixed by the closed source registry) and no fallback indexed on the "
+          "value being nominated (fwY5z: both branches derive from s-1; the "
+          "target slot NUMBER enters only as a domain separator -- the "
+          "priorities for source+1 and source+2 differ while the source inputs "
+          "are byte-identical)",
+          nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot + 1,
+                              cl_a.hash,
+                              canonical_value_hash(cl_a.value_bytes),
+                              True, rel_reg) == pulse_nom
+          and nomination_priority(None, full_nom_map, epoch.hash,
+                                  cl_a.slot + 1, cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, unrel_reg) == _fb_next
+          and _fb_next == nomination_fallback_priority(
+              epoch.hash, cl_a.slot + 1, cl_a.hash,
+              canonical_value_hash(cl_a.value_bytes))
+          and _fb_later != _fb_next)
+    check("ReleaseRegistry admits ONLY internally-proof-verified entries tied to "
+          "(epoch, C_s) (round-24 3939264494; round-31 fw_fL): a registry "
+          "cannot be conjured from a bare caller-supplied dict AND no caller-"
+          "supplied authenticator can conjure a canonical root -- it is built "
+          "by DECODING the specified committed carrier, and an entry is "
+          "admitted ONLY when the carried 64-byte proof verifies internally "
+          "under (epoch, C_s) (`UniqueThresholdProof.verify`, root derived "
+          "from the proof); a FABRICATED payload (hash of nothing), a rogue "
+          "threshold that cannot prove the payload, and a BARE 32-BYTE "
+          "ROOT-shaped payload -- the forged-authenticator's exact shape, "
+          "structurally impossible now that no `authenticator` parameter "
+          "exists -- all yield NOTHING released",
+          good_carrier.released(cl_a.hash)
+          and good_carrier.root_for(cl_a.hash) == root_a
+          and not fabricated.released(cl_a.hash)
+          and fabricated.root_for(cl_a.hash) is None
+          and not rogue_epoch.released(cl_a.hash)
+          and not bare_root.released(cl_a.hash)
+          and bare_root.root_for(cl_a.hash) is None)
+    bad_carriers = [
+        b"\x00" * 8,                                        # wrong magic
+        b"cap-0089:release-registry/v1" + b"\x00\x00\x00\x01",  # truncated entry
+        encode_release_carrier({cl_a.hash: root_a}) + b"X",    # trailing bytes
+        b"cap-0089:release-registry/v1" + b"\x00\x00\x00\x01"
+        + sha256(b"c") + b"\x00\xc8" + b"\x00" * 32,        # invalid length code
+    ]
+    # round-28 3942590416 (foQhq): duplicate / non-canonical key order is a
+    # CORRUPT committed carrier, never last-entry-wins. `encode_release_carrier`
+    # always sorts, so a duplicate or a genuinely DESCENDING layout can only be
+    # an adversarial/manual byte string -- both must RAISE.
+    _magic_ = b"cap-0089:release-registry/v1"
+    _dup_carrier = (_magic_ + struct.pack(">I", 2)
+                    + cl_a.hash + struct.pack(">H", 0)
+                    + cl_a.hash + struct.pack(">H", 0))
+    _desc_carrier = (_magic_ + struct.pack(">I", 2)
+                     + b"\xff" * 32 + struct.pack(">H", 0)
+                     + b"\x00" * 32 + struct.pack(">H", 0))
+    bad_carriers.append(_dup_carrier)
+    bad_carriers.append(_desc_carrier)
+    strict_decode = all(raises(lambda c=c: decode_release_carrier(c))
+                        for c in bad_carriers)
+    check("Release registry carrier decoding is STRICT (round-24 3939264494; "
+          "round-28 3942590416 / foQhq): a wrong magic, a truncated entry, "
+          "trailing bytes, an invalid payload-length code, a DUPLICATE cl_hash "
+          "and a DESCENDING (non-canonical) key order all RAISE -- a node "
+          "never invents registry entries from a corrupt committed carrier and "
+          "never resolves duplicate keys last-entry-wins (fail closed; the "
+          "carrier is consensus state and parses exactly, with strictly "
+          "increasing keys)",
+          strict_decode
+          and decode_release_carrier(
+              encode_release_carrier({})) == []
+          and decode_release_carrier(
+              encode_release_carrier({cl_a.hash: root_a, cl_b.hash: None}))
+          == sorted([(cl_a.hash, root_a), (cl_b.hash, None)],
+                    key=lambda kv: kv[0]))
+    # --- Round-20 thread 3936012529: nomination is NEVER None and the pulse-vs-
+    # fallback choice is CONSENSUS-bound and permanent. The DECISION is the pair
+    # `(slot_finalized, registry.released())` -- canonical consensus facts read
+    # from the CONSENSUS-CARRIED release registry -- never local delivery: for
+    # a FINALIZED close whose canonical root R_s is NOT carried in the sealed
+    # value (registry absent -> not released), nomination uses the single
+    # closed-form fallback -- every node, never None, never mixing one pulse for
+    # net A and a fallback for net B. ---
+    check("Never-None, consensus-bound finalized nomination (round-20 "
+          "3936012529 / round-21 3936363900 / round-22 3936620399): a "
+          "finalized, NOMINATION-enabled close whose canonical root is absent "
+          "from the consensus release registry (not released) returns the "
+          "closed-form fallback -- NEVER None and NEVER the hidden pulse -- so "
+          "the contract 'NOMINATION never returns None' holds and all nodes "
+          "still compute exactly one priority per slot",
+          nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                              cl_a.hash,
+                              canonical_value_hash(cl_a.value_bytes),
+                              True, unrel_reg) is not None
+          and nomination_priority(None, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, unrel_reg)
+          == nomination_fallback_priority(epoch.hash, cl_a.slot, cl_a.hash,
+                                          canonical_value_hash(cl_a.value_bytes)))
+    # --- Round-28 3942590403 (foQhh) / round-29 foqq4 / ROUND-31 fw_ff: the
+    # release registry of the CLOSED SOURCE lives in the source's FROZEN
+    # POST-CLOSE LEDGER STATE (a `LedgerHeader.ext` release-registry section
+    # written AFTER the source close externalized -- the same section that
+    # persists `canonical_proof`), NEVER inside any balloted value: a proof
+    # `P_{s-1}` EXISTS only after the `s-1` release edge completes across the
+    # CONFIRM->EXTERNALIZE boundary, so it can never be serialized into the
+    # very value slot-(s-1) votes on -- that earlier phrasing was a TEMPORAL
+    # CYCLE (round-31 fw_ff revises the round-28 foQhh / round-29 foqq4
+    # ballot-value wording). Slot-s nomination reads the branch, ONCE, from the
+    # already-finalized source's post-close registry. ---
+    _pres_entry = encode_release_carrier({cl_a.hash: full})
+    _abs_entry = encode_release_carrier({})
+    _pres_reg = ReleaseRegistry(_pres_entry, epoch=epoch)
+    _abs_reg = ReleaseRegistry(_abs_entry, epoch=epoch)
+    _reg_b = ReleaseRegistry(_pres_entry, epoch=epoch)
+    # POST-CLOSE state of the frozen SOURCE close versus the slot-s ballot
+    # value: the value being NOMINATED for slot s carries NO registry field
+    # (round-30 fwY5s) and NO `P_{s-1}` bytes (round-31 fw_ff) -- the registry
+    # holding the released proof is written into the SOURCE's closed
+    # `LedgerHeader.ext` after `C_{s-1}` externalized, and reads IDENTICALLY
+    # on every node (strict-sorted, deterministic canonical carrier).
+    _post_close_state = (lambda prev_hash, carrier:
+                         (b"cap-0089:source-post-close-state/v1"
+                          + prev_hash + b":" + carrier))
+    _slot_val = (b"cap-0089:slot-value/v1" + cl_a.hash)      # NO registry field
+    _nodeA = _post_close_state(cl_a.hash, _pres_entry)
+    _nodeB = _post_close_state(cl_a.hash, _pres_entry)
+    check("Closed-ledger registry presence is read from the CLOSED SOURCE's "
+          "POST-CLOSE LEDGER STATE, never from any balloted value (round-28 "
+          "3942590403 / foQhh; round-29 foqq4; ROUND-31 fw_ff REVISES the "
+          "phrase 'serialized into the very value slot-(s-1) votes on' as a "
+          "TEMPORAL CYCLE: `P_{s-1}` is reconstructed only from shares released "
+          "across the s-1 CONFIRM/EXTERNALIZE boundary, so the proof cannot "
+          "appear in the s-1 ballot -- the registry is written into the source "
+          "close's frozen post-close `LedgerHeader.ext` section (the section "
+          "that persists `canonical_proof`, Section 'Native seam and the "
+          "LedgerHeader proof path for catchup') as the release edge crosses "
+          "after externalize, and slot-s nomination reads the branch once "
+          "`C_{s-1}` is final): every node reads the IDENTICAL canonical "
+          "post-close carrier (strict-sorted, deterministic encoder) for "
+          "identical release-edge state; the slot-s balloted value carries NO "
+          "registry field and NO `P_{s-1}` bytes -- exactly ONE balloted value "
+          "per slot (fwY5s) -- and the pulse-vs-fallback branch is a pure "
+          "function of (slot_finalized, the source's post-close registry); "
+          "presence never depends on local proof-delivery timing because the "
+          "release-edge records are consensus-carried; a node lacking the "
+          "unique `P_{s-1}` reads the ABSENT post-close register -- a DIFFERENT "
+          "committed source-close state from the present one (round-24 "
+          "UNKNOWN-stall semantics) -- so honest closes of the predecessor "
+          "block on the unique proof",
+          _pres_entry != _abs_entry
+          and _nodeA == _nodeB
+          and _nodeA != _post_close_state(cl_a.hash, _abs_entry)
+          and _slot_val == (b"cap-0089:slot-value/v1" + cl_a.hash)
+          and _pres_reg.released(cl_a.hash)
+          and _pres_reg.root_for(cl_a.hash) == root_a
+          and not _abs_reg.released(cl_a.hash)
+          and _reg_b.root_for(cl_a.hash) == _pres_reg.root_for(cl_a.hash)
+          and nomination_priority(root_a, full_nom_map, epoch.hash, cl_a.slot,
+                                  cl_a.hash,
+                                  canonical_value_hash(cl_a.value_bytes),
+                                  True, _pres_reg)
+          == consumer_kdf(root_a, LABEL_NOM, full_nom_map))
+    # --- Invalid mapping: omitting a MANDATORY consumer is rejected both by the
+    # validator AND by the epoch constructor / hash path (thread 3930443019). ---
+    check("Mapping missing APPLY is INVALID and the epoch is rejected "
+          "(Copilot 3929943643 / 3930443019): a committed epoch must not be able "
+          "to opt out of post-lock hidden entropy that unstalled apply requires "
+          "-- the validator rejects it AND EpochDescriptor cannot construct an "
+          "epoch with an invalid mapping",
+          not is_valid_event_mapping(b"PRNG,NOMINATION")
+          and not is_valid_event_mapping(b"NOMINATION")
+          and is_valid_event_mapping(b"PRNG,APPLY,NOMINATION")
+          and is_valid_event_mapping(b"single-pulse:LockedClose->C_s/v1"))
+    # Copilot round-16 thread 3934383303 (Medium): the event-mapping grammar is
+    # CLOSED -- a committed mapping that enables an UNKNOWN label is invalid, so
+    # an application cannot silently append a consumer the protocol does not
+    # recognise (typos / out-of-band labels must fail loudly, never silently
+    # collapse to a permissive superset).
+    check("Closed event-mapping grammar (Copilot 3934383303): a mapping "
+          "containing an UNKNOWN label is rejected by is_valid_event_mapping -- "
+          "only the protocol's recognised consumers (APPLY/PRNG/NOMINATION) and "
+          "the single-pulse shortcut are admissible",
+          is_valid_event_mapping(b"APPLY,PRNG")
+          and not is_valid_event_mapping(b"APPLY,PRNG,OTHER")
+          and not is_valid_event_mapping(b"APPLY,PRNG,BAD")
+          and not is_valid_event_mapping(b"APPLY,PRNG,NOMINATION,EXTRA"))
+    # Copilot round-16 thread 3934383355 (Medium): `consumer_kdf` must not raise
+    # a TypeError on an UNKNOWN root -- the unknown-root case is an OUTCOME of
+    # the reveal-resolution path (a root the boundary has not yet derived), so
+    # it is a normal `None` return, not an exception.
+    check("consumer_kdf tolerates an unknown root (Copilot 3934383355): "
+          "consumer_kdf(None, label, mapping) returns None for every consumer "
+          "label instead of raising TypeError, and never fabricates a "
+          "derived value from a missing root",
+          consumer_kdf(None, LABEL_PRN, epoch.event_mapping) is None
+          and consumer_kdf(None, LABEL_APPLY, epoch.event_mapping) is None
+          and consumer_kdf(None, LABEL_NOM, epoch.event_mapping) is None
+          and consumer_kdf(None, LABEL_PRN, optout_map) is None)
+    source_b = RandomnessSource(epoch)
+    b_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    source_b.bind(b_auth)
+    boundary_release(source_b, cl_b)
+    check("B2 C_s binds the externalized value: a proof for value A FAILS "
+          "against value B, and B resolves only under its own admitted proof",
+          resolve(epoch, cl_b, source, proof_a)["outcome"] == "REJECTED"
+          and resolve(epoch, cl_b, source_b, source_b.proof(cl_b, b_auth))
+          ["outcome"] == "ROOT")
+
+    # ---------- Epoch gate: bind to THIS epoch (dnFVu) -------------------------
+    other_source = RandomnessSource(other_win)
+    o_auth = ThresholdAuthority.from_epoch(other_win, GROUP_SK)
+    other_source.bind(o_auth)
+    other_slot = other_win.activation + 50
+    cl_o = LockedClose(other_win, other_slot,
+                       sha256(u32(other_slot - 1) + b"prev-o"),
+                       sha256(b"externalized-value-A"))
+    boundary_release(other_source, cl_o)
+    check("dnFVu epoch binding: a close derived under a DIFFERENT epoch is "
+          "REJECTED under the calling epoch; it resolves only under its own "
+          "epoch+source",
+          other_win.hash != epoch.hash
+          and cl_o.epoch_hash != epoch.hash
+          and resolve(other_win, cl_o, other_source,
+                      other_source.proof(cl_o, o_auth))["outcome"] == "ROOT"
+          and resolve(epoch, cl_o, source, other_source.proof(cl_o, o_auth))
+          == {"event_hash": cl_o.hash.hex(), "outcome": "REJECTED"})
+
+    # ---------- Admission keyed by the EXACT close (dnFWo) ---------------------
+    cl_c = LockedClose(epoch, slot + 5,
+                       sha256(u32(slot + 4) + b"real-predecessor-committed-core"),
+                       sha256(b"externalized-value-A"))
+    src_slot = RandomnessSource(epoch)
+    boundary_release(src_slot, cl_c)
+    sl_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    check("dnFWo admission by the exact close: admitting one close (value+slot) "
+          "does NOT stock a valid proof for a DIFFERENT close sharing only the "
+          "value bytes -- cl_a's proof is absent and its stale try is UNKNOWN",
+          src_slot.has_valid_proof(cl_c)
+          and cl_c.hash != cl_a.hash
+          and not src_slot.has_valid_proof(cl_a)
+          and resolve(epoch, cl_a, src_slot, src_slot.proof(cl_a, sl_auth))
+          == {"event_hash": cl_a.hash.hex(), "outcome": "UNKNOWN"})
+
+    # ---------- dnFWC: length-prefixed epoch preimage is injective -------------
+    pair1 = EpochDescriptor(format_version=epoch.format_version,
+                            authority_key=epoch.authority_key,
+                            roster=epoch.roster, activation=epoch.activation,
+                            retirement=epoch.retirement, threshold=epoch.threshold,
+                            root_rule=b"a", event_mapping=b"APPLY,PRNG")
+    pair2 = EpochDescriptor(format_version=epoch.format_version,
+                            authority_key=epoch.authority_key,
+                            roster=epoch.roster, activation=epoch.activation,
+                            retirement=epoch.retirement, threshold=epoch.threshold,
+                            root_rule=b"ab", event_mapping=b"APPLY,PRNG,NOMINATION")
+    check("dnFWC epoch preimage is injective (length-prefixed): "
+          "(root_rule=b'a',event_mapping=b'APPLY,PRNG') vs "
+          "(root_rule=b'ab',event_mapping=b'APPLY,PRNG,NOMINATION') yields "
+          "DIFFERENT epoch hashes", pair1.hash != pair2.hash)
+
+    # ---------- dnFV1: the proof verifier/encoding is canonicalized in the -----
+    # ---------- epoch identity (Copilot d7OY2) --------------------------------
+    verif_change = EpochDescriptor(format_version=epoch.format_version,
+                                   authority_key=epoch.authority_key,
+                                   roster=epoch.roster,
+                                   activation=epoch.activation,
+                                   retirement=epoch.retirement,
+                                   threshold=epoch.threshold,
+                                   root_rule=epoch.root_rule,
+                                   event_mapping=epoch.event_mapping,
+                                   verifier_rule=b"unique-threshold/v2-alt")
+    check("dnFV1 the proof verifier/encoding is a canonical member of the epoch "
+          "rule-hash: a verifier/encoding change alone produces a NEW epoch "
+          "identity (single-interpretation + permanent-pulse invariant)",
+          verif_change.hash != epoch.hash
+          and verif_change.verifier_rule != epoch.verifier_rule)
+
+    # ---------- Proof canonicalization (Noot: one proof = one byte future) ----
+    check("P-CANON proof malleability: a non-canonical byte string "
+          "(trailing padding, alternate group-element/scalar encoding) is NOT "
+          "accepted by the pure verifier and can never produce a different R_s; "
+          "any two accepted encodings canonicalize to the SAME bytes before "
+          "influencing the root",
+          UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a + b"\x00") is None
+          and UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a + b"\x00\x00")
+          is None
+          and canonical_proof(proof_a) == proof_a)
+
+    # ---------- canonical proof is NOT a function of caller evidence ----------
+    src_w1 = RandomnessSource(epoch)
+    src_w2 = RandomnessSource(epoch)
+    a_w1 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    a_w2 = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    src_w1.bind(a_w1)
+    src_w2.bind(a_w2)
+    ok_w1 = boundary_release(src_w1, cl_a)
+    ok_w2 = boundary_release(src_w2, cl_a)
+    p_w1 = src_w1.proof(cl_a, a_w1)
+    p_w2 = src_w2.proof(cl_a, a_w2)
+    check("dnFVg canonical proof/root: two DIFFERENT honest release boundaries "
+          "for the SAME close admit the IDENTICAL canonical proof and root -- "
+          "the boundary witness authorizes release only and never changes the "
+          "permanent pulse",
+          ok_w1 and ok_w2 and p_w1 == p_w2 and p_w1 == proof_a
+          and canonical_root(cl_a.hash, epoch.authority_key, epoch.hash,
+                             proof_a) == root_a)
+
+    # ---------- cross-network binding (Copilot d7OZI) --------------------------
+    foreign_net = LockedClose.rebuild(epoch, slot, prev_hash,
+                                      sha256(b"externalized-value-A"),
+                                      network_id=sha256(b"SomeOtherNetwork"))
+    foreign_src = RandomnessSource(epoch)
+    admitted_foreign = boundary_release(foreign_src, foreign_net)
+    check("dnFVu cross-network binding: a self-consistent close rebuilt under a "
+          "NON-local network id is REJECTED by the resolver (never ROOT), and is "
+          "never admitted by this source -- the boundary transition itself "
+          "refuses an out-of-network close",
+          not admitted_foreign
+          and resolve(epoch, foreign_net, foreign_src, proof_a)
+          == {"event_hash": foreign_net.hash.hex(), "outcome": "REJECTED"})
+
+    # ---------- B3: transport/replay composition (schedule-driven) -------------
+    n_events = 601
+    evs, proofs = [], {}
+    for i in range(n_events):
+        s = epoch.activation + 2 + i               # distinct, in-window, != slot
+        prev = sha256(u32(s - 1) + b"real-predecessor-%d" % s)
+        c = LockedClose(epoch, s, prev, sha256(b"protect:%d" % i))
+        evs.append(c)
+        boundary_release(source, c)
+        proofs[i] = source.proof(c, auth)
+    schedules = [
+        lambda i: True,
+        lambda i: i % 2 == 0,
+        lambda i: i % 3 != 1,
+        lambda i: i % 4 in (0, 3),
+    ]
+    wire_orders = [
+        list(range(n_events)),
+        list(reversed(range(n_events))),
+        [i for i in range(n_events) if i % 2 == 1]
+        + [i for i in range(n_events) if i % 2 == 0],
+        list(range(n_events // 2)) + list(range(n_events // 2, n_events)),
+    ]
+
+    def history_digest(rows):
+        canon = b"".join(
+            d["event_hash"].encode() + d["outcome"].encode()
+            + d.get("source_root", "").encode() for d in rows)
+        return sha256(canon).hex()
+
+    canon_map = {evs[i].slot: i for i in range(n_events)}
+
+    def slot_order_root(rows_by_slot):
+        return b"".join(
+            (bytes.fromhex(rows_by_slot[evs[i].slot]["source_root"])
+             if rows_by_slot[evs[i].slot]["outcome"] == "ROOT" else b"UNKNOWN")
+            for i in sorted(range(n_events), key=lambda j: evs[j].slot))
+
+    transient_digests, route_confluent = set(), True
+    for sched in schedules:
+        per_sched = None
+        for wire in wire_orders:
+            seen = {}
+            for idx in wire:
+                seen[evs[idx].slot] = resolve(
+                    epoch, evs[idx], source, proofs[idx] if sched(idx) else None)
+            seq = tuple((seen[evs[i].slot]["outcome"],
+                         seen[evs[i].slot].get("source_root", ""))
+                        for i in sorted(range(n_events),
+                                        key=lambda j: evs[j].slot))
+            transient_digests.add(history_digest(
+                [seen[evs[i].slot] for i in range(n_events)]))
+            if per_sched is None:
+                per_sched = seq
+            elif seq != per_sched:
+                route_confluent = False
+    all_root_vals = []
+    for i in range(n_events):
+        d = resolve(epoch, evs[i], source, proofs[i])
+        all_root_vals.append(d["source_root"])
+    tr_unique = len(set(all_root_vals)) == n_events
+    flushed_digest = history_digest([
+        resolve(epoch, evs[i], source, proofs[i]) for i in range(n_events)])
+    # Copilot 3917696376: every schedule is a PER-EVENT DELIVERY SEQUENCE (each
+    # event delivers either its genuine proof or nothing), which we FLUSH
+    # (observe the terminal steady state after applying each delivered payload).
+    # We pin the TERMINAL history digest of EVERY schedule against a registered
+    # literal -- not just the full-delivery case.
+    terminal_digests = [
+        history_digest([resolve(epoch, evs[i], source,
+                                proofs[i] if sched(i) else None)
+                        for i in range(n_events)])
+        for sched in schedules
+    ]
+    check("C realizations genuinely differ: distinct (schedule x wire-order) "
+          "profiles yield distinct transient partial-observation histories",
+          len(transient_digests) > 1)
+    check("C compositional one-future: for a FIXED schedule the final per-slot "
+          "outcome map is IDENTICAL across every wire order (resolve()-state "
+          "transitions are confluent), and every delivered close yields a "
+          "DISTINCT canonical root -- no 2^n fan-out, no order-dependent roots",
+          route_confluent and tr_unique and flushed_digest == history_digest(
+              [resolve(epoch, evs[i], source, proofs[i])
+               for i in range(n_events)]))
+
+    # ---------- Noot #3: applied history is a PREFIX of one canonical history ---
+    canon_roots = [bytes.fromhex(all_root_vals[i])
+                   for i in sorted(range(n_events), key=lambda j: evs[j].slot)]
+    prefix_ok = True
+    for sched in schedules:
+        applied, stalled = [], False
+        for i in sorted(range(n_events), key=lambda j: evs[j].slot):
+            if stalled:
+                continue
+            d = resolve(epoch, evs[i], source, proofs[i] if sched(i) else None)
+            if d["outcome"] == "ROOT":
+                applied.append(bytes.fromhex(d["source_root"]))
+            elif d["outcome"] == "UNKNOWN":
+                stalled = True
+        if applied != canon_roots[:len(applied)]:
+            prefix_ok = False
+    check("N3 ledger-realistic applied history: under every delivery schedule "
+          "the APPLIED root sequence is a PREFIX of the canonical slot-ordered "
+          "history -- nodes cache future proofs but their applied view stalls at "
+          "the first gap, so nodes differ only in prefix length, never an applied "
+          "ROOT,UNKNOWN,ROOT hole", prefix_ok)
+
+    # e6Vdu_: explicit UNKNOWN -> ROOT transition for the SAME close. Delaying
+    # the proof (a `[none, proof]`-style schedule for THAT event) must first
+    # yield UNKNOWN (apply stalls) and later the identical ROOT once the proof
+    # arrives -- a per-event delivery sequence, not proof-permanently-present.
+    mid = evs[n_events // 2]
+    res_first = resolve(epoch, mid, source, None)
+    res_after = resolve(epoch, mid, source, source.proof(mid, auth))
+    check("B3 per-event UNKNOWN -> ROOT: an event whose proof arrives LATE "
+          "(a `[none, proof]`-style schedule) first resolves UNKNOWN (apply "
+          "stalls, never a substitute entropy branch) and then, on the proof "
+          "delivery, resolves the IDENTICAL canonical path root -- the same "
+          "close, one proven root, availability-only difference (thread e6Vdu_)",
+          res_first == {"event_hash": mid.hash.hex(), "outcome": "UNKNOWN"}
+          and res_after["outcome"] == "ROOT"
+          and res_after["source_root"] == bytes.fromhex(all_root_vals[
+              [i for i in range(n_events) if evs[i].slot == mid.slot][0]]
+          ).hex() and res_after["source_root"]
+          == UniqueThresholdProof.verify(epoch, mid.hash,
+                                         source.proof(mid, auth)).hex())
+
+    # ---------- B4: authority surface -------------------------------------------
+    resolved = resolve(epoch, cl_a, source, proof_a)
+    permitted = {"event_hash", "outcome", "source_root"}
+    check("B4 authority surface: the resolved object holds ONLY "
+          "{event_hash, outcome, source_root?} -- no successor/delegate/"
+          "membership-edit/recovery/permission field",
+          set(resolved.keys()) == permitted
+          and not hasattr(epoch, "successor")
+          and not hasattr(epoch, "delegate"))
+
+    # ---------- O1: one use -> one pulse (competing same-slot admissions) ------
+    comp_src = RandomnessSource(epoch)
+    comp_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    comp_src.bind(comp_auth)
+    c1 = LockedClose(epoch, slot + 300, prev_hash, sha256(b"value-one"))
+    c2 = LockedClose(epoch, slot + 300, prev_hash, sha256(b"value-two"))
+    ok_c1 = boundary_release(comp_src, c1)
+    ok_c2 = boundary_release(comp_src, c2)
+    check("O1 competing same-slot admission: the source keeps ONE canonical slot "
+          "lock -- the first admitted close for the slot stays, a SECOND "
+          "different value for the SAME slot is REFUSED and can never resolve to "
+          "a root (retries may change availability, never the root)",
+          ok_c1 and not ok_c2
+          and comp_src.proof(c2, comp_auth) is None
+          and resolve(epoch, c1, comp_src, comp_src.proof(c1, comp_auth))
+          ["outcome"] == "ROOT"
+          and resolve(epoch, c2, comp_src, comp_src.proof(c2, comp_auth))
+          ["outcome"] == "UNKNOWN"
+          and boundary_release(comp_src, c1))
+    cand_vals = [
+        (slot, sha256(b"externalized-value-A"), proof_a),
+        (slot, sha256(b"externalized-value-B"), None),
+        (slot + 5, sha256(b"externalized-value-A"), None),
+        (slot, sha256(sha256(b"externalized-value-A") + b"alias"), None),
+    ]
+    drawn_root_set = set()
+    for (sl, val, pfx) in cand_vals:
+        c = LockedClose(epoch, sl, prev_hash, val)
+        if pfx is not None:
+            r = resolve(epoch, c, source, pfx)
+            if r["outcome"] == "ROOT":
+                drawn_root_set.add(r["source_root"])
+    check("O1 one use -> one pulse: exactly ONE distinct root is drawn for the "
+          "canonical close; value/slot/value-nonce candidates are distinct "
+          "closes that are never valid draws -- a consumer cannot lock N draws "
+          "and pick one after seeing roots",
+          drawn_root_set == {root_a.hex()}
+          and len({LockedClose(epoch, sl, prev_hash, val).hash
+                   for (sl, val, _) in cand_vals}) >= 3)
+
+    # ---------- O2: earliest-knowledge sealing (the brutal red test) ----------
+    cand_closes = [LockedClose(epoch, epoch.activation + 2 + c,
+                               sha256(u32(epoch.activation + 1 + c)
+                                      + b"pre-lock-prev"),
+                               sha256(b"cand:%d" % c)) for c in range(8)]
+    spoof = ThresholdAuthority.from_epoch(epoch, sha256(b"spoof-seed"))
+    attacker_forged = []
+    for _c in cand_closes:
+        attacker_forged.append(spoof.recover_proof(
+            [(i, spoof.share(i, _c)) for i in range(1, t)], _c))
+        # A spoof-secret (different seed) authority is never boundary-released,
+        # so its shares are None and it recovers no proof at all.
+    # Copilot this review #1 (High): the negative-synthesis evidence is driven
+    # ONLY through the `AttackerView` façade -- an attacker object that is
+    # constructed with PUBLIC material (authority_key, roster, membership
+    # commitment, candidate closes) and exposes NO shares, seed, _group_secret,
+    # or _spf_sign. The honest (admitted) proof, when it exists, is produced
+    # exclusively through the ThresholdAuthority / RandomnessSource signing
+    # path. This is what separates "the attacker interface cannot sign" from a
+    # naive "read the file" reading of the harness. The model documents that the
+    # information-theoretic <t-share secrecy itself is the primitive's guarantee
+    # (BLS/VUF), not re-derived here.
+    attacker = AttackerView(epoch, cand_closes)
+    assert attacker.authority_key == epoch.authority_key
+    # PUBLIC-only synthesized proofs: a scalar guessed from the committed public
+    # key is an attacker's closest public estimate of d -- it is NOT d, and the
+    # Schnorr public-key check rejects it (negative synthesis).
+    dummy_pub_d = _spf_scalar(attacker.authority_key)
+    public_candidates = [_spf_sign(dummy_pub_d, epoch.hash, _c.hash)
+                         for _c in cand_closes]
+    random_64 = bytes(range(64))                          # arbitrary archive bytes
+    # The GENUINE proof for the same close is obtained ONLY via the honest
+    # authority's sign-once/recover path (never a public-only formula), proving
+    # the attacker's public candidates are all distinct from it byte-wise.
+    check("O2/Copilot negative-synthesis (AttackerView): an attacker whose "
+          "interface holds ONLY public committed material (authority_key, "
+          "roster, membership commitment, candidate closes) and CANNOT touch "
+          "signing material (no shares, no _group_secret, no _spf_sign on the "
+          "façade) cannot forge an accepted proof: every public-only candidate "
+          "differs from the honest recovered proof and is REJECTED by the pure "
+          "public-key verifier, and an arbitrary/random byte string is rejected "
+          "(fix 3917696336 + line-519: canonical-look is not acceptance)",
+          not hasattr(attacker, "_group_secret") and not hasattr(attacker, "_spf_sign")
+          and not hasattr(attacker, "GROUP_SK")
+          and all(UniqueThresholdProof.verify(epoch, _c.hash,
+                                              public_candidates[k]) is None
+                  for k, _c in enumerate(cand_closes))
+          and UniqueThresholdProof.verify(epoch, cand_closes[0].hash,
+                                          random_64) is None)
+    check("O2 pre-lock unavailability (brute force, AttackerView surface): an "
+          "attacker whose interface holds only public close/epoch fields -- "
+          "forged, spoof-secret, crafted, and its best public-only proof "
+          "expression for the exact close -- cannot obtain ANY P_s that RESOLVES "
+          "to a root: with <t VALID system shares and without the "
+          "release-at-externalize boundary the close has no genuine recovered "
+          "proof, the pure verifier rejects every forged/random candidate, and "
+          "resolve() rejects every crafted candidate (flow + public-key property, "
+          "not a source flag)",
+          all(attacker_forged[k] is None for k in range(len(cand_closes)))
+          and not any(auth.verify_share(
+              i, cand_closes[0],
+              (sha256(b"forged"), sha256(b"not-a-real-nonce"),
+               sha256(b"not-a-real-feldman")))
+              for i in range(1, t + 1))
+          and all(source.genuine_proof(_c) is None for _c in cand_closes)
+          and all(resolve(epoch, _c, source, public_candidates[k])["outcome"]
+                  != "ROOT" for k, _c in enumerate(cand_closes))
+          and all(not source.has_valid_proof(_c) for _c in cand_closes))
+    real = cand_closes[3]
+    true_src = RandomnessSource(epoch)
+    true_auth = ThresholdAuthority.from_epoch(epoch, GROUP_SK)
+    true_src.bind(true_auth)
+    boundary_release(true_src, real)
+    real_proof = true_src.proof(real, true_auth)
+    check("O2 once EXACTLY ONE close is boundary-admitted, only that close "
+          "resolves to a root; every other candidate yields none (no post-hoc "
+          "selection among previewed candidates)",
+          true_src.genuine_proof(real) == real_proof
+          and UniqueThresholdProof.verify(epoch, real.hash, real_proof) is not None
+          and all(true_src.genuine_proof(c) is None
+                  for c in cand_closes if c.hash != real.hash)
+          and resolve(epoch, real, true_src, real_proof)["outcome"] == "ROOT"
+          and all(resolve(epoch, c, true_src, real_proof)["outcome"] != "ROOT"
+                  for c in cand_closes if c.hash != real.hash))
+
+    # ---------- I1-I4: UniqueThresholdProof interface contract ---------------
+    I1 = not hasattr(ThresholdAuthority, "emit") \
+        and not hasattr(ThresholdAuthority, "sign_public")
+    I2 = auth.recover_proof(full_shares[:t - 1], cl_a) is None
+    I3 = (len(recovered) > 1
+          and all(p == proof_a for p in recovered.values()))
+    I4 = (UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a)
+          == UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a)
+          == root_a)
+    check("I1-I4 UniqueThresholdProof interface contract: nothing in the program "
+          "emits a proof from public close bytes alone (I1); <t valid shares "
+          "produce no proof (I2); every >=t valid subset/permutation recovers "
+          "the byte-identical canonical proof (I3); verify(epoch, C_s, P_s) is "
+          "PURE and archived-stable -- same triple, same root, every time (I4)",
+          I1 and I2 and I3 and I4)
+
+    # Copilot this review #2 (High) + #1 (High): the source root is bound to the
+    # UNPREDICTABLE canonical threshold proof `P_s`, so it is not a public
+    # function of C_s (no proposer grinding) AND it is byte-unique per close.
+    #
+    # ONE-FUTURE / ALTERNATE-VALID-PROOF (Copilot this review #2): Schnorr per se
+    # permits multiple valid same-message signatures under different nonces, so a
+    # model that CONJURED an alternate signature would split the pulse. With the
+    # FROST/Feldman message-dependent construction (this review #3) this is
+    # structurally impossible for every actor the threshold denies: a second
+    # valid proof for (Y, C_s) must be signed under the group secret `d`, but NO
+    # actor below t collusion ever holds `d` -- the partials `s_i=n(i)+c*f(i)`
+    # combine only into `s=r+c*d` for THIS message, and the fresh per-message
+    # nonce `r` (masking every partial) is never revealed. So there is exactly
+    # ONE obtainable canonical `P_s` per close, hence one root (one-future), and
+    # the honest path itself is deterministic (`_spf_sign`/`recover_proof` emit
+    # the byte-identical P_s). An ALTERNATE-VALID-PROOF probe that tries to mint
+    # a second signature for the same (Y, C_s) -- whether by a crafted/different
+    # nonce, a replayed/cross-close partial, or a public-only guess -- either
+    # fails the public-key check (REJECTED) or, being byte-different, can only be
+    # produced with `d`, which the attacker surface lacks. We assert:
+    #   (a) the canonical proof is deterministic (every >=t subset -> proof_a);
+    #   (b) an alternate valid proof does NOT exist below the secret: every
+    #       alternate candidate (crafted 64-byte, cross-close partials, and the
+    #       attacker's best public-only proof) is REJECTED by verify -> None;
+    #   (c) the attacker surface cannot touch signing material / recover `d`, so
+    #       no pre-lock root is obtainable.
+    c_e = cl_a.hash
+    crafted = sha256(b"non-canonical:" + proof_a)[:32] + proof_a[32:]
+    check("I4/O2 unique-root & alternate-valid-proof (Copilot #2/#1): the "
+          "accepted root is a strict deterministic function of the UNPREDICTABLE "
+          "canonical proof -- H(Root || Y || epoch || C_s || R), byte-unique "
+          "across every >=t reconstruction (I3). One-future is structural: an "
+          "ALTERNATE valid proof is impossible below `d` (FROST message-dependent "
+          "shares, #3), so a byte-different 'proof' (any crafted 64-byte string), "
+          "cross-close partials, and the attacker's public guesses are ALL "
+          "REJECTED -- yielding no second root, and no pre-lock root is derivable",
+          all(p == proof_a for p in recovered.values())
+          and UniqueThresholdProof.verify(epoch, c_e, proof_a) == root_a
+          and UniqueThresholdProof.verify(epoch, c_e, crafted) is None
+          and all(UniqueThresholdProof.verify(epoch, c_e, alt_src)
+                  is None for alt_src in public_candidates)
+          and canonical_root(c_e, epoch.authority_key, epoch.hash, proof_a)
+          == root_a
+          and not hasattr(attacker, "_spf_sign")
+          and all(attacker.public_root_guess(_c, public_candidates[k])
+                  != root_a
+                  for k, _c in enumerate(cand_closes)))
+    # I4/O2 NON-MALLEABILITY + SEALING of the root (Copilot 3921067284 round-14b
+    # AND 3929898690 / 3929943584 round-15, reconciled). The root now binds BOTH
+    # the transcript-committed nonce commitment `R` AND the unpredictable
+    # verified scalar `s` (`root = H(Root || Y || epoch || C_s || R || s)`).
+    #   * Uniqueness (3921067284): `R` is fixed by the authenticated round-1
+    #     broadcast; for that fixed R and the committed close the Schnorr
+    #     equation forces a SINGLE valid `s`, so at most ONE verified proof (one
+    #     root) per session -- the relation is a genuine function.
+    #   * Sealing (3929898690 / 3929943584): `s` exists only after the threshold
+    #     PRODUCED it (it needs the secret d), so the root is unpredictable before
+    #     a verified proof -- a public-R-only observer cannot pre-compute the root
+    #     (no pre-finality root oracle).
+    # The round-14b test's analogous claim is now STRONGER and honest: a tampered
+    # `s` (same R) does NOT verify and therefore yields NO root at all -- while
+    # the GENUINE proof (the unique (R, s) the equation admits for the committed
+    # session) yields exactly the canonical root.
+    tampered_s = proof_a[:32] + sha256(b"malleated-s:" + proof_a[32:])[:32]
+    tampered_rejected = (UniqueThresholdProof.verify(epoch, c_e, tampered_s) is None
+                         and UniqueThresholdProof.verify(epoch, c_e, proof_a)
+                         == canonical_root(c_e, epoch.authority_key, epoch.hash,
+                                           proof_a))
+    check("I4/O2 non-malleable + sealed root (Copilot 3921067284 + "
+          "3929898690/3929943584): the root binds BOTH the transcript-committed "
+          "nonce commitment R AND the unpredictable verified scalar s "
+          "(`H(Root||Y||epoch||C_s||R||s)`) -- a tampered-s proof with the same R "
+          "does NOT verify (no root; no alternate encoding can yield a second "
+          "root), and the single valid proof for the committed session yields "
+          "exactly the canonical root, so one-future + earliest-knowledge sealing "
+          "hold of the VERIFICATION RELATION (VUF/BLS uniqueness), not merely of "
+          "honest behavior",
+          tampered_rejected)
+    # S2 EARLIEST-KNOWLEDGE SEALING -- root NOT derivable from public round-1
+    # records (Copilot 3929898690 / 3929943584, High). The reviewer's exact
+    # objection: "The source root is already computable from public round-1
+    # traffic." Before this round the root was H(Root||Y||epoch||C_s||R) with R a
+    # PUBLIC round-1 aggregate, so an observer holding the round-1 transcript
+    # could compute the root before the proof scalar existed (a pre-finality root
+    # oracle). The fix binds the root to the UNPREDICTABLE VERIFIED scalar s as
+    # well: R_s = H(Root||Y||epoch||C_s||R||s). We now prove, against the PUBLIC
+    # round-1 transcription exactly as the reviewer requests, that a peer holding
+    # (authority_key, epoch_hash, C_s and the PUBLIC N_i -> aggregate R) but NO
+    # proof scalar can compute ONLY a stale R-only projection -- which is NOT the
+    # accepted root, because the root's second input s exists only once the
+    # threshold has ACTUALLY produced and verified it (it needs the group secret,
+    # which no actor below t shares ever holds). So "public round-1 records" are
+    # insufficient: the R-only guess differs from root_a, and every genuine proof
+    # candidate the attacker can public-construct is REJECTED by verify (no root).
+    r1_records = auth.round1_nonces(cl_a)          # public round-1 transcript
+    R_pub = auth._public_aggregate(cl_a.hash, r1_records)   # public aggregate R
+    stale_R_only = sha256(b"Root" + epoch.authority_key + epoch.hash
+                          + cl_a.hash + R_pub)     # the OLD (leaky) R-only formula
+    s2_sealed = (R_pub == proof_a[:32]             # R truly is public/derivable
+                 and stale_R_only is not None
+                 and stale_R_only != root_a        # R-only projection is NOT the root
+                 and all(UniqueThresholdProof.verify(epoch, _c.hash, pk) is None
+                         for _c, pk in zip(cand_closes, public_candidates)))
+    check("S2 earliest-knowledge sealing holds of the RELATION, not honest "
+          "behavior (Copilot 3929898690/3929943584): although the public round-1 "
+          "transcript DOES expose R (R_pub == P_s[:32]), the OLD R-only root "
+          "projection is NOT the accepted root -- the real root additionally "
+          "binds the unpredictable verified scalar s, so an observer with only "
+          "public round-1 records cannot compute the consumer root before a "
+          "verified proof exists, and every attacker-constructed proof is "
+          "REJECTED (no pre-finality root oracle)",
+          s2_sealed)
+
+    # ---------- O3: permanent pulse ----------------------------------------------
+    pulse_a = consumer_kdf(root_a, LABEL_NOM, epoch.event_mapping)
+    pulse_a2 = consumer_kdf(UniqueThresholdProof.verify(epoch, cl_a.hash, proof_a),
+                            LABEL_NOM, epoch.event_mapping)
+    check("O3 permanent pulse: the next-ledger nomination draw is fixed by the "
+          "canonical root and survives re-derivation (never a second historical "
+          "pulse)", pulse_a == pulse_a2)
+
+    # ---------- K: the three kill questions (adversarial) ----------------------
+    forged_val = sha256(sha256(b"externalized-value-A") + b"ATTACKER-NONCE")
+    payload_v = sha256(b"externalized-value-A")   # a >0 s.sub event payload
+    check("K1 kill-Q1: no caller nonce/alias can mint a second equivalent event "
+          "for the same protected close (forged value -> distinct close)",
+          LockedClose(epoch, slot, prev_hash, forged_val).hash != cl_a.hash)
+    check("K2 kill-Q2: pre-lock unavailability -- only the exact boundary-admitted "
+          "close has a genuine recovered proof; every other candidate close "
+          "resolves to NO root (a bare value never yields a root)",
+          true_src.genuine_proof(real) == real_proof
+          and all(resolve(epoch, c, true_src, real_proof)["outcome"] != "ROOT"
+                  for c in cand_closes if c.hash != real.hash))
+    # year-later catchup: fresh node with ONLY canonical history (descriptor +
+    # C_s + P_s), no source, no memory, no quorum-path fact -> same R_s.
+    archival_epoch = EpochDescriptor(
+        format_version=epoch.format_version, authority_key=epoch.authority_key,
+        roster=epoch.roster, activation=epoch.activation,
+        retirement=epoch.retirement, threshold=epoch.threshold,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        scheme=epoch.scheme, verifier_rule=epoch.verifier_rule,
+        byzantine_bound=epoch.byzantine_bound,
+        confirm_pub=epoch.confirm_pub,
+        feldman_pub=epoch.feldman_pub)
+    archival_root = UniqueThresholdProof.verify(archival_epoch, cl_a.hash,
+                                                proof_a)
+    check("K3 kill-Q3: archival replay preserving only the canonical epoch "
+          "descriptor + C_s + P_s re-derives the SAME root and pulse through the "
+          "PURE verifier -- no old process memory, packet history, quorum-path "
+          "fact, or caller flag (Noot's next hard gate)",
+          archival_epoch.hash == epoch.hash
+          and archival_root == root_a
+          and pulse_a == consumer_kdf(archival_root, LABEL_NOM))
+    check("K3 kill-Q3 / thread evw-0: PROVENANCE-INDEPENDENT archival resolution "
+          "-- a fresh catchup node holding ONLY {epoch, C_s, P_s} (and NO "
+          "transient `_admitted` release record, because it never ran the live "
+          "boundary) resolves the same close to the same ROOT via "
+          "`resolve_archival`, and it is NOT wrongly rejected just because its "
+          "process lacks the live admission entry",
+          resolve_archival(archival_epoch, cl_a, proof_a)["outcome"] == "ROOT"
+          and resolve_archival(archival_epoch, cl_a, proof_a)["source_root"]
+          == root_a.hex()
+          and resolve_archival(archival_epoch, cl_a, sha256(b"forged-archive"))
+          ["outcome"] == "REJECTED")
+    rewritten = EpochDescriptor(
+        format_version=epoch.format_version,
+        authority_key=group_pub_from_seed(sha256(b"rewritten-key-seed-v7"), 5, 8),
+        roster=epoch.roster, activation=epoch.activation,
+        retirement=epoch.retirement, threshold=epoch.threshold,
+        root_rule=epoch.root_rule, event_mapping=epoch.event_mapping,
+        feldman_pub=tuple(_feldman_commit(sha256(b"rewritten-key-seed-v7"), 5, 8, i)
+                          for i in range(1, 9)))
+    check("K3 kill-Q3: a REWRITTEN epoch (new group key) is a different canonical "
+          "epoch", rewritten.hash != epoch.hash)
+
+    # ---------- S: three Layer-B source properties -----------------------------
+    check("S1 single binding: one protected close -> one root (forged/alias/"
+          "retry value differs, so a use cannot bind several roots)",
+          LockedClose(epoch, slot, prev_hash, forged_val).hash != cl_a.hash)
+    check("S1 / thread evw_K: C_s is a one-use/one-event mapping INDEPENDENT of "
+          "the signer provenance. Two serialized values with the SAME payload "
+          "but DIFFERENT trailing lcValueSignature NodeIDs hash -- via "
+          "`canonical_value_hash`, which strips the signer -- to the SAME "
+          "canonical value hash and therefore the SAME C_s, so differently-"
+          "SIGNED but semantically-identical closes do NOT diverge, while a "
+          "GENUINELY different value payload yields a different C_s",
+          canonical_value_hash(payload_v + sha256(b"signer-A")) ==
+          canonical_value_hash(payload_v + sha256(b"signer-B"))
+          and LockedClose(epoch, slot, prev_hash,
+                          payload_v + sha256(b"signer-A")).hash ==
+          LockedClose(epoch, slot, prev_hash,
+                      payload_v + sha256(b"signer-B")).hash
+          and LockedClose(epoch, slot, prev_hash, payload_v).hash !=
+          LockedClose(epoch, slot, prev_hash,
+                      sha256(b"different-payload")).hash)
+    # Copilot re-review thread 3930442982: the canonicalization must be
+    # XDR-aware -- ZERO the signer members IN PLACE (preserving the arm width),
+    # not naively strip a trailing field. The harness's `payload || signer`
+    # form therefore canonicalizes to `payload || <32 zero bytes>` (same total
+    # width, signer fields zeroed), and a genuinely different payload still
+    # maps to a different value.
+    pf_full = provenance_free_value(payload_v + sha256(b"signer-A"))
+    check("S1 / thread 3930442982 (XDR-aware canonical zero): the signer region "
+          "is zeroed IN PLACE with its full width preserved (NOT stripped), so "
+          "differently-SIGNED payloads canonicalize byte-identically and a "
+          "genuinely different payload differs",
+          provenance_free_value(payload_v + sha256(b"signer-A")) ==
+          provenance_free_value(payload_v + sha256(b"signer-B"))
+          and pf_full == payload_v + (b"\x00" * 32)
+          and len(pf_full) == len(payload_v + sha256(b"signer-A"))
+          and provenance_free_value(payload_v + sha256(b"signer-A")) !=
+              provenance_free_value(b"different-payload" + sha256(b"signer-A")))
+    check("S2 pre-lock unavailability: before the CONFIRM/EXTERNALIZE boundary "
+          "admits the lock, a proposer holds NO valid proof -- no genuine "
+          "recovered proof exists and no candidate resolves to a root (source "
+          "fault model, not a caller flag)",
+          all(source.genuine_proof(c) is None for c in cand_closes)
+          and all(resolve(epoch, c, source, real_proof)["outcome"] != "ROOT"
+                  for c in cand_closes if c.hash != real.hash))
+    roots_seen = [UniqueThresholdProof.verify(epoch, evs[i].hash, proofs[i])
+                  for i in range(n_events)]
+    s3_ok = all(r is not None for r in roots_seen) \
+        and len(roots_seen) == len(set(roots_seen))
+    for i in range(n_events):
+        wrong = proofs[(i + 1) % n_events]
+        if resolve(epoch, evs[i], source, wrong)["outcome"] != "REJECTED":
+            s3_ok = False
+    check("S3 unique resolution: every valid boundary-authorized proof path "
+          "collapses to exactly one canonical R and an invalid proof is always "
+          "REJECTED, never a second root", s3_ok)
+
+    # ---------- AVSS dealer/qualification emulation (round-22) ---------------
+    # Answer to thread 3936844242 ("the model only interpolates a centrally
+    # generated polynomial"): the model now EXERCISES the normative AVSS
+    # guarantees end-to-end -- a dealer COMMIT REGISTER (coefficient
+    # commitments), ENCRYPTED-SHARE DISTRIBUTION bound to the epoch-committed
+    # E_j vector (verifiable encryption with PUBLIC randomness), a canonical
+    # PUBLIC qualification rule Q* that never consults a decryption report
+    # (3936620224 / 3936844061), and RECONSTRUCTION OF AN ABORTING DEALER.
+    # The trading roster below is the reviewer's own threshold-preservation
+    # counterexample copy (n=10, t=7, f=3, both activation bounds hold).
+    av_n, av_t, av_f = 10, 7, 3
+    av_roster = [sha256(b"cap-0089:avss-node:%02d" % i)
+                 for i in range(1, av_n + 1)]
+    av_epoch = EpochDescriptor(
+        0, group_pub_from_seed(GROUP_SK, av_t, av_n), av_roster,
+        activation=0, retirement=1000, threshold=av_t,
+        byzantine_bound=1, scp_qset=(8, tuple(range(1, av_n + 1))),
+        root_rule=b"unique-threshold/v1",
+        event_mapping=b"single-pulse:LockedClose->C_s/v1")
+    av_cl_hash = sha256(b"AVSS-close-s")
+    av_honest = 7
+    av_byz = av_n - av_honest                        # 3 Byzantine dealers
+    assert 2 * av_t - av_n > av_f and av_t <= av_n - av_f   # bounds hold
+    av_records = []
+    for d in range(1, av_honest + 1):         # dealer indices 1..7 (honest)
+        av_records.append(_avss_dealer_publish(
+            sha256(b"cap-0089:avss:honest:%02d" % d), av_epoch, av_cl_hash,
+            av_n, av_t, d))
+    for b in range(1, av_byz + 1):            # dealer indices 8..10 (byzant)
+        av_records.append(_avss_dealer_publish(
+            sha256(b"cap-0089:avss:byz:%02d" % b), av_epoch, av_cl_hash,
+            av_n, av_t, av_honest + b, corrupt_e_recipient=(b + 1)))
+    # Canonical public Q* (node A and node B compute it independently).
+    q_a = _avss_qualification(av_records, av_epoch, av_n)
+    q_b = _avss_qualification(list(av_records), av_epoch, av_n)
+    # Every dealer SUB-SHARES on the epoch's own delegated curve whose
+    # constant is the dealer's own share s_d = f(d) of the group secret: the
+    # dealer's command-register constant commitment C^{(d)}_0 = G^{s_d} is a
+    # PUBLIC point ON the group polynomial f (not a separate curve).
+    constant_ok = all(
+        int.from_bytes(rec["Cks"][0], "big")
+        == pow(_GRP_G,
+               _poly_share(GROUP_SK, av_t, av_n, rec["d"]), _GRP_P)
+        for rec in av_records)
+    check("AVSS dealer command registers lie on the epoch's delegated " 
+          "polynomial (round-22 3936844242 / threshold-preservation of the "
+          "committed dealer set): each dealer's constant commitment "
+          "C^{(d)}_0 = G^{s_d} equals the PUBLIC evaluation G^{f(d)} of the "
+          "group polynomial the epoch commits -- 'the dealers' are the "
+          "committed randomness roster sub-sharing the SAME delegated secret, "
+          "not a separately-generated curve",
+          constant_ok and sorted(rec["d"] for rec in av_records)
+          == list(range(1, av_n + 1)))
+    check("AVSS canonical public qualification Q* (round-22 3936620224 / "
+          "3936844061): Q* is a pure function of the published records + the "
+          "epoch-committed E_j -- every node derives the SAME set; the n=10, "
+          "t=7, f=3 dealer register with all 7 honest dealers well-formed and "
+          "all 3 Byzantine dealers carrying a re-bound/malformed ciphertext "
+          "qualifies EXACTLY the 7 honest dealers, and even excluding all 3 "
+          "Byzantine leaves |Q*| = 7 = t (the claimed threshold is preserved "
+          "after exclusions)",
+          len(q_a) == av_honest == av_t
+          and sorted(rec["d"] for rec in q_a)
+          == list(range(1, av_honest + 1))
+          and len(q_a) == len(q_b)
+          and [r["d"] for r in q_a] == [r["d"] for r in q_b])
+    # GROUP reconstruction from the QUALIFIED dealers' CONSTANT commitments:
+    # the qualified sub-sharing dealer constants {G^{s_d} : d in Q*} are
+    # PUBLIC points on the group polynomial, so any t of them reconstruct
+    # G^{f(0)} by exponent-Lagrange -- the AVSS channel genuinely restores
+    # the very authority key the threshold proof is bound to.
+    group_points = [(r["d"], r["Cks"][0]) for r in q_a]
+    restored_group = _lagrange_constant_commitment(group_points, index0=0)
+    check("AVSS reconstruction of the GROUP key from the qualified dealer "
+          "constants (round-22 3936844242): the |Q*| = t sub-sharing dealers' "
+          "PUBLIC constant commitments {G^{s_d}} reconstruct the committed "
+          "group constant G^{f(0)} == the epoch authority key -- so the AVSS "
+          "channel reconstructs the SAME delegated secret the threshold proof "
+          "is bound to, from public register data alone, with NO decryption "
+          "report consulted",
+          restored_group == int.from_bytes(av_epoch.authority_key, "big"))
+    # A BYZANTINE member falsely reporting decryption failure must NOT alter Q*.
+    q_after_lying = _avss_qualification(av_records, av_epoch, av_n)
+    decoy_ok = len(q_after_lying) == len(q_a)
+    check("AVSS qualification ignores decryption reports -- a per-recipient "
+          "'decryption failed' complaint is NOT evidence in Q*: the same "
+          "records re-qualify to the identical set because the rule reads only "
+          "public well-formedness; and a dealer whose published ciphertext is "
+          "malformed under E_j is excluded CONSISTENTLY for every node "
+          "(round-22 3936844061)",
+          decoy_ok and len(q_after_lying) == len(q_a)
+          and all(a["Cks"][0] == b_["Cks"][0]
+                  for a, b_ in zip(q_after_lying, q_a)))
+    # ABORTING dealer: broadcasts its commits, delivers encrypted envelopes to
+    # only `t` of the n members, then vanishes before the remaining deliveries.
+    av_abort = _avss_dealer_publish(
+        sha256(b"cap-0089:avss:abort"), av_epoch, av_cl_hash, av_n, av_t,
+        av_n, abort_after=av_t)
+    # The t recipients OPEN the PRIVATE KEM envelope of their DELIVERED entry
+    # with their PRIVATE e_j (_avss_recv_scalar) and FELDMAN-VERIFY the SCALAR
+    # sub-share against the PUBLIC point commitment (G^m == C_i); scalar-
+    # Lagrange over those SCALAR sub-shares (member indices as x) recovers the
+    # committed constant s_0, checked G^{s_0} == C^{(d)}_0. This is the EXACT
+    # material a FROST partial s_i = n_i + c*f(i) consumes -- round-24
+    # 3939264478: the aborted dealer's recovery determinably yields the SCALAR
+    # (not merely its group image), so it genuinely feeds the threshold-sign
+    # path. The public record carries NO secret coefficient and NO plaintext
+    # (round-23 3939109855).
+    decrypted_scalars = {}
+    decrypt_ok = True
+    for j in range(1, av_t + 1):
+        C_j = _avss_point_commit(av_abort["Cks"], j)
+        m = _avss_recv_scalar(j, av_abort["enc"][j], av_abort["d"],
+                              av_epoch.hash, C_j)
+        if m is None:
+            decrypt_ok = False
+        decrypted_scalars[j] = m
+    abort_shard_ok = decrypt_ok and all(
+        m is not None and pow(_GRP_G, m, _GRP_P) == av_abort["points"][j]
+        for j, m in decrypted_scalars.items())
+    abort_scalars = {j: m for j, m in decrypted_scalars.items()
+                     if m is not None}
+    abort_constant = _lagrange_recover(abort_scalars)     # s_0 = f_d(0) SCALAR
+    check("AVSS reconstruction of an ABORTING dealer (round-22 3936844242, "
+          "round-23 3939109855, round-24 3939264478): a dealer broadcasts its "
+          "commits and delivers encrypted SCALAR envelopes to t members, then "
+          "vanishes; the t recipients open the PRIVATE KEM channel with their "
+          "PRIVATE e_j (_avss_recv_scalar), FELDMAN-VERIFY each decoded SCALAR "
+          "against the published point commitment (G^m == C_i; the PUBLIC "
+          "record carries no secret coefficient and no plaintext), and "
+          "scalar-Lagrange over those SCALAR sub-shares recovers the committed "
+          "constant s_0 with G^{s_0} == the broadcast commitment -- the aborted "
+          "contribution is determinable AS A SCALAR, the exact input a FROST "
+          "partial s_i = n_i + c*f(i) needs -- while a dealer that aborted "
+          "before completing the full distribution is EXCLUDED from Q* by the "
+          "one-entry-per-member rule",
+          len(av_abort["enc"]) == av_t
+          and len(av_abort.get("coeffs", ())) == 0
+          and abort_shard_ok
+          and pow(_GRP_G, abort_constant, _GRP_P)
+          == int.from_bytes(av_abort["Cks"][0], "big")
+          and _avss_qualification([av_abort], av_epoch, av_n) == [])
+    # E_j binding: re-qualify under a SWAPPED encryption-key vector.
+    ev_swapped = EpochDescriptor(
+        0, group_pub_from_seed(GROUP_SK, av_t, av_n), av_roster,
+        activation=0, retirement=1000, threshold=av_t,
+        byzantine_bound=1, scp_qset=(8, tuple(range(1, av_n + 1))),
+        root_rule=b"unique-threshold/v1",
+        event_mapping=b"single-pulse:LockedClose->C_s/v1",
+        enc_keys=tuple(list(av_epoch.enc_keys[1:]) + [av_epoch.enc_keys[0]]))
+    q_swapped = _avss_qualification(av_records, ev_swapped, av_n)
+    check("AVSS ciphertexts are bound to the committed E_j vector (round-22 "
+          "3936844318 / 3936844061): re-interpreting the SAME records under a "
+          "permuted E_j breaks well-formedness for the mis-bound recipients, "
+          "so the qualification set CHANGES -- which is exactly why E_j is "
+          "committed in index order into the epoch hash (a different E_j "
+          "mapping is a DIFFERENT protocol state)",
+          len(q_swapped) != len(q_a) and len(q_swapped) < av_n)
+    # FAIL-CLOSED PUBLIC PARSING (round-24 3939264509): malformed dealer
+    # records are EXCLUDED, never raised on -- invariant I13 by construction.
+    base_honest = av_records[0]                   # a KEEN honest record
+    malformed_recs = {}
+    # The malformed variants each claim their OWN fresh dealer index and are
+    # AUTHENTICALLY signed for it (distinct indices / valid sig per record, so
+    # the mixed batch has no ambiguity and every record's EXCLUSION is caused
+    # by ITS OWN structural anomaly -- never by the index-deduplication rule
+    # swallowing an honest record that shares an index with a rogue present).
+    _rogue_index = iter(range(2, 9))
+    def _make_rogue(**mut):
+        rb = dict(base_honest, d=next(_rogue_index), **mut)
+        rb["sig"] = _avss_dealer_sig(rb["d"], av_epoch.hash, rb)
+        return rb
+    malformed_recs["missing_key"] = _make_rogue(
+        enc=dict(list(base_honest["enc"].items())[:-1]))
+    bad_proofs = dict(base_honest["proofs"])
+    bad_proofs[1] = (b"\x00" * 32,)
+    malformed_recs["proof_shape"] = _make_rogue(proofs=bad_proofs)
+    malformed_recs["element_width"] = _make_rogue(enc={
+        k: (v[0], b"\x00" * 31, v[2], v[3])
+        for k, v in base_honest["enc"].items()})
+    malformed_recs["truncated_Cks"] = _make_rogue(
+        Cks=base_honest["Cks"][:-1])
+    malformed_recs["non_dict"] = b"not-a-record"
+    q_missing = _avss_qualification([malformed_recs["missing_key"]],
+                                    av_epoch, av_n)
+    q_proof_shape = _avss_qualification([malformed_recs["proof_shape"]],
+                                        av_epoch, av_n)
+    q_elem_width = _avss_qualification([malformed_recs["element_width"]],
+                                       av_epoch, av_n)
+    q_truncated = _avss_qualification([malformed_recs["truncated_Cks"]],
+                                      av_epoch, av_n)
+    q_non_dict = _avss_qualification([malformed_recs["non_dict"]],
+                                     av_epoch, av_n)
+    q_mixed = _avss_qualification(
+        [base_honest, malformed_recs["proof_shape"],
+         malformed_recs["missing_key"]], av_epoch, av_n)
+    check("AVSS Q* FAILS CLOSED on malformed public dealer records (round-24 "
+          "3939264509): a record missing ciphertext key j, a short/malformed "
+          "NIZK proof (1-tuple, 32 bytes), a wrong ciphertext element width "
+          "(31 bytes), a truncated coefficient-commit register or a non-dict "
+          "record is s-l-e-n-t-l-y EXCLUDED -- never raised on -- and a "
+          "HEALTHY record in the same batch still qualifies in isolation "
+          "(I13: malformed proofs never crash, and Q* depends on the VALID "
+          "records only)",
+          q_missing == [] and q_proof_shape == [] and q_elem_width == []
+          and q_truncated == [] and q_non_dict == []
+          and q_mixed == [base_honest])
+    # Forged private KEM envelope: public bytes look well-formed, but the
+    # recipient's private-channel material fails Feldman -- fail-closed.
+    forged_env = dict(
+        base_honest, enc={
+            k: (v[0], v[1], v[2], bytes([b ^ 0x01 for b in v[3]]))
+            for k, v in base_honest["enc"].items()})
+    forged_scalar = _avss_recv_scalar(
+        1, forged_env["enc"][1], forged_env["d"], av_epoch.hash,
+        _avss_point_commit(forged_env["Cks"], 1))
+    check("AVSS fail-closed SCALAR channel (round-24 3939264478): a forged "
+          "private envelope (well-formed PUBLIC tag/proof, corrupted KEM "
+          "material) is excluded from reconstruction -- the recipient "
+          "recovers NO scalar (_avss_recv_scalar -> None), so the forged "
+          "dealer contributes nothing to the assembled FROST material",
+          forged_scalar is None)
+    # ROUND-25 3939431465 (fgK8F): the Schnorr NIZK covers the ENTIRE public
+    # envelope -- point tag (A1, B), public C_i, E_j, the KEM tag A2 AND the
+    # inner env bytes -- so a byte-tampered envelope is now a PUBLIC
+    # well-formedness failure (not only a private decryption failure).
+    q_forged = _avss_qualification([forged_env], av_epoch, av_n)
+    check("AVSS NIZK covers the full envelope (round-25 3939431465): one bit "
+          "flipped in the PRIVATE-channel ciphertext invalidates the PUBLIC "
+          "NIZK -- the forged envelope is EXCLUDED by Q* from public "
+          "well-formedness alone (before any recipient ever tries to decrypt)",
+          q_forged == [] and forged_scalar is None)
+    # ROUND-25 3939431477 (fgK8N): a dealer record is AUTHENTICATED under the
+    # EPOCH-COMMITTED identity key E_d of the roster member owning its index.
+    # (a) a record signed by member 1 but claiming index 2 does NOT verify
+    #     under E_2 -> EXCLUDED;
+    # (b) a batch offering TWO records for the same index is ambiguous -> both
+    #     indices EXCLUDED.
+    stolen_index = dict(av_records[0], d=2)
+    q_stolen = _avss_qualification([stolen_index], av_epoch, av_n)
+    dup_batch = [dict(av_records[0], enc=av_records[1]["enc"]), av_records[0]]
+    q_dup = _avss_qualification(dup_batch, av_epoch, av_n)
+    check("AVSS dealer records are bound to their roster identity (round-25 "
+          "3939431477): a record signed under member 1's private key but "
+          "CLAIMING index 2 fails the signature check against the "
+          "epoch-committed E_2 and is excluded -- `d` is not a caller-asserted "
+          "field -- and a batch offering two records for the same index is "
+          "ambiguous, so every duplicated index is excluded wholesale "
+          "(one authenticated record per index)",
+          q_stolen == [] and q_dup == [])
+    # ROUND-25 3939431489 (fgK8T): a record whose published points map does
+    # not equal the commitments recomputed from its OWN Cks is excluded, and
+    # member-side reconstruction combines the RECOMPUTED commitments (never
+    # the stored points).
+    wrong_points = dict(base_honest,
+                        points={k: (v ^ 1) for k, v in base_honest["points"].items()})
+    q_wrong_points = _avss_qualification([wrong_points], av_epoch, av_n)
+    check("AVSS qualification ties every published point to the commitments "
+          "(round-25 3939431489): Q* recomputes C_i = prod_k C_k^(i^k) from "
+          "the record's OWN coefficient commitments and requires the stored "
+          "points map to equal it -- a record whose points disagree with its "
+          "commits is EXCLUDED (and member-side assembly combines the "
+          "recomputed commitment, so a qualifying record's points can never "
+          "steer reconstruction)",
+          q_wrong_points == [])
+    # ---------- ROUND-28 3942590393 (foQha): PUBLIC well-formedness vs
+    # RECONSTRUCTIBILITY -- a Byzantine dealer can publish a WRONG-but-well-
+    # formed ciphertext. Q* reads ONLY public bytes, so by construction it can
+    # never invert the encrypted plaintext (that is what the encryption IS);
+    # the CAP therefore does NOT claim "every qualified dealer is publicly
+    # reconstructible" -- it REVISES qualification/recovery (the reviewer's own
+    # alternative): reconstructibility is bounded TOPOLOGICALLY (every honest
+    # dealer's envelope opens for all n - f honest recipients, so an honest
+    # dealer is reconstructed through >= t honest opens alone) and Byzantine
+    # garbage degrades into the round-24 missing-scalar path (bounded UNKNOWN,
+    # epoch roll), never a qualified-but-permanently-unreconstructible state.
+    _cheat_rec = _avss_reencrypt_wrong(
+        base_honest, 1, av_epoch, av_cl_hash, base_honest["d"],
+        sha256(b"cap-0089:avss:honest:%02d" % 1), 1)
+    _cheat_qualified = _avss_qualification([_cheat_rec], av_epoch, av_n)
+    _cheat_scalar = _avss_recv_scalar(
+        1, _cheat_rec["enc"][1], _cheat_rec["d"], av_epoch.hash,
+        _avss_point_commit(_cheat_rec["Cks"], 1))
+    _cheat_member_nonce = _avss_member_nonce([_cheat_rec], 1, av_epoch)
+    _honest_dealer_opens = all(
+        _avss_recv_scalar(
+            jj, base_honest["enc"][jj], base_honest["d"], av_epoch.hash,
+            base_honest["points"][jj]) is not None
+        for jj in range(1, av_n + 1))
+    check("AVSS public well-formedness vs reconstructibility (round-28 "
+          "3942590393 / foQha): a Byzantine dealer's WRONG-but-well-formed "
+          "ciphertext (a DIFFERENT scalar encrypted under a fully valid public "
+          "NIZK) IS qualified by Q* -- the public predicate cannot invert the "
+          "plaintext-- but contributes ZERO to honest recovery: the recipient "
+          "fail-closes (G^garbage != C_i) and `_avss_member_nonce` returns "
+          "None, so the garbage dealer degrades into the round-24 "
+          "missing-scalar path (bounded UNKNOWN / epoch roll), never a "
+          "qualified-but-unreconstructible claim. Availability is carried by "
+          "the honest-dealer bound instead: EVERY honest dealer's envelope "
+          "opens for ALL n - f honest recipients (n=10, f=3 -> 7 honest "
+          "opens >= t=7), so every HONEST dealer is reconstructed from >= t "
+          "honest opens alone -- Byzantine garbage can delay availability, "
+          "never strand it (availability is governed by the topology gate)",
+          _cheat_qualified == [_cheat_rec]
+          and _cheat_scalar is None
+          and _cheat_member_nonce is None
+          and _honest_dealer_opens)
+    # ROUND-28 3942590381 (foQhP): the dealer-auth Schnorr nonce is derived from
+    # the SECRET e_d as well as the public message (RFC-6979-style, cf.
+    # `_confirm_vote`), so the deterministic nonce can no longer be recomputed
+    # from public bytes to recover the private key e_d = (s - k)/c -- and e_d
+    # IS the member's AVSS decryption key (E_d = G^{e_d} opens every envelope
+    # to that member), so a message-only nonce would expose that member's
+    # confidential sub-shares from ONE published record.
+    # (a) recovery FAILS against the current signature: an attacker recomputing
+    #     k0 = H(msg) and forming (s - k0)/c mod q gets something unrelated to
+    #     e_d;
+    # (b) the HYPOTHETICAL message-only-nonce signature (rebuilt here for the
+    #     same record) still passes the PUBLIC verification equation, and its
+    #     private key recovers as (s_old - k0)/c_old == e_d exactly -- the
+    #     reviewer's attack is real and the current nonce eliminates it.
+    _sig_msg = (b"AVSSDealerAuth" + u32(base_honest["d"]) + av_epoch.hash
+                + _avss_record_identity_bytes(base_honest))
+    _sig_R = int.from_bytes(base_honest["sig"][:32], "big")
+    _sig_e_d = _avss_recv_sk(base_honest["d"]) % _GRP_Q
+    _sig_c = int.from_bytes(
+        sha256(b"AVSSDealerChal" + sha256(_sig_msg)
+               + _sig_R.to_bytes(32, "big")), "big") % _GRP_Q
+    _sig_s = int.from_bytes(base_honest["sig"][32:], "big") % _GRP_Q
+    _sig_k0 = (_spf_scalar(sha256(_sig_msg))) % _GRP_Q  # attacker's msg-only
+    _recovered = ((_sig_s - _sig_k0) % _GRP_Q
+                  * pow(_sig_c, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+    _old_k = _sig_k0
+    _old_R = pow(_GRP_G, _old_k, _GRP_P)
+    _old_c = int.from_bytes(
+        sha256(b"AVSSDealerChal" + sha256(_sig_msg)
+               + _old_R.to_bytes(32, "big")), "big") % _GRP_Q
+    _old_s = (_old_k + _old_c * _sig_e_d) % _GRP_Q
+    _old_leak = ((_old_s - _old_k) % _GRP_Q
+                 * pow(_old_c, _GRP_Q - 2, _GRP_Q)) % _GRP_Q
+    _old_verifies = (
+        pow(_GRP_G, _old_s, _GRP_P)
+        == (_old_R * pow(int.from_bytes(av_epoch.enc_keys[
+            base_honest["d"] - 1], "big") % _GRP_P, _old_c, _GRP_P)) % _GRP_P)
+    check("AVSS dealer-auth nonce binds the secret e_d (round-28 3942590381 / "
+          "foQhP): under a message-only Schnorr nonce any node recomputes k0 = "
+          "H(msg) and recovers e_d = (s - k0)/c from ONE published record "
+          "((b): the rebuilt message-only signature passes the PUBLIC "
+          "verification equation and leaks (s_old - k0)/c_old == e_d exactly, "
+          "the dealer's AVSS decryption key). The current nonce derives from "
+          "(AVSSDealerNonce || e_d || msg), so the same attack recovers "
+          "(s - k0)/c != e_d -- a published record can no longer expose the "
+          "dealer's confidential envelope material",
+          _sig_s != _sig_k0
+          and _recovered != _sig_e_d
+          and _old_verifies
+          and _old_leak == _sig_e_d)
+    # AVSS-FED PROOF ASSEMBLY (round-24 3939264478 / 3939264532): the slot's
+    # NONCE polynomial g_v is distributed through the SAME AVSS machinery
+    # (nonce dealers sub-share with constants g_v(d)), and the qualified
+    # dealers' reconstructed per-member SCALAR shares feed the REAL proof
+    # path: PUBLIC R = G^{g_v(0)} from the nonce registers, the public
+    # challenge c, and the t partials sigma_i = n_i + c*h(i) assemble the
+    # byte-identical canonical P_s == R || (g_v(0) + c*f(0)) -- no process
+    # derives the full coefficient vector of f or of g_v. ROUND-29 foqqv: the
+    # AUTHORITATIVE R for assembly (and for the verifier's committed_R) is the
+    # aggregate of the MEMBERS' OWN ROUND-1 nonce commitments (the FROST
+    # broadcast each member publishes for the close); the AVSS nonce
+    # distribution transports the SAME polynomial -- `_avss_aggregate_nonce`
+    # == `_public_aggregate_comms` -- so a Byzantine NONCE dealer cannot steer
+    # R, and ANY >= t contributing members yield the identical R.
+    av_cl2_hash = sha256(b"AVSS-proof-close-s")
+    av_nonce_seed = sha256(b"FrostNonce" + GROUP_SK + av_epoch.hash
+                           + av_cl2_hash)
+    av_nonce_coeffs = _frost_nonce_poly(av_nonce_seed, av_t, av_n)
+    # Members' OWN round-1 nonce commitments N_i = G^{n_i} (FROST round-1
+    # broadcast; the registry the verifier binds `committed_R` to, round-29
+    # foqqj/foqqv).
+    av_r1_nonce = {
+        i: pow(_GRP_G, _frost_share(av_nonce_coeffs, i), _GRP_P).to_bytes(32, "big")
+        for i in range(1, av_n + 1)}
+    nonce_records = []
+    for d in range(1, av_t + 1):
+        nonce_records.append(_avss_distribute(
+            av_nonce_coeffs, d, av_epoch, av_cl2_hash, av_n, av_t,
+            _frost_share(av_nonce_coeffs, d), av_nonce_seed))
+    P_avss = _avss_proof_from_dealers(q_a, nonce_records,
+                                      list(range(1, av_t + 1)),
+                                      av_epoch, av_cl2_hash, av_r1_nonce)
+    R_ref = pow(_GRP_G, av_nonce_coeffs[0], _GRP_P).to_bytes(32, "big")
+    s_ref = (av_nonce_coeffs[0]
+             + _avss_challenge(av_epoch, av_cl2_hash, R_ref)
+             * _group_secret(GROUP_SK, av_t, av_n)) % _GRP_Q
+    P_ref = R_ref + s_ref.to_bytes(32, "big")
+    check("AVSS-FED canonical proof assembly (round-24 3939264478 / "
+          "3939264532, round-29 foqqv): the dealer-recovered per-member SCALAR "
+          "sub-shares of f AND the AVSS-DISTRIBUTED nonce polynomial g_v (same "
+          "machinery, constants {G^{g_v(d)}}) feed the real two-round path -- "
+          "PUBLIC R = G^{g_v(0)} == _avss_aggregate_nonce from the nonce "
+          "registers == _public_aggregate_comms over the members' OWN round-1 "
+          "nonce commitments (the AVSS distribution is a transport "
+          "demonstration of the same secret polynomial; the authoritative R is "
+          "the member registry, invariant under any >= t contributing subset) -- "
+          "public c, t partials sigma_i = n_i + c*h(i) over each member's own "
+          "decrypted scalars -- and assemble the byte-identical canonical "
+          "P_s; no process in the assembly ever derives the full coefficient "
+          "vector of f or g_v, only each member's own decrypted scalar",
+          P_avss == P_ref
+          and _avss_aggregate_nonce(nonce_records) == R_ref
+          and _public_aggregate_comms(av_r1_nonce) == R_ref
+          and _public_aggregate_comms(dict((i, av_r1_nonce[i])
+                                           for i in range(1, av_t + 1))) == R_ref
+          and UniqueThresholdProof.verify(av_epoch, av_cl2_hash, P_avss)
+          is not None)
+    # Threshold preservation INSIDE the AVSS-fed path (<t stalls here too).
+    P_avss_short = _avss_proof_from_dealers(
+        q_a, nonce_records, list(range(1, av_t)), av_epoch, av_cl2_hash,
+        av_r1_nonce)
+    check("AVSS-FED threshold preservation (round-24 3939264532 / "
+          "3939264478): the distributed path INHERITS the <t rule -- assembling "
+          "from only t-1 members' recovered scalars yields NO canonical proof "
+          "(_avss_proof_from_dealers -> None and verify rejects), i.e. the AVSS-"
+          "fed path is exactly threshold-exact like the authority path",
+          P_avss_short is None
+          and UniqueThresholdProof.verify(av_epoch, av_cl2_hash, P_avss_short)
+          is None)
+
+    # ---------- ROUND-29 foqrG / foqqv: dealer corruption is INERT to per-close
+    # ---------- nonces AND to member share availability. ----------------------
+    # (foqrG) A Byzantine DEALER that garbles a QUALIFIED record's envelope to
+    # exactly ONE recipient only removes THAT member's contribution -- the old
+    # whole-assembly fail-closed (`return None` on any member) treated one
+    # garbled (share OR nonce) envelope as breaking EVERY member's availability;
+    # the round-29 assembly skips the affected member individually (mirroring
+    # `recover_proof`'s per-partial discard) and survives while >= t members
+    # still contribute. The honest-dealer bound supplies the <t-free floor:
+    # EVERY honest dealer's envelope opens for all n - f honest recipients, so
+    # >= t honest members always contribute.
+    # (foqqv) The close's aggregate R is the aggregate of the MEMBERS' OWN
+    # round-1 nonce commitments (the FROST broadcast), NOT the nonce dealers'
+    # constants: a Byzantine NONCE dealer cannot steer R (its garbling at most
+    # removes ITS OWN affected recipients, never changes the members' R), the
+    # distribution degrades into the missing-scalar path (bounded UNKNOWN /
+    # epoch roll), and any >= t contributing members yield the identical R.
+    _av_garb_share = _avss_reencrypt_wrong(
+        base_honest, 7, av_epoch, av_cl2_hash, base_honest["d"],
+        sha256(b"cap-0089:avss:garbed-share"), 7)
+    _av_garbed_shares = [_av_garb_share if rec is base_honest else rec
+                         for rec in q_a]
+    _av_garb_nonce = _avss_reencrypt_wrong(
+        nonce_records[0], 7, av_epoch, av_cl2_hash, nonce_records[0]["d"],
+        sha256(b"cap-0089:avss:garbed-nonce"), 7)
+    _av_garbed_nonces = [_av_garb_nonce if rec is nonce_records[0] else rec
+                         for rec in nonce_records]
+    check("AVSS per-close nonce/share availability is DEALER-CORRUPTION-INERT "
+          "(round-29 foqrG/foqqv): a Byzantine dealer that garbles a QUALIFIED "
+          "record's envelope to exactly ONE recipient removes ONLY that member "
+          "-- `_avss_member_share`/`_avss_member_nonce` return None for member 7 "
+          "alone, member 7 is SKIPPED individually (the old whole-assembly "
+          "fail-closed is gone), and assembly from members 1..8 still recovers "
+          "the byte-identical canonical P_s (7 contributors >= t; the honest-"
+          "dealer bound guarantees >= t honest opens); a same-envelope-garbled "
+          "subset that SKINKS below t (members 1..7) yields None -- the skip "
+          "never lowers the threshold. R is the members' OWN round-1 aggregate "
+          "(_public_aggregate_comms), so the garbled nonce dealer can neither "
+          "steer R nor strand availability: R == G^{g_v(0)} and the surviving "
+          "members' partials still assemble P_ref exactly",
+          _avss_member_share(_av_garbed_shares, 7, av_epoch) is None
+          and _avss_member_nonce(_av_garbed_nonces, 7, av_epoch) is None
+          and _avss_proof_from_dealers(
+              _av_garbed_shares, nonce_records, list(range(1, av_t + 2)),
+              av_epoch, av_cl2_hash, av_r1_nonce) == P_ref
+          and _avss_proof_from_dealers(
+              q_a, _av_garbed_nonces, list(range(1, av_t + 2)),
+              av_epoch, av_cl2_hash, av_r1_nonce) == P_ref
+          and _avss_proof_from_dealers(
+              _av_garbed_shares, nonce_records, list(range(1, av_t + 1)),
+              av_epoch, av_cl2_hash, av_r1_nonce) is None
+          and _public_aggregate_comms(
+              dict((i, av_r1_nonce[i]) for i in range(1, av_t + 2))) == R_ref)
+
+    # ---------- ROUND-30 fwY5j: the DISTRIBUTION-CLOSE gate is now a PUBLIC
+    # ---------- authenticated-certificate count (the honesty oracle is gone).
+    # Round-29 built the reviewer's worst-case foqrG premise SURVIVED: a
+    # BYZANTINE DEALER (the roster member holding its own E_d identity key,
+    # `_avss_recv_sk(d)`) publishes a record whose every entry is PUBLICLY
+    # WELL-FORMED (per-entry NIZK verifies over the exact committed bytes; the
+    # envelope is re-encrypted under the SAME r1 as the honest base record --
+    # same publish seed, same cl_hash, same tag -- so the tag AND the NIZK stay
+    # valid, exactly the foQha qualified-garbage construction) but whose
+    # envelope decrypts to a GARBAGE SCALAR for EVERY honest recipient (each
+    # `_avss_recv_scalar` Feldman-tie G^m == C_i FAILS -> None). Because the
+    # dealer signature covers (d || epoch_hash || Cks) and the garbage
+    # record keeps the SAME committed coefficient registers, the record REMAINS
+    # IN Q* (`_avss_qualification(q_rogue) == q_rogue`) -- qualification is
+    # public well-formedness, it can never see the wrong plaintext (no ZK
+    # argument proves the plaintext). WITHOUT a gate, that qualified record
+    # would machine honest members 1..7 a None aggregate share: honest valid
+    # signers 0, even ALL-ROSTER valid signers = f = 3 < t, and no proof can be
+    # assembled (an honest member needs its OWN valid aggregate h(i) AND n_i).
+    # The round-29 reply was a gate keyed on `honest_members`, an EXTERNALLY
+    # SUPPLIED honesty set, and on `_avss_valid_signers`, which opens EVERY
+    # recipient's private ciphertext -- neither is implementable by a protocol
+    # participant (a node cannot know the Byzantine set, and cannot decrypt
+    # anyone's envelope but its own). Round-30 fwY5j replaces the whole
+    # decision with a PUBLIC, consensus-verifiable CERTIFICATE count: each
+    # roster member, upon successfully opening ITS OWN envelopes (its private
+    # e_i) and Feldman-verifying its aggregate share and its own nonce, issues
+    # an AUTHENTICATED material-OK certificate -- a Schnorr signature under its
+    # epoch-committed identity key K_i over (epoch, C_s, exact index) -- and
+    # the gate closes iff >= `threshold + f` DISTINCT exactly-indexed
+    # certificates verify PURELY PUBLICLY (`_avss_material_cert_verify`,
+    # public arithmetic only). Soundness is the adversarial bound: HONEST
+    # members certify iff their own recovery succeeded (they cannot attest
+    # garbage they failed to decrypt), Byzantine can pad at most f FALSE
+    # certificates, so certified >= t + f forces honest holders >=
+    # (t + f) - f = t -- the SAME `q >= t + f` flat activation lattice as
+    # foqq9, with the certified-roster COUNT serving as the `q` (== n == 10
+    # here). The garbage-everyone record FAILS the gate (certified = the
+    # Byzantine holders only = f < t + f) -> the epoch never commits and no
+    # externalized close ever exists; "a qualified dealer stalling a COMMITTED
+    # close" is unreachable by construction. The gate stays HONEST-BINDING
+    # through the PUBLIC lattice: with the roster (10, 7, 3) the latch needs
+    # ALL ten member certificates, so even a SINGLE honest recipient's garble
+    # (the one-recipient case above) leaves one certificate permanently
+    # unmintable (only that member holds its own K_i) -> 9 < 10 WITHHOLDS the
+    # close -- no honesty oracle, no decryption, no second decision input.
+    _av_rogue_enc = dict(base_honest["enc"])
+    _av_rogue_proofs = dict(base_honest["proofs"])
+    for __j in range(1, av_honest + 1):
+        __rw = _avss_reencrypt_wrong(
+            base_honest, __j, av_epoch, av_cl_hash, base_honest["d"],
+            sha256(b"cap-0089:avss:honest:%02d" % 1), 7)
+        _av_rogue_enc[__j] = __rw["enc"][__j]
+        _av_rogue_proofs[__j] = __rw["proofs"][__j]
+    _av_rogue = dict(base_honest, enc=_av_rogue_enc, proofs=_av_rogue_proofs)
+    _av_rogue_shares = [_av_rogue if rec is base_honest else rec
+                        for rec in q_a]
+    _av_honest_set = list(range(1, av_honest + 1))
+    _truth_q = _avss_valid_signers(q_a, nonce_records,
+                                   list(range(1, av_n + 1)), av_epoch)
+    # Round-31 fw_fU: the consensus-committed DEALER-SET DIGEST is a pure
+    # function `_avss_dealer_digest` of the QUALIFIED dealer records (canonical
+    # full-record bytes, sorted by dealer) -- IDENTICAL network-wide; each
+    # material-OK certificate signs its OWN view's digest, so certificates
+    # minted over divergent local dealer sets are cross-incompatible (and the
+    # honest-combination fallacy dies). The honest / qualified-garbage-repacked
+    # / garbled-everyone sets share the SAME dealer-identity set (same Cks,
+    # points, d, sig), so an identity-only digest would NOT distinguish them --
+    # `_avss_record_bytes` hashes the FULL record.
+    _dg_q = _avss_dealer_digest(q_a, av_epoch, av_n)
+    _dg_rogue = _avss_dealer_digest(_av_rogue_shares, av_epoch, av_n)
+    _dg_gar = _avss_dealer_digest(_av_garbed_shares, av_epoch, av_n)
+    _certs_q = {i: _avss_material_certificate(i, av_epoch, av_cl_hash, _dg_q)
+                for i in _truth_q}
+    _truth_rogue = _avss_valid_signers(
+        _av_rogue_shares, nonce_records, list(range(1, av_n + 1)), av_epoch)
+    _certs_rogue = {i: _avss_material_certificate(i, av_epoch, av_cl_hash,
+                                                  _dg_rogue)
+                    for i in _truth_rogue}
+    _truth_gar = _avss_valid_signers(
+        _av_garbed_shares, nonce_records, list(range(1, av_n + 1)), av_epoch)
+    _certs_gar = {i: _avss_material_certificate(i, av_epoch, av_cl_hash,
+                                                _dg_gar)
+                  for i in _truth_gar}
+    _K_pub = {i: _validator_confirm_pub(GROUP_SK, i)
+              for i in range(1, av_n + 1)}
+    _cert_8 = _avss_material_certificate(8, av_epoch, av_cl_hash, _dg_q)
+    _confirm_1 = _confirm_vote(_validator_confirm_sk(GROUP_SK, 1),
+                               av_epoch.hash, av_cl_hash)
+    _certs_q_extra = dict(_certs_q)
+    _certs_q_extra[99] = b"x" * 64
+    check("AVSS DISTRIBUTION-CLOSE gate is a PUBLIC authenticated-"
+          "certificate count (round-30 fwY5j): the reviewer's worst case -- a "
+          "QUALIFIED Byzantine dealer (own identity key, well-formed NIZKs "
+          "over exact bytes, SAME committed Cks, hence SAME valid dealer "
+          "signature, `_avss_qualification` keeps it in Q*) whose envelopes "
+          "open to GARBAGE scalars for EVERY honest recipient "
+          "(`_avss_reencrypt_wrong` per honest j, m_garbage scalar) -- makes "
+          "every honest member's SELF-recovery fail (`_avss_valid_signers` "
+          "over the honest roster = [], the only whole-roster material "
+          "holders are the f = 3 Byzantine members, `_avss_proof_from_dealers` "
+          "-> None). The gate now closes IFF >= threshold + f DISTINCT "
+          "material-OK certificates (Schnorr signatures under the epoch-"
+          "committed K_i, issued only after the member's OWN envelope+nonce "
+          "Feldman recovery) verify PURELY PUBLICLY -- no decryption, no "
+          "honesty set: `_avss_distribution_closes` takes ONLY the "
+          "certificate records, the epoch, the close hash, the roster size, "
+          "the adversarial bound f and the CONSENSUS-COMMITTED DEALER-SET "
+          "DIGEST (round-31 fw_fU adds the digest: a certificate count alone "
+          "would not stop certificates minted over two divergent local dealer "
+          "sets from pairing into one register -- every certificate now "
+          "commits to `_avss_dealer_digest` of the qualified records, and the "
+          "gate closes only when the whole batch verifies under ONE committed "
+          "digest), and `_avss_material_cert_verify` checks "
+          "nothing but public arithmetic. The all-hold honest course "
+          "certifies n = 10 >= t + f and CLOSES; the qualified-garbage-"
+          "everyone record leaves certified = the Byzantine members only (3 "
+          "< 10) and FAILS the gate -> the epoch is rolled BEFORE any close "
+          "exists -- no post-externalization stall is reachable. Membership is "
+          "exact: an entry for index 99 (beyond the roster) is ignored, and a "
+          "root-misindexed or cross-channel certificate is rejected",
+          _avss_qualification(_av_rogue_shares, av_epoch, av_n) == _av_rogue_shares
+          and _avss_valid_signers(_av_rogue_shares, nonce_records,
+                                  _av_honest_set, av_epoch) == []
+          and len(_truth_rogue) == av_f
+          and _avss_proof_from_dealers(_av_rogue_shares, nonce_records,
+                                       list(range(1, av_n + 1)),
+                                       av_epoch, av_cl2_hash,
+                                       av_r1_nonce) is None
+          and _avss_distribution_closes(_certs_q, av_epoch, av_cl_hash,
+                                        av_n, av_f, _dg_q)
+          and _avss_distribution_closes(_certs_rogue, av_epoch, av_cl_hash,
+                                        av_n, av_f, _dg_rogue) is False
+          and _avss_distribution_closes(_certs_q_extra, av_epoch, av_cl_hash,
+                                        av_n, av_f, _dg_q)
+          and _avss_material_cert_verify(_K_pub[8], 8, av_epoch, av_cl_hash,
+                                         _cert_8, _dg_q)
+          and not _avss_material_cert_verify(_K_pub[7], 7, av_epoch, av_cl_hash,
+                                             _cert_8, _dg_q)
+          and not _avss_material_cert_verify(_K_pub[1], 1, av_epoch, av_cl_hash,
+                                             _confirm_1, _dg_q)
+          and not _avss_material_cert_verify(_K_pub[1], 1, av_epoch, av_cl_hash,
+                                             b"x" * 64, _dg_q))
+    check("Certificates BIND the consensus-committed dealer-set digest; a "
+          "cross-view certificate batch closes nothing (round-31 fw_fU): "
+          "`_avss_dealer_digest` hashes the CANONICAL FULL RECORD bytes of "
+          "the QUALIFIED dealer set in sorted-dealer order (the same public "
+          "qualification predicate every node runs over the same committed "
+          "records, so `Q*` is a pure function of a digest -- the old "
+          "'reliable broadcast makes every honest node's Q* canonical' claim "
+          "is deliberately NOT relied on, because RB never equalizes absent / "
+          "late dealer boundaries), and every material-OK certificate signs "
+          "`(epoch, C_s, member, DEALER-SET DIGEST)`. The honest, "
+          "qualified-garbage-repacked and garbled-everyone sets share the "
+          "IDENTICAL dealer-identity set (same Cks/points/d/sig), so an "
+          "identity-only digest could not distinguish them -- `_avss_record_"
+          "bytes` hashes the FULL record (enc/proofs differ), hence dg_q != "
+          "dg_rogue != dg_gar; `_cert_8` (minted under dg_q) verifies ONLY "
+          "under dg_q, NOT under dg_gar / dg_rogue; the honest batch "
+          "`_certs_q` closes under dg_q but NOT under dg_gar, so a set of "
+          "certificates certified against one node's divergent local dealer "
+          "view cannot combine with another's into a committed register (the "
+          "honest-combination fallacy is impossible: every cert in the "
+          "closing batch must verify under ONE committed digest); and the "
+          "digest recomputes canonically (deterministic qualification + "
+          "sorted canonical bytes)",
+          _dg_q != _dg_rogue
+          and _dg_rogue != _dg_gar
+          and _dg_q != _dg_gar
+          and _dg_q == _avss_dealer_digest(q_a, av_epoch, av_n)
+          and _avss_material_cert_verify(_K_pub[8], 8, av_epoch, av_cl_hash,
+                                         _cert_8, _dg_q)
+          and not _avss_material_cert_verify(_K_pub[8], 8, av_epoch, av_cl_hash,
+                                             _cert_8, _dg_gar)
+          and not _avss_material_cert_verify(_K_pub[8], 8, av_epoch, av_cl_hash,
+                                             _cert_8, _dg_rogue)
+          and _avss_material_cert_verify(_K_pub[1], 1, av_epoch, av_cl_hash,
+                                         _certs_gar[1], _dg_gar)
+          and not _avss_material_cert_verify(_K_pub[1], 1, av_epoch, av_cl_hash,
+                                             _certs_gar[1], _dg_q)
+          and not _avss_distribution_closes(_certs_q, av_epoch, av_cl_hash,
+                                            av_n, av_f, _dg_gar)
+          and _avss_distribution_closes(_certs_q, av_epoch, av_cl_hash,
+                                        av_n, av_f, _dg_q))
+    # ---------- ROUND-31 fw_fl: the distribution-close gate is an ACTIVATION
+    # ---------- SEAM (admission), not an afterthought. ---------------------
+    # The reviewer's point (L1174 / L1194 / L1197): `_avss_distribution_closes`
+    # was consumed ONLY by `main()` assertion blocks -- neither EpochDescriptor
+    # construction nor the externalize seam rejected a bogus epoch. The model now
+    # binds the gate into RandomnessSource itself: `require_distribution_close`
+    # makes `admit()` refuse until that EXACT close's AVSS distribution close was
+    # certified through the very same public gate (the model's counterpart of
+    # EpochDescriptor REJECTING a topology-violating epoch during construction,
+    # BEFORE any slot -- closed during admission, before any release).
+    _av_cl = LockedClose(av_epoch, av_epoch.activation + 1,
+                         sha256(b"AVSS-prev"), sha256(b"AVSS-value"))
+    _av_src = RandomnessSource(av_epoch, require_distribution_close=True)
+    _av_src_bad = RandomnessSource(av_epoch, require_distribution_close=True)
+    # REAL-PATH honest bootstrap: fresh material-OK certificates are minted over
+    # the ACTUAL close hash `_av_cl.hash` -- NOT over `av_cl_hash` (av_cl_hash
+    # != _av_cl.hash, and every certificate statement binds the exact close hash
+    # the gate re-verifies against) -- under the honest dealer-set digest.
+    _certs_q_real = {i: _avss_material_certificate(i, av_epoch, _av_cl.hash,
+                                                   _dg_q)
+                     for i in _truth_q}
+    # The reviewer's literal worst case for the BAD course: the qualified
+    # Byzantine dealer re-encrypts every honest recipient's envelope wrongly
+    # (`_av_rogue_shares`), so honest members' self-recoveries FAIL and only
+    # the f = 3 Byzantine members can mint (`_truth_rogue`, over the ACTUAL
+    # close hash and the rogue digest).
+    _certs_rogue_real = {i: _avss_material_certificate(i, av_epoch,
+                                                       _av_cl.hash, _dg_rogue)
+                         for i in _truth_rogue}
+    _honest_cert = _av_src.admit_distribution(_certs_q_real, _av_cl.hash,
+                                              _dg_q, av_f)
+    _honest_close = boundary_release(_av_src, _av_cl, n_votes=av_n)
+    _bad_cert = _av_src_bad.admit_distribution(_certs_rogue_real, _av_cl.hash,
+                                               _dg_rogue, av_f)
+    check("The distribution-close gate is an ACTIVATION SEAM for the source, "
+          "not an afterthought (round-31 fw_fl): with `require_distribution_"
+          "close`, an externalized close is ADMITTED -- and therefore "
+          "boundary-released, has-valid-proof, proof-able -- only after "
+          "`admit_distribution` certified that EXACT close's AVSS distribution "
+          "close through the SAME public gate (`_avss_distribution_closes`: "
+          ">= threshold + f distinct exactly-indexed material-OK certificates "
+          "verifying under the consensus-committed dealer-set digest; the "
+          "model's counterpart of EpochDescriptor rejecting a violating epoch "
+          "before any slot). Closing the boundary alone only RECORDS; ADMISSION "
+          "is the seam that consumes the certified distribution close. The "
+          "HONEST course certifies the 10 genuine material-OK certificates "
+          "-- minted over the ACTUAL close hash (a batch minted over "
+          "`av_cl_hash` does NOT certify `_av_cl`: statement binding) -- and "
+          "the close RELEASES; the qualified-garbage-everyone course leaves "
+          "only the Byzantine members certified (3 < 10): `admit_distribution` "
+          "is False, `boundary_release` is False, `has_valid_proof` is False, "
+          "and a DIRECT `admit` -- after the boundary really externalized -- "
+          "refuses. No source admits, releases, or proves a close whose "
+          "distribution gate did not close, and no batch over a DIFFERENT digest "
+          "(round-31 fw_fU) can unlock it",
+          _honest_cert is True
+          and _honest_close is True
+          and _av_src.has_valid_proof(_av_cl)
+          and not _avss_distribution_closes(_certs_q, av_epoch, _av_cl.hash,
+                                            av_n, av_f, _dg_q)
+          and not _avss_distribution_closes(_certs_q_real, av_epoch,
+                                            _av_cl.hash, av_n, av_f, _dg_gar)
+          and _bad_cert is False
+          and boundary_release(_av_src_bad, _av_cl) is False
+          and not _av_src_bad.has_valid_proof(_av_cl)
+          and _av_src_bad.admit(_av_cl) is False)
+    check("Certified >= t + f forces >= t HONEST material holders -- the "
+          "`q >= t + f` close lattice (round-30 fwY5j): the gate's threshold "
+          "is `threshold + f` (10 for the roster), NOT `threshold` (7) -- a "
+          "plain t-certificate count would let the adversary's f false "
+          "certificates pad a garbage epoch across the line; counting t + f "
+          "with HONEST certs truthful-by-construction and Byzantine false "
+          "pads bounded by f yields honest-holders >= certified - f >= t "
+          "exactly when the gate closes. A 7-certificate set on the honest "
+          "records does NOT close (7 < 10); the full 10-certificate honest "
+          "set DOES (10 >= 10) and its certified-honest floor is >= t",
+          not _avss_distribution_closes(
+              dict((i, _certs_q[i]) for i in range(1, av_t + 1)),
+              av_epoch, av_cl_hash, av_n, av_f, _dg_q)
+          and _avss_distribution_closes(_certs_q, av_epoch, av_cl_hash,
+                                        av_n, av_f, _dg_q)
+          and len(set(_truth_q) & set(_certs_q)) >= av_t)
+    check("The PUBLIC lattice keeps the gate HONEST-BINDING with NO honesty "
+          "oracle (round-30 fwY5j): with the roster (10, 7, 3) the latch "
+          "needs ALL ten distinct member certificates, so the ONE-honest-"
+          "recipient garble (member 7's aggregate share fails closed) leaves "
+          "exactly that member's certificate unmintable FOREVER -- the "
+          "garbled member's own private k_7 is the only signing key for its "
+          "K_7, so a Byzantine substitution (member 8's signature re-asserted "
+          "at index 7) is REJECTED by the exact-index challenge binding. "
+          "Certified = the 9 genuine holders = 9 < 10 WITHHOLDS the close -- "
+          "the round-29 honest-binding survival now flows from the PUBLIC "
+          "certification lattice, never from an externally supplied honest "
+          "set and never from opening anyone's ciphertext",
+          len(_truth_gar) == av_n - 1
+          and not _avss_material_cert_verify(_K_pub[7], 7, av_epoch, av_cl_hash,
+                                             _cert_8, _dg_q)
+          and _avss_distribution_closes(_certs_gar, av_epoch, av_cl_hash,
+                                        av_n, av_f, _dg_gar) is False)
+
+    # ---------- ROUND-29 foqqj: valid-but-wrong-R is REJECTED once the verifier
+    # ---------- binds the round-1 aggregate nonce. ------------------------------
+    # Plain Schnorr acceptance admits any (R, s) pair satisfying G^s == R*Y^c
+    # under c = H(..., R, ...): whoever controls t partials can substitute their
+    # OWN nonce commitments and mint a SECOND SCHNORR-VALID proof P_alt with a
+    # DIFFERENT nonce R_alt != R_canonical -- if the verifier accepts the raw
+    # equation alone, TWO roots are reachable for the same close (the reviewer's
+    # foqqj objection). The round-29 verifier takes the close's round-1-committed
+    # aggregate R (`committed_R`, from the members' published N_i) and REJECTS a
+    # proof whose own R diverges, even when the signature scalar is
+    # Schnorr-valid -- exactly ONE nonce (the transcript one) and exactly ONE
+    # root survive (one-future).
+    _av_d = _group_secret(GROUP_SK, av_t, av_n)
+    _av_k_alt = _spf_scalar(sha256(b"SpfNonce" + b"attacker-alt-nonce"
+                                   + av_epoch.hash + av_cl2_hash)) % _GRP_Q
+    _av_R_alt = pow(_GRP_G, _av_k_alt, _GRP_P).to_bytes(32, "big")
+    _av_c_alt = _avss_challenge(av_epoch, av_cl2_hash, _av_R_alt)
+    _av_s_alt = (_av_k_alt + _av_c_alt * _av_d) % _GRP_Q
+    _P_alt = _av_R_alt + _av_s_alt.to_bytes(32, "big")
+    check("Verifier binds the round-1 aggregate nonce: a VALID-but-wrong-R "
+          "proof is REJECTED by `committed_R` (round-29 foqqj) -- a party "
+          "controlling t partials can substitute its own nonces and mint a "
+          "SECOND Schnorr-valid proof P_alt under a DIFFERENT R_alt (!= the "
+          "canonical R): the raw equation accepts BOTH, so a transcript-blind "
+          "verifier would admit TWO roots for one close; binding the close's "
+          "round-1-committed aggregate R (the members' published N_i) makes "
+          "`verify(..., committed_R=R)` accept EXACTLY the canonical nonce "
+          "(P_avss) and REJECT P_alt -- one close, one committed nonce, one "
+          "root (one-future)",
+          _av_R_alt != R_ref
+          and _spf_verify(av_epoch.authority_key, av_epoch.hash,
+                          av_cl2_hash, _P_alt)
+          and UniqueThresholdProof.verify(av_epoch, av_cl2_hash, _P_alt)
+          is not None
+          and UniqueThresholdProof.verify(
+              av_epoch, av_cl2_hash, _P_alt, committed_R=R_ref) is None
+          and UniqueThresholdProof.verify(
+              av_epoch, av_cl2_hash, P_avss, committed_R=R_ref) is not None)
+
+    # ---------- P: pinned model vectors (fixed registered literals) -------------
+    pinned_b3 = flushed_digest
+    comp_seq_digest = sha256(b"".join(canon_roots)).hex()
+    EXP_B3 = (
+        "a6d901286ed7bceb3d56fb482fde3558642964d4922a11d609d1d27aa8c5eac7",
+        "7201de4605a2a9ab9aa881fce7fa3b7b32c8fa82baebaf35252badee2c5aa603",
+        "5cd45151c95beb7fb00126af0ec7ce80b34012f3de0caa4df301d3979fcdd2a5",
+        "2877e3e997e8c55333f55bd37d3461a93e8615d87f56b7fef6eab5c8bf7d920b",
+    )
+    EXP_COMP = "72df51824fb67e1215d980c9f007a2478e23f1a16e613b4d9d03efd6a9f3955f"
+    check("P pinned B3 authoritative-history digest matches the REGISTERED "
+          "conformance literals (one per delivery sequence): %s"
+          % (tuple(terminal_digests),),
+          tuple(terminal_digests) == EXP_B3)
+    check("P compositional root-sequence digest matches the REGISTERED literal: "
+          "%s" % comp_seq_digest, comp_seq_digest == EXP_COMP)
+
+    print("\n" + (("ALL PASS (%d checks)" % passed)
+                   if failed == 0 else "%d FAILURE(S)" % failed))
+    return 0 if failed == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
