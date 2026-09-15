@@ -5,12 +5,12 @@
 ### Primary Workflow
 - **Draft** — A CAP that is currently open for consideration and actively being discussed.
 - **Awaiting Decision** — A mature and ready CAP that is ready for final deliberation by the CAP
-  Core Team. After a maximum of three meetings, a vote will take place that will set the CAP's
-  intended FCP disposition (**FCP: Acceptance/Rejection**) or go back into a **Draft** state.
-- **FCP: [Acceptance/Rejection]** — A CAP that has entered a Final Comment Period (FCP) with an
-  intended disposition. After one week has passed, during which any new concerns should be
-  addressed, the CAP will head towards its intended disposition [**Acceptance/Rejection**] or go
-  back into a Draft state.
+  Core Team. After a maximum of three meetings, a vote will take place that will move the CAP
+  to **Final Comment Period** state, or back into a **Draft** state.
+- **Final Comment Period** — A CAP that has entered a Final Comment Period with an
+  intended disposition of Acceptance or Rejection. After one week has passed, during which any new concerns should be
+  addressed, the CAP will move to **Accepted** or **Rejected** according to its intended
+  disposition, or go back into a **Draft** state.
 - **Accepted** — A CAP that has been accepted on the merits of its idea pre-implementation, and is
   ready for implementation. It is still possible that the CAP may be rejected post-implementation
   due to the issues that may arise during an initial implementation.
@@ -122,6 +122,7 @@
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0087](cap-0087.md) | Host functions for ML-DSA signature verification | Jay Geng | Draft |
+| [CAP-0088](cap-0088.md) | Millisecond-Resolution Close Times | Garand Tyson | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
@@ -217,6 +218,7 @@ Introduce your idea on the [stellar-dev mailing list](https://groups.google.com/
 
 [GitHub Discussions]: https://github.com/stellar/stellar-protocol/discussions
 
+- New ideas start as a discussion, not a pull request.
 - Make sure to gather feedback and alternative ideas — it's useful before putting together a
   formal draft!
 - Consider contacting experts in a particular area for feedback while you're hashing out the
@@ -228,12 +230,18 @@ repository. You should make sure to adhere to the following:
 
 - Make sure to place the draft in the `core/` folder.
 - Your CAP should be named `cap-TBD.md`
+- Do not self-assign, reference, or request a CAP number. Leave the CAP number in the preamble as
+  `To Be Assigned`. A CAP number will be assigned by a maintainer just before merge.
+- Do not add the proposal to the `core/README.md` as it increases the chance of conflicts at merge
+  time. The proposal will be added to the readme by a maintainer.
 - If your CAP requires images or other supporting files, they should be included in a sub-directory
   of the `contents` folder for that CAP, such as `contents/cap-TBD/`. Links
   should be relative, for example a link to an image from your CAP would be
   `../contents/cap-TBD/image.png`.
 
-Finally, submit a PR of your draft via your fork of this repository.
+Finally, submit a PR of your draft via your fork of this repository. Once the idea has been
+discussed and the proposal is ready for a maintainer to review and merge, mark the PR as ready for
+review and ask in your discussion for it to be merged.
 
 #### Additional Tips
 - Use `TBD` for the protocol version. Don't assign a protocol version to the CAP — this will be
@@ -247,8 +255,8 @@ From there, the following process will happen.
 #### CAP gets merged
 If you properly followed the steps above, your PR will get merged.
 
-The CAP and associated files will get renamed based on the latest
-CAP draft number before merging.
+A maintainer will assign the CAP number, and the CAP and associated files will get renamed based on
+that number before merging.
 
 #### Assembling a working group
 
@@ -288,17 +296,21 @@ The protocol meetings will be used to decide on next step:
   - If the CAP requires some adjustments or needs to receive more feedback from the community, the meeting is adjourned;
   - If for any reason the CAP gets abandoned, it gets a status of `Rejected`.
 
-### Awaiting Decision -> Final Comment Period (FCP)
+### Awaiting Decision -> Final Comment Period
 - A vote will take place among the CAP Core Team.
-  - A unanimous approval from the CAP Core Team will put the CAP in a `Accepted` status.
-  - Otherwise, the CAP will be given feedback and head towards a `FCP: Rejected` status (if the
-    majority of the CAP raises concerns) or a `Draft` status (if only a minority of the CAP
-    raises concerns).
+  - A unanimous approval from the CAP Core Team will move the CAP to `Final Comment Period` with
+    an intended disposition of Acceptance.
+  - Otherwise, the CAP will be given feedback, and one of the following will occur:
+    - The CAP will move to `Final Comment Period` with an intended disposition of Rejection, 
+      documenting the reason, if the majority of the CAP Core Team raises concerns.
+    - The CAP will return to `Draft` if only a minority of the CAP Core Team raises concerns.
   - It can take upwards of 3 meetings before a disposition is reached.
 
-### FCP -> Accepted/Rejected
-- After a week of an Final Comment Period (FCP) where any major concerns that have not been
-  previously addressed can be brought up, the CAP will head to its final disposition.
+### Final Comment Period -> Accepted or Rejected
+- During the week-long Final Comment Period, anyone can bring up major concerns
+  that have not been previously addressed. If no such concerns remain at the
+  end of the period, the CAP will move to `Accepted` or `Rejected` according to
+  its intended disposition.
   - Concerns will be addressed on a case by case basis, and only major concerns that were not
     addressed earlier will move the CAP back to a `Draft` state.
 
