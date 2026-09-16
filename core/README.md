@@ -100,6 +100,8 @@
 | [CAP-0085](cap-0085.md) | 28 | Externally managed contract executables | Dmytro Kozhevin | Implemented |
 | [CAP-0084](cap-0084.md) | TBD | Muxed Contract Addresses | Jake Urban | Accepted |
 | [CAP-0086](cap-0086.md) | 28 | Host functions for sparse Symbol-keyed map creation and unpacking | Dmytro Kozhevin | Implemented |
+| [CAP-0087](cap-0087.md) | TBD | Host functions for ML-DSA signature verification | Jay Geng | Awaiting Decision |
+| [CAP-0088](cap-0088.md) | TBD | Millisecond-Resolution Close Times | Garand Tyson | Final Comment Period |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
@@ -121,8 +123,6 @@
 | [CAP-0057](cap-0057.md) | State Archival Persistent Entry Eviction | Garand Tyson | Draft |
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
-| [CAP-0087](cap-0087.md) | Host functions for ML-DSA signature verification | Jay Geng | Draft |
-| [CAP-0088](cap-0088.md) | Millisecond-Resolution Close Times | Garand Tyson | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
