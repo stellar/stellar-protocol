@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stellar/stellar-protocol/blob/master/contents/sep-contract-verification-registry/status-object-1.0.schema.json",
+  "title": "Contract Verification Status Object",
+  "description": "The body returned by GET /wasms/:wasm_hash.json on a 200 OK or 202 Accepted response.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "wasm_hash",
+    "updated_at",
+    "source_code_verifications"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "The version of the response schema, as MAJOR.MINOR, versioned independently of the SEP. MAJOR increments on a breaking change; MINOR on an additive change. This schema describes version 1.0.",
+      "const": "1.0"
+    },
+    "wasm_hash": {
+      "type": "string",
+      "description": "The queried wasm hash, echoed back. Lowercase hex SHA-256.",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "RFC 3339 UTC timestamp of when this record was last updated across all of its verifications. Always present.",
+      "format": "date-time"
+    },
+    "source_code_verifications": {
+      "type": "array",
+      "description": "One or more rebuild-from-source verification results, each from one verifier.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["verifier", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "verifier": {
+            "type": "object",
+            "description": "Identity of the verifier that produced (or is producing) this result.",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "A human-readable name for the verifier.",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "A URL identifying the verifier or describing its methodology."
+              },
+              "logo_url": {
+                "description": "A logo for the verifier. Either a URL string, or an object with light and/or dark URL variants for light and dark backgrounds. The image SHOULD be square; a transparent background is recommended.",
+                "oneOf": [
+                  { "type": "string", "format": "uri" },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "minProperties": 1,
+                    "properties": {
+                      "light": { "type": "string", "format": "uri" },
+                      "dark": { "type": "string", "format": "uri" }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "The verification status value.",
+            "enum": ["verified", "mismatched", "unverified"]
+          },
+          "out_of_band": {
+            "type": "boolean",
+            "description": "When true, this verification was established outside SEP-58's reproducible-build mechanisms (e.g. a custom or non-allowlisted build image, or private source). Absent or false means a standard reproducible SEP-58 verification."
+          },
+          "bldimg": {
+            "type": "string",
+            "description": "SEP-58 bldimg. Fully-qualified container image pinned by digest.",
+            "pattern": "^(?:localhost(?::\\d+)?|[^\\s@/]*[.:][^\\s@/]*)/[^\\s@]+@sha256:[0-9a-f]{64}$"
+          },
+          "bldopt": {
+            "type": "array",
+            "description": "SEP-58 bldopt. One entry per build flag; order is not significant.",
+            "items": {
+              "type": "string",
+              "pattern": "^--[A-Za-z][A-Za-z0-9_-]*(=.+)?$"
+            }
+          },
+          "source_repo": {
+            "type": "string",
+            "description": "SEP-58 source_repo.",
+            "pattern": "^(https?://\\S+|github:[^/\\s]+/[^/\\s]+)$"
+          },
+          "source_rev": {
+            "type": "string",
+            "description": "SEP-58 source_rev. Full 40-char SHA-1 of the source commit.",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "tarball_url": {
+            "type": "string",
+            "description": "SEP-58 tarball_url.",
+            "pattern": "^https?://\\S+$"
+          },
+          "tarball_sha256": {
+            "type": "string",
+            "description": "SEP-58 tarball_sha256. Lowercase hex SHA-256 of the source tarball.",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "rebuilt_hash": {
+            "type": "string",
+            "description": "The conflicting lowercase hex SHA-256 the verifier produced by rebuilding from source. Present only when status is mismatched; omitted for verified (where it would equal wasm_hash) and unverified.",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "processed_at": {
+            "type": "string",
+            "description": "RFC 3339 UTC timestamp of when this verification was processed. Required for verified and mismatched; must be omitted for unverified.",
+            "format": "date-time"
+          },
+          "results_urls": {
+            "type": "array",
+            "description": "Zero or more open-scheme URIs to an externally-published record of this verification.",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$comment": "rebuilt_hash is the conflicting hash, so it is required for mismatched and absent otherwise.",
+            "if": {
+              "properties": { "status": { "const": "mismatched" } },
+              "required": ["status"]
+            },
+            "then": {
+              "required": ["rebuilt_hash"]
+            },
+            "else": {
+              "not": { "required": ["rebuilt_hash"] }
+            }
+          },
+          {
+            "$comment": "verified and mismatched are processed results, so processed_at is required.",
+            "if": {
+              "properties": {
+                "status": { "enum": ["verified", "mismatched"] }
+              },
+              "required": ["status"]
+            },
+            "then": {
+              "required": ["processed_at"]
+            }
+          },
+          {
+            "$comment": "unverified is not a processed result, so processed_at must be absent.",
+            "if": {
+              "properties": { "status": { "const": "unverified" } },
+              "required": ["status"]
+            },
+            "then": {
+              "not": { "required": ["processed_at"] }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
