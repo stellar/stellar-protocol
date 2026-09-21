@@ -4,6 +4,17 @@
 
 This document list the considerations that go into smart contract resource limit updates (mostly increases) and introduces a proposal process for performing the resource limit updates, similar to the CAP/SEP processes.
 
+## List of Proposals
+
+| Number | Title | Author | Status |
+| --- | --- | --- | --- |
+| [SLP-0001](slp-0001.md) | Increase Events and Read/Write Ledger Entry Limits for Soroban | Tim Baker, Attiss Ngo, Mootz12, Siddharth Suresh | Final |
+| [SLP-0002](slp-0002.md) | Increase Ledger Wide Read Bytes Limit for Soroban | Tomer Weller | Final |
+| [SLP-0003](slp-0003.md) | Increase Ledger Wide Limits for Soroban | Tomer Weller | Final |
+| [SLP-0004](slp-0004.md) | Increase Ledger Wide Limits for Soroban | Dmytro Kozhevin | Final |
+| [SLP-0005](slp-0005.md) | Increase Per-Transaction Footprint Limit for Soroban | Dmytro Kozhevin | Final |
+| [SLP-0006](slp-0006.md) | Freeze YieldBlox Exploit Stellar Accounts | Alex Mootz | Draft |
+
 ## Limits Overview
 
 Smart contract execution on Stellar is guarded by various resource limits that ensure that:
