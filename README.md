@@ -7,6 +7,7 @@
 <p align="center">
 <a href="./core/README.md"><img alt="Docs: CAPs" src="https://img.shields.io/badge/docs-CAPs-blue" /></a>
 <a href="./ecosystem/README.md"><img alt="Docs: SEPs" src="https://img.shields.io/badge/docs-SEPs-blue" /></a>
+<a href="./limits/README.md"><img alt="Docs: SLPs" src="https://img.shields.io/badge/docs-SLPs-blue" /></a>
 </p>
 
 This repository is home to **Core Advancement Proposals** (CAPs) and **Stellar Ecosystem Proposals**
@@ -20,6 +21,9 @@ CAPs deal with changes to the core protocol of the Stellar network. Please see [
 SEPs deal with changes to the standards, protocols, and methods used in the ecosystem built on top
 of the Stellar network. Please see [the process for SEPs](ecosystem/README.md).
 
+This repository also contains **Stellar Limits Proposals** (SLPs). SLPs deal with changes to smart
+contract resource limits. Please see [the process and list of SLPs](limits/README.md).
+
 ## Repository structure
 
 The root directory of this repository contains:
@@ -28,6 +32,7 @@ The root directory of this repository contains:
 * `contents` directory with `[cap | sep]-xxxx` subdirectories that contain all media/script files for a given CAP or SEP document.
 * core directory which contains accepted CAPs (`cap-xxxx.md` where `xxxx` is a CAP number with leading zeros, ex. `cap-0051.md`)
 * ecosystem directory which contains accepted SEPs (`sep-xxxx.md` where `xxxx` is a SEP number with leading zeros, ex. `sep-0051.md`)
+* limits directory which contains SLPs (`slp-xxxx.md` where `xxxx` is an SLP number with leading zeros, ex. `slp-0004.md`)
 
 Example repository structure:
 ```
@@ -49,6 +54,7 @@ Example repository structure:
 │   ├── sep-0003.md
 ├── limits
 │   ├── README.md
+│   ├── slp-0001.md
 └── sep-template.md
 ```
 
