@@ -21,8 +21,9 @@ CAPs deal with changes to the core protocol of the Stellar network. Please see [
 SEPs deal with changes to the standards, protocols, and methods used in the ecosystem built on top
 of the Stellar network. Please see [the process for SEPs](ecosystem/README.md).
 
-This repository also contains **Stellar Limits Proposals** (SLPs). SLPs deal with changes to smart
-contract resource limits. Please see [the process and list of SLPs](limits/README.md).
+This repository also contains **Stellar Limits Proposals** (SLPs).
+SLPs propose changes to protocol limits and related network configuration.
+Please see [the process and list of SLPs](limits/README.md).
 
 ## Repository structure
 
