@@ -21,11 +21,10 @@ authorization-delegation interface, a `stellar.toml` discovery block, and an
 integrator interface that together reduce the user to **at most one in-flow
 signature, and often zero**. It is asset-agnostic: it serves the majority of
 **open** classic assets (USDC, EURC — not `AUTH_REQUIRED`) and **regulated**
-`AUTH_REQUIRED` assets (EURCV) under one interface. It builds on the
-[Contract Admin SEP](https://github.com/theahaco/admin-sep) (`admin-sep`) and
-references
+`AUTH_REQUIRED` assets (EURCV) under one interface. It builds on
 [CAP-73](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0073.md)
-(Protocol 26).
+(Protocol 26) and composes with, without depending on, the
+[Contract Admin SEP](https://github.com/theahaco/admin-sep) (`admin-sep`).
 
 ## Dependencies
 
@@ -46,11 +45,6 @@ references
 - [CAP-73](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0073.md)
   (Protocol 26) — `SAC.trust()`, required only by the one-signature `onboard()`
   fallback (§4, §5).
-- [Contract Admin SEP](https://github.com/theahaco/admin-sep) (`admin-sep`) — a
-  draft proposal, not yet numbered; the Trustline Authorizer implements its
-  `Administratable` (`admin`, `set_admin`) and `Upgradable` (`upgrade`) traits
-  (§3). The three functions this SEP relies on are restated in §3, so it can be
-  implemented without `admin-sep`.
 
 ## Motivation
 
@@ -147,15 +141,18 @@ transfers SAC admin to the Authorizer, authorization is a contract call subject
 to an on-chain policy, with no issuer signature at authorize time and no
 per-transaction co-signing server.
 
-### Why build on admin-sep
+### Composing with admin-sep
 
 The [Contract Admin SEP](https://github.com/theahaco/admin-sep) (a draft
 proposal, not yet numbered) standardizes the SAC/contract admin surface via an
 `Administratable` trait (`admin` / `set_admin`) plus `Upgradable`. The
-Trustline Authorizer is an `Administratable` contract: the issuer transfers SAC
-admin to it, and the Authorizer's own admin governs policy changes (ban/unban,
-freeze, clawback, upgrade). Reusing `admin-sep` keeps the admin surface uniform
-across the Stellar contract ecosystem rather than inventing a new one.
+Trustline Authorizer can be an `Administratable` contract: the issuer transfers
+SAC admin to it, and the Authorizer's own admin governs policy changes
+(ban/unban, freeze, clawback, upgrade). Implementing `admin-sep` keeps the
+admin surface uniform across the Stellar contract ecosystem, so this SEP
+recommends it. It is not required: nothing on the onboarding path calls the
+admin surface, which only the issuer uses to govern the Authorizer, so the two
+standards are adjacent rather than dependent.
 
 ## Abstract
 
@@ -193,11 +190,11 @@ This specification defines:
 2. The **three onboarding cases** (A: zero-signature authorize-on-behalf; B:
    classic one-tap, sponsored when needed; C: CAP-73 one-transaction fallback)
    that arise across both asset classes and account states (§2).
-3. A **Trustline Authorizer** contract, installed as the asset's SAC admin (via
-   `admin-sep`'s `Administratable` trait), exposing an asset-agnostic,
-   **permissionless** `authorize_trustline` interface gated by a configurable
-   **denylist** (open-by-default) or **allowlist** (gated) policy. Required
-   only for regulated `AUTH_REQUIRED` assets (§3).
+3. A **Trustline Authorizer** contract, installed as the asset's SAC admin,
+   exposing an asset-agnostic, **permissionless** `authorize_trustline`
+   interface gated by a configurable **denylist** (open-by-default) or
+   **allowlist** (gated) policy. Required only for regulated `AUTH_REQUIRED`
+   assets (§3).
 4. A **Trustline Onboard** wrapper that composes CAP-73's `SAC.trust()` with
    the Authorizer's `authorize_trustline` so that creating and authorizing a
    trustline happen **atomically under one holder signature** — specified as
@@ -219,7 +216,7 @@ This specification defines:
 | Role                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Issuer**                    | The classic asset issuer (`G…`). For a regulated asset, sets `AUTH_REQUIRED` (and optionally `AUTH_REVOCABLE`, `AUTH_CLAWBACK_ENABLED`), wraps the asset as a SAC, and transfers SAC admin to the Trustline Authorizer. Publishes `[TRUSTLINE_ONBOARDER]` in its `stellar.toml`.                                                                                                                                                                                           |
-| **Trustline Authorizer**      | A Soroban contract installed as the asset's **SAC admin**. Implements the authorization-delegation interface (§3). Is `Administratable` + `Upgradable` per `admin-sep`. Holds policy state (denylist or allowlist) and emits audit events (§8). **Required only for `AUTH_REQUIRED` assets.**                                                                                                                                                                              |
+| **Trustline Authorizer**      | A Soroban contract installed as the asset's **SAC admin**. Implements the authorization-delegation interface (§3). SHOULD be `Administratable` + `Upgradable` per `admin-sep`. Holds policy state (denylist or allowlist) and emits audit events (§8). **Required only for `AUTH_REQUIRED` assets.**                                                                                                                                                                       |
 | **Trustline Onboard wrapper** | A stateless, immutable, asset-agnostic Soroban ROUTER whose `onboard(sac, holder)` (§4) composes CAP-73 `SAC.trust()` with the authorizer **discovered on-chain** from `SAC.admin()` (CAP-68). The **fallback** path (§5) for holders with nobody to submit a separate authorization transaction, and for wallets that render Soroban authorization well. Deployed once per network; integrators SHOULD use a pinned/curated router id (§6) rather than an advertised one. |
 | **Integrator (third party)**  | A wallet, exchange, or broker that reads the issuer's `stellar.toml`, detects the asset class, checks eligibility, builds the trustline transaction the holder signs, submits and pays for the authorization transaction the holder does not sign, and reports completion from `is_authorized`.                                                                                                                                                                            |
 | **Sponsor**                   | (Backend 2 only.) An account (issuer or platform) that pays the holder's reserve(s) via CAP-33 future-reserves sponsorship and co-signs the classic activation transaction.                                                                                                                                                                                                                                                                                                |
@@ -295,8 +292,11 @@ authorize.
 
 The Trustline Authorizer MUST be set as the SAC admin of the asset
 (`SAC.set_admin(authorizer)`), so that it — and only it — may call
-`set_authorized` on the SAC. The Authorizer MUST implement `admin-sep`'s
-`Administratable` (`admin`, `set_admin`) and SHOULD implement `Upgradable`.
+`set_authorized` on the SAC. The Authorizer SHOULD implement `admin-sep`'s
+`Administratable` (`admin`, `set_admin`) and `Upgradable` (`upgrade`).
+Integrators never call these functions — the onboarding path uses only
+`authorize_trustline` and the reads below — so this SEP does not depend on
+`admin-sep`.
 
 The Authorizer MUST expose:
 
@@ -437,7 +437,7 @@ fn mint_to_account(env: Env, to: Address, amount: i128);
 fn pause(env: Env);
 fn unpause(env: Env);
 
-// From admin-sep
+// admin-sep (RECOMMENDED, not required; see above)
 fn admin(env: Env) -> Address;
 fn set_admin(env: Env, new_admin: Address);
 fn upgrade(env: Env, wasm_hash: BytesN<32>);
@@ -445,9 +445,9 @@ fn upgrade(env: Env, wasm_hash: BytesN<32>);
 
 `freeze_accounts`/`unfreeze_accounts` require `AUTH_REVOCABLE`; `clawback`
 requires `AUTH_CLAWBACK_ENABLED`. Implementations MUST gate all admin entry
-points on `admin().require_auth()`. `Reason` is the enumerated deauthorization
-code carried into the audit event (§8); implementations SHOULD offer at least
-`Sanctions`, `KycExpired`, `IssuerRequest` and `Unspecified`.
+points on the Authorizer admin's `require_auth()`. `Reason` is the enumerated
+deauthorization code carried into the audit event (§8); implementations SHOULD
+offer at least `Sanctions`, `KycExpired`, `IssuerRequest` and `Unspecified`.
 
 `pause` MUST stop `authorize_trustline`; implementations SHOULD also stop every
 other state-changing entry point, leaving only `unpause`, `set_admin` and
@@ -1137,9 +1137,9 @@ This SEP introduces no protocol change and is **purely additive**.
 - The `onboard()` wrapper depends on CAP-73's `SAC.trust()`, live since
   Protocol 26; integrators on pre-26 history MUST use the default classic path.
   The standard therefore degrades gracefully if CAP-73 is unavailable.
-- `admin-sep` compatibility: the Authorizer is an `Administratable` contract,
-  so any tooling that understands `admin-sep`'s `admin`/`set_admin`/`upgrade`
-  surface works unchanged.
+- `admin-sep` compatibility: an Authorizer that implements `admin-sep`
+  (RECOMMENDED, §3) works unchanged with any tooling that understands its
+  `admin`/`set_admin`/`upgrade` surface.
 
 ## Reference Implementation
 
@@ -1196,5 +1196,6 @@ document, in
 
 ## Changelog
 
-- `v0.0.1`: Initial draft. Pre-submission history and review:
-  [discussion #2008](https://github.com/orgs/stellar/discussions/2008).
+- `v0.0.1`: Initial draft
+  ([discussion #2008](https://github.com/orgs/stellar/discussions/2008)).
+  [#2028](https://github.com/stellar/stellar-protocol/pull/2028)
