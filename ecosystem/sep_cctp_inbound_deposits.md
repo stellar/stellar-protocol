@@ -10,7 +10,7 @@ Status: Draft
 Created: 2026-10-01
 Updated: 2026-10-01
 Version: 0.0.1
-Discussion: https://github.com/orgs/stellar/discussions/categories/stellar-ecosystem-proposals
+Discussion: https://github.com/orgs/stellar/discussions/2032
 ```
 
 ## Simple Summary
