@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "wasm_hash": "cb2fc3a1b4d5e6f7081928374655647382910abcdef0123456789abcdef01234",
+  "updated_at": "2026-06-04T12:00:00Z",
+  "source_code_verifications": [
+    {
+      "verifier": { "name": "Example Verification Service" },
+      "status": "unverified"
+    }
+  ]
+}
