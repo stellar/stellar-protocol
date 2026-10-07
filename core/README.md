@@ -100,7 +100,7 @@
 | [CAP-0085](cap-0085.md) | 28 | Externally managed contract executables | Dmytro Kozhevin | Final |
 | [CAP-0084](cap-0084.md) | TBD | Muxed Contract Addresses | Jake Urban | Accepted |
 | [CAP-0086](cap-0086.md) | 28 | Host functions for sparse Symbol-keyed map creation and unpacking | Dmytro Kozhevin | Final |
-| [CAP-0087](cap-0087.md) | TBD | Host functions for ML-DSA signature verification | Jay Geng | Final Comment Period |
+| [CAP-0087](cap-0087.md) | TBD | Host functions for ML-DSA signature verification | Jay Geng | Accepted |
 | [CAP-0088](cap-0088.md) | TBD | Millisecond-Resolution Close Times | Garand Tyson | Accepted |
 
 ### Draft Proposals
