@@ -103,6 +103,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0057](sep-0057.md) | T-REX (Token for Regulated EXchanges)                          | OpenZeppelin, Boyan Barakov, Özgün Özerk, Dennis O'Connell | Draft                |
 | [SEP-0058](sep-0058.md) | Contract Build Reproducibility for Verification                | Leigh McCulloch                                            | Draft                |
 | [SEP-0059](sep-0059.md) | External Account API                                           | Anthony Barker                                             | Draft                |
+| [SEP-0060](sep-0060.md) | Wallet Provider Discovery                                      | Aristides Staffieri                                        | Draft                |
 
 ### Abandoned Proposals
 
