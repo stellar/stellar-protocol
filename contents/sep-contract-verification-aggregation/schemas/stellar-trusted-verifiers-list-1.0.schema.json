@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Contract Verification Aggregation SEP (draft) — an aggregator's Trusted Verifiers List. The Registry API draft left verifier discovery undefined; this is where the SEP defines it. Closed for a producer; a consumer validates with additionalProperties relaxed. No public_key: nothing is signed and this SEP defines no signature for 1.0, so a key field would have no producer and no consumer — the Design Rationale of the Contract Verification Results SEP carries the argument.",
+  "title": "Trusted Verifiers List (Aggregation SEP 1.0)",
+  "description": "The body of GET /v1/verifiers on an aggregator, listing every verifier it aggregates — paused and disabled members included. Without this route, the promise that an aggregator never silently omits a verifier is one a consumer cannot check. The list is authored by the aggregating operator; a verifier describes itself and does not admit itself to anyone's list, which is why no verifier-registration API exists.",
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "verifiers",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "description": "The document type. A list written before this SEP spells it `stellar-trusted-verifiers-list-v1`; a consumer accepts both.",
+      "const": "stellar-trusted-verifiers-list"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "MAJOR.MINOR of this document.",
+      "const": "1.0"
+    },
+    "verifiers": {
+      "type": "array",
+      "description": "Every member, whatever its `status`. Filtering the list to the members currently being queried would make an omission and a pause indistinguishable from outside.",
+      "items": {
+        "$ref": "#/$defs/verifier_entry"
+      }
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "verifier_entry": {
+      "type": "object",
+      "required": [
+        "url",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The verifier's result root, and **the identity of this entry**. Named `url` and not `cdn_root`: nothing here assumes a CDN, and a public contract should not. A verifier may call it a result root internally; what a reader needs is a URL. A list cannot hold two entries with the same one, because the same result root is the same verifier — which is why no entry needs an id."
+        },
+        "manifest_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Where this verifier serves a self-description of how it verifies — its build-image and source-mode policy, its retention, whom to contact. Optional: the document behind this URL is not defined by this SEP, and no field of this SEP is read out of it. Absent means the verifier publishes no such self-description; a consumer that finds one MUST treat it as advisory and MUST NOT derive any status, root or identity from it."
+        },
+        "bulk_load_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Where this verifier serves GET /v1/wasms, when it serves one. Absent means static files only: readable per Wasm hash, not enumerable — a conformance class, not a defect."
+        },
+        "display_name": {
+          "type": "string",
+          "description": "What the OPERATOR calls this verifier, for its own display. Optional, and not identity."
+        },
+        "trust_tier": {
+          "type": "string",
+          "description": "The operator's own assessment of this verifier. Free-form: the values are the operator's to choose and nothing interprets them across lists."
+        },
+        "status": {
+          "type": "string",
+          "description": "`paused` and `disabled` members stay listed. Removing a member from the document instead is how an aggregator silently omits a verifier.",
+          "enum": [
+            "active",
+            "paused",
+            "disabled"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "description": "OPTIONAL and implementation-local. An operator may key its own storage by a short id — ours does — but it means nothing outside the aggregator that minted it, and no other document refers to it. `url` is what identifies this entry."
+        },
+        "added_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
