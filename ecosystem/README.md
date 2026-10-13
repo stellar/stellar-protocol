@@ -104,7 +104,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0058](sep-0058.md) | Contract Build Reproducibility for Verification                | Leigh McCulloch                                                      | Draft                |
 | [SEP-0059](sep-0059.md) | External Account API                                           | Anthony Barker                                                       | Draft                |
 | [SEP-0060](sep-0060.md) | Wallet Provider Discovery                                      | Aristides Staffieri                                                  | Draft                |
-| [SEP-0060](sep-0061.md) | Trustline Onboarder.                                           | The Aha Company, Willem Wyndham, Enzo Soyer, Pamphile Roy, Hugo Heer | Draft                |
+| [SEP-0061](sep-0061.md) | Trustline Onboarder.                                           | The Aha Company, Willem Wyndham, Enzo Soyer, Pamphile Roy, Hugo Heer | Draft                |
 
 ### Abandoned Proposals
 
