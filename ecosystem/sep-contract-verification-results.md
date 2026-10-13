@@ -10,7 +10,7 @@ Status: Draft
 Created: 2026-09-10
 Updated: 2026-10-13
 Version: 0.1.0
-Discussion: To Be Assigned
+Discussion: https://github.com/orgs/stellar/discussions/2037
 ```
 
 ## Simple Summary
