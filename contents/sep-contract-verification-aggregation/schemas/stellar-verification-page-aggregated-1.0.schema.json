@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Contract Verification Aggregation SEP (draft) — an aggregator's page of the bulk-load stream. The envelope is the Results SEP's stellar-verification-page, unchanged and under the same schema value; only `records` differs, which is why this is a second file rather than a branch in that one — a verifier implementing only the Results SEP validates against a document that cannot mention aggregation.",
+  "title": "Contract Verification Bulk-Load Page, aggregated (Aggregation SEP 1.0)",
+  "description": "The body of GET /v1/wasms on an aggregator: records are whole stellar-verification-aggregate documents, because an aggregator's value is that a consumer gets one stream instead of traversing a Trusted Verifiers List and synchronising against every member.",
+  "type": "object",
+  "required": ["schema", "schema_version", "order", "cursor", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "description": "The document type, and the same value a verifier's page carries: the envelope is one document type serving two roles, and a consumer knows which record shape it will get because it knows which role it asked.",
+      "const": "stellar-verification-page"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "MAJOR.MINOR of this envelope, and of the envelope only: a relayed entry inside a record carries the schema_version of the document it was read from, and this field never restates it.",
+      "const": "1.0"
+    },
+    "order": {
+      "type": "string",
+      "description": "The direction this page pages in, echoed back so a consumer never has to remember what it asked for.",
+      "enum": ["asc", "desc"]
+    },
+    "cursor": {
+      "type": ["string", "null"],
+      "description": "The cursor for the next page, {timestamp}-{wasm_hash}; null at the end of the stream. Opaque, and valid only within the stream that issued it: this stream is ordered by the aggregator's own assembly clock, a verifier's by that verifier's publication update time, and the two share a format while meaning different positions.",
+      "pattern": "^[0-9]+-[0-9a-f]{64}$"
+    },
+    "records": {
+      "type": "array",
+      "description": "This page's records, in `order`. Empty is a valid page and means the stream has caught up, not that the aggregator has nothing.",
+      "items": { "$ref": "stellar-verification-aggregate-1.0.schema.json" }
+    }
+  }
+}

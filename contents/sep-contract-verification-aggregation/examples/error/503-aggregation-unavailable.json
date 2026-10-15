@@ -1,0 +1,7 @@
+{
+  "schema": "stellar-verification-error",
+  "schema_version": "1.0",
+  "error": "aggregation_unavailable",
+  "message": "the aggregation index is still building; retry shortly",
+  "status_code": 503
+}
