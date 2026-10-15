@@ -1,0 +1,12 @@
+{
+  "schema": "stellar-verification-page",
+  "schema_version": "1.0",
+  "order": "asc",
+  "cursor": null,
+  "records": [
+    {
+      "wasm_hash": "0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "updated_at": "2026-09-08T13:41:55.630Z"
+    }
+  ]
+}
