@@ -95,7 +95,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0045](sep-0045.md) | Stellar Web Authentication for Contract Accounts               | Philip Liu, Marcelo Salloum, Leigh McCulloch                         | Draft                |
 | [SEP-0047](sep-0047.md) | Contract Interface Discovery                                   | Leigh McCulloch                                                      | Draft                |
 | [SEP-0049](sep-0049.md) | Upgradeable Contracts                                          | OpenZeppelin, Boyan Barakov, Özgün Özerk                             | Draft                |
-| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk                             | Draft                |
+| [SEP-0050](sep-0050.md) | Non-Fungible Tokens                                            | OpenZeppelin, Boyan Barakov, Özgün Özerk, Pamphile Roy               | Draft                |
 | [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                                      | Draft                |
 | [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                                | Draft                |
 | [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                                         | Draft                |
