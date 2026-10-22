@@ -98,10 +98,10 @@
 | [CAP-0082](cap-0082.md) | 26 | Checked 256-bit integer arithmetic host functions | Jay Geng | Final |
 | [CAP-0083](cap-0083.md) | 28 | Allow validators to vote to drop the transaction set from the current ledger | Brett Boston | Final |
 | [CAP-0085](cap-0085.md) | 28 | Externally managed contract executables | Dmytro Kozhevin | Final |
-| [CAP-0084](cap-0084.md) | TBD | Muxed Contract Addresses | Jake Urban | Accepted |
+| [CAP-0084](cap-0084.md) | 30 | Muxed Contract Addresses | Jake Urban | Implemented |
 | [CAP-0086](cap-0086.md) | 28 | Host functions for sparse Symbol-keyed map creation and unpacking | Dmytro Kozhevin | Final |
-| [CAP-0087](cap-0087.md) | TBD | Host functions for ML-DSA signature verification | Jay Geng | Accepted |
-| [CAP-0088](cap-0088.md) | TBD | Millisecond-Resolution Close Times | Garand Tyson | Accepted |
+| [CAP-0087](cap-0087.md) | 30 | Host functions for ML-DSA signature verification | Jay Geng | Implemented |
+| [CAP-0088](cap-0088.md) | 30 | Millisecond-Resolution Close Times | Garand Tyson | Implemented |
 
 ### Draft Proposals
 | Number | Title | Author | Status |
