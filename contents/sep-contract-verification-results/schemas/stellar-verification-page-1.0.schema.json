@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Contract Verification Results SEP (draft) — one page of a bulk-load stream. Closed for a producer; a consumer validates with additionalProperties relaxed, so a higher MINOR stays readable.",
+  "title": "Contract Verification Bulk-Load Page (Results SEP 1.0)",
+  "description": "The body of GET /v1/wasms on a verifier: records reference this verifier's own documents. The envelope is shared and the record shape belongs to the role serving the stream — the Contract Verification Aggregation SEP defines an aggregator's records over the same schema value, in stellar-verification-page-aggregated-1.0.schema.json.",
+  "type": "object",
+  "required": ["schema", "schema_version", "order", "cursor", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "description": "The document type. Every Results SEP document names its type here beside its version.",
+      "const": "stellar-verification-page"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "MAJOR.MINOR of this envelope, and of the envelope only. A record is a pointer at a document, not the document, so nothing here restates a status object's version.",
+      "const": "1.0"
+    },
+    "order": {
+      "type": "string",
+      "description": "The direction this page pages in, echoed back so a consumer never has to remember what it asked for.",
+      "enum": ["asc", "desc"]
+    },
+    "cursor": {
+      "type": ["string", "null"],
+      "description": "The cursor for the next page, {timestamp}-{wasm_hash}; null at the end of the stream. A record may legitimately reappear on a later page — a verifier's clock is publication update time, which a backfill advances — so consumers upsert by wasm_hash rather than treating re-delivery as duplication.",
+      "pattern": "^[0-9]+-[0-9a-f]{64}$"
+    },
+    "records": {
+      "type": "array",
+      "description": "This page's records, in `order`. Empty is a valid page and means the stream has caught up, not that the verifier has nothing.",
+      "items": { "$ref": "#/$defs/reference_record" }
+    }
+  },
+  "$defs": {
+    "reference_record": {
+      "type": "object",
+      "description": "A per-verifier page's record: a pointer, not a result. The consumer fetches wasms/{wasm_hash}.json for the document itself — which keeps a page small enough that enumeration is cheap and the result is read at its source.",
+      "required": ["wasm_hash", "updated_at"],
+      "additionalProperties": false,
+      "properties": {
+        "wasm_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "updated_at": {
+          "type": "string",
+          "description": "This verifier's publication update time for that hash — the clock this stream is ordered by.",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

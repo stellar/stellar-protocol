@@ -1,0 +1,6 @@
+{
+  "schema": "stellar-verification-error",
+  "schema_version": "1.0",
+  "error": "storage_unavailable",
+  "message": "Result storage is temporarily unreadable."
+}

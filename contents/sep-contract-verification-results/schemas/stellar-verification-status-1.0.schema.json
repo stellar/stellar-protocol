@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Contract Verification Results SEP (draft) — the per-verifier status object. Closed for a producer: a document of schema_version 1.0 carries exactly these fields. A consumer validates with additionalProperties relaxed, so a higher MINOR stays readable. Incorporates the Registry API draft (stellar-protocol#1944).",
+  "title": "Contract Verification Status Object (Results SEP 1.0)",
+  "description": "The static document at <result-root>/wasms/{wasm_hash}.json, and the body of a verifier's dynamic GET /v1/wasms/{wasm_hash}.json (200 = these bytes; 202 = one unverified entry while a verification is in flight).",
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "wasm_hash",
+    "updated_at",
+    "source_code_verifications"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "description": "The document type. Every Results SEP document names its type here beside its version.",
+      "const": "stellar-verification-status"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "MAJOR.MINOR of this schema, versioned independently of the SEP document. Adding a field is a MINOR; removing or redefining one is a MAJOR. Consumers branch on MAJOR and tolerate a higher MINOR.",
+      "const": "1.0"
+    },
+    "wasm_hash": {
+      "type": "string",
+      "description": "The Wasm hash this document is about. Lowercase hex SHA-256.",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "RFC 3339 UTC timestamp of the last change to this document across all of its entries — a new verification, or an archive reference added to an existing one. The clock a bulk-load consumer synchronises on.",
+      "format": "date-time"
+    },
+    "source_code_verifications": {
+      "type": "array",
+      "description": "The verifier's own entry, and only its own: a result root publishes one result per Wasm hash. Keyed by the verifier's identity rather than by position — cross-verifier results are a different document with a different `schema`, and a reader that indexes [0] is correct until the day it is not.",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "$ref": "#/$defs/verification"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "verifier": {
+      "type": "object",
+      "description": "A verifier's identity. Exactly one field identifies: `url`, the result root. `name` is what the verifier calls itself — self-claimed, preferred, never authoritative, and present to be displayed rather than keyed on. A reader that wants a name it can hold someone to derives one from `url` (its certificate, the reader's own list); that is a UI concern and not this document's.",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The verifier's result root, and its identity. Two entries in one document, or two members of any set of verifiers built on it, cannot share it: the same result root IS the same verifier. Compared after normalising: scheme and host lowercased, one trailing `/` dropped, path kept and case-sensitive — without a stated rule two implementations disagree on whether `https://v.example/` and `https://v.example` are one verifier or two."
+        },
+        "name": {
+          "type": "string",
+          "description": "Self-claimed. Display it, do not key on it, and do not read it as an endorsement by whoever relayed it."
+        },
+        "logo_url": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uri"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "light": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "dark": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "result_url": {
+      "type": "object",
+      "description": "A link to a published artifact. `sha256` is REQUIRED on every entry pointing at content the publishing verifier controls — the report and any archive copy of it.",
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "What the link points at — a content-category axis.",
+          "enum": [
+            "report",
+            "provenance",
+            "attestation",
+            "sbom",
+            "audit"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "description": "Where the link's bytes live — a storage-location axis, independent of `type`. Two entries can share a `type` (this verifier's own copy and the Arweave copy of the same report) and differ only in `location`.",
+          "enum": [
+            "verifier_self_storage",
+            "arweave"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "source_code_uri": {
+      "type": "object",
+      "description": "Where THIS verifier serves a retrievable copy of the source that produced the match. No `type`: every entry is the same kind of thing, so `location` alone distinguishes them. No `sha256`: the entry's parent already carries `source_sha256` over the same bytes.",
+      "required": [
+        "location",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "type": "string",
+          "enum": [
+            "verifier_self_storage",
+            "arweave"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": [
+        "verifier",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "verifier": {
+          "$ref": "#/$defs/verifier"
+        },
+        "status": {
+          "type": "string",
+          "description": "verified: the rebuild reproduced the deployed bytes; mismatched: it did not (rebuilt_hash carries what it produced); unverified: no result — the 202 body while a verification is in flight, or an aggregator's placeholder for a verifier with none. A consumer treats an unrecognised value as unverified.",
+          "enum": [
+            "verified",
+            "mismatched",
+            "unverified"
+          ]
+        },
+        "recipe_source": {
+          "type": "string",
+          "description": "Where the build recipe came from: SEP-58 fields carried in the contract's SEP-46 meta, or the submitter.",
+          "enum": [
+            "on_chain_metadata",
+            "submitted"
+          ]
+        },
+        "image_trust_level": {
+          "type": "string",
+          "description": "How the build environment came about: an image the official Stellar pipeline publishes; composed by the verifier from pinned official components; digest-pinned with a public reproducible definition; digest-pinned with provenance not established.",
+          "enum": [
+            "official_trusted",
+            "upstream_pinned",
+            "publicly_auditable",
+            "arbitrary"
+          ]
+        },
+        "bldimg": {
+          "type": "string",
+          "description": "SEP-58: the digest-pinned build image.",
+          "pattern": "^(?:localhost(?::[0-9]+)?|[^\\s@/]*[.:][^\\s@/]*)/[^\\s@]+@sha256:[0-9a-f]{64}$"
+        },
+        "bldarg": {
+          "type": "array",
+          "description": "SEP-58 v0.6.0: leading entry-point arguments. ORDER IS SIGNIFICANT; never sorted. Absent AND empty both mean SEP-58's default, `contract build` — a consumer must not read `[]` as an empty argument vector (see the SEP's status-object section).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bldopt": {
+          "type": "array",
+          "description": "SEP-58: build options, one complete flag per entry in `--flag=value` form. Order is not significant.",
+          "items": {
+            "type": "string",
+            "pattern": "^--[A-Za-z][A-Za-z0-9_-]*(=.+)?$"
+          }
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "SEP-58: SHA-256 of the source archive the verification was produced from."
+        },
+        "source_uri": {
+          "type": "string",
+          "description": "SEP-58: where the archive can be fetched. Scheme is open-ended.",
+          "minLength": 1
+        },
+        "verified_source_code_uris": {
+          "type": "array",
+          "description": "Where THIS verifier serves a retrievable copy of the source that produced the match.",
+          "items": {
+            "$ref": "#/$defs/source_code_uri"
+          }
+        },
+        "rebuilt_hash": {
+          "$ref": "#/$defs/sha256",
+          "description": "The hash the rebuild produced. Present exactly when status is mismatched."
+        },
+        "processed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "results_urls": {
+          "type": "array",
+          "description": "Links to what this verifier published for this verification: at least the report. Appended to over time (an archive copy arriving), never reset.",
+          "items": {
+            "$ref": "#/$defs/result_url"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "The verdict-conditional fields are present exactly when the entry carries a verdict.",
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unverified"
+              }
+            }
+          },
+          "then": {
+            "$comment": "An unverified entry is exactly {verifier, status} — not merely one missing the four verdict-conditional fields. Nothing has been published yet, so no recipe, no custody, no build inputs and no links have a value; listing only the four left `bldimg`/`bldopt`/`results_urls` legal on an entry that by definition has none.",
+            "properties": {
+              "verifier": true,
+              "status": true
+            },
+            "additionalProperties": false
+          },
+          "else": {
+            "required": [
+              "recipe_source",
+              "image_trust_level",
+              "source_sha256",
+              "processed_at"
+            ]
+          }
+        },
+        {
+          "$comment": "rebuilt_hash is present exactly when status is mismatched.",
+          "if": {
+            "properties": {
+              "status": {
+                "const": "mismatched"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rebuilt_hash"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "rebuilt_hash"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
