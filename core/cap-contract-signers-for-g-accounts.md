@@ -79,14 +79,14 @@ This CAP adds a new signer key type, `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`, which 
 its contract ID. It can be added to an account with the existing `SetOptionsOp`, with a weight,
 like any other signer.
 
-Contract signers are ignored when checking transaction and operation signatures. They have
-effect only in Soroban authorization, when a G account authorizes with address credentials
-(`SOROBAN_CREDENTIALS_ADDRESS`). The signature format that the host accepts for a G account
-is extended so that it can contain contract signatures next to ed25519 signatures. For each
-contract signature, the host calls the contract's `__check_auth` function with the same
-arguments it would pass if the contract were authorizing for itself. If the call succeeds,
-the signer's weight is added to the total, and the total must meet the account's medium
-threshold, as today.
+Contract signers are invalid when used in transaction signers and in the `extraSigners` field.
+They have effect only in Soroban authorization, when a G account authorizes with address
+credentials (`SOROBAN_CREDENTIALS_ADDRESS`). The signature format that the host accepts for a G
+account is extended so that it can contain contract signatures next to ed25519 signatures. For
+each contract signature, the host calls the contract's `__check_auth` function with the same
+arguments it would pass if the contract were authorizing for itself. If the call succeeds, the
+signer's weight is added to the total, and the total must meet the account's medium threshold, as
+today.
 
 No other changes are made to G accounts, classic operations, or the Soroban authorization
 payload.
