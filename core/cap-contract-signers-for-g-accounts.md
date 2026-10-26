@@ -273,7 +273,8 @@ the signer key types in the SDKs. No new strkey version byte is needed.
 The discussion proposed several changes to make G accounts more programmable. This CAP covers
 only one of them: contracts as signers of G accounts for Soroban authorization. It does not make
 the account's signers manageable from Soroban or add a way to manage trustlines from Soroban.
-Those can be proposed separately, and this CAP does not prevent either of them.
+Those can come later. Releasing only what this CAP proposes first does not limit or restrict
+what can be added separately in future protocols.
 
 ### No transaction signing
 
