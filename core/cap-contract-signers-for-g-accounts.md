@@ -17,7 +17,7 @@ Protocol version: TBD
 
 Allow a contract to be added as a signer of a Stellar account (G account). A contract
 signer can authorize Soroban operations on behalf of the account, using the contract's own
-`__check_auth` logic, but cannot sign transactions.
+`__check_auth` logic, but cannot sign transactions or be extra signers.
 
 ## Working Group
 
@@ -161,6 +161,10 @@ high thresholds in those checks, and no `DecoratedSignature` can match it.
 This also means a contract signer cannot authorize a Soroban invocation that uses
 `SOROBAN_CREDENTIALS_SOURCE_ACCOUNT`, because those credentials are checked through the
 transaction's signatures.
+
+A `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` key cannot be used as an extra signer in a transaction's
+`PreconditionsV2.extraSigners`. A transaction whose `extraSigners` contains one is invalid and
+fails with `txMALFORMED`.
 
 #### Soroban authorization of G accounts
 
