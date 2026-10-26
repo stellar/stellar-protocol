@@ -100,16 +100,24 @@ This patch of XDR changes is based on the XDR files in commit
 
 ```diff mddiffcheck.base=4f524bbac80c781c06e4fb5fc93a2d0d331d6705
 diff --git a/Stellar-types.x b/Stellar-types.x
-index 4a9d5bd..bce8e5b 100644
+index 4a9d5bd..77fb305 100644
 --- a/Stellar-types.x
 +++ b/Stellar-types.x
-@@ -49,9 +49,12 @@ enum SignerKeyType
+@@ -34,6 +34,7 @@ enum CryptoKeyType
+     KEY_TYPE_PRE_AUTH_TX = 1,
+     KEY_TYPE_HASH_X = 2,
+     KEY_TYPE_ED25519_SIGNED_PAYLOAD = 3,
++    KEY_TYPE_DELEGATE_CONTRACT = 4,
+     // MUXED enum values for supported type are derived from the enum values
+     // above by ORing them with 0x100
+     KEY_TYPE_MUXED_ED25519 = 0x100
+@@ -49,9 +50,12 @@ enum SignerKeyType
      SIGNER_KEY_TYPE_ED25519 = KEY_TYPE_ED25519,
      SIGNER_KEY_TYPE_PRE_AUTH_TX = KEY_TYPE_PRE_AUTH_TX,
      SIGNER_KEY_TYPE_HASH_X = KEY_TYPE_HASH_X,
 -    SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD = KEY_TYPE_ED25519_SIGNED_PAYLOAD
 +    SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD = KEY_TYPE_ED25519_SIGNED_PAYLOAD,
-+    SIGNER_KEY_TYPE_DELEGATE_CONTRACT = 4
++    SIGNER_KEY_TYPE_DELEGATE_CONTRACT = KEY_TYPE_DELEGATE_CONTRACT
  };
  
 +typedef Hash ContractID;
@@ -117,7 +125,7 @@ index 4a9d5bd..bce8e5b 100644
  union PublicKey switch (PublicKeyType type)
  {
  case PUBLIC_KEY_TYPE_ED25519:
-@@ -76,6 +79,10 @@ case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
+@@ -76,6 +80,10 @@ case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
          /* Payload to be raw signed by ed25519. */
          opaque payload<64>;
      } ed25519SignedPayload;
@@ -128,7 +136,7 @@ index 4a9d5bd..bce8e5b 100644
  };
  
  // variable size as the size depends on the signature scheme used
-@@ -86,8 +93,6 @@ typedef opaque SignatureHint[4];
+@@ -86,8 +94,6 @@ typedef opaque SignatureHint[4];
  typedef PublicKey NodeID;
  typedef PublicKey AccountID;
  
@@ -140,9 +148,6 @@ index 4a9d5bd..bce8e5b 100644
 ```
 
 The existing `ContractID` typedef is moved above `SignerKey` so that it can be used there.
-
-`SIGNER_KEY_TYPE_DELEGATE_CONTRACT` is not tied to a `CryptoKeyType` value, because it is not a
-cryptographic key.
 
 ### Semantics
 
