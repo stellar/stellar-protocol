@@ -15,7 +15,7 @@ Protocol version: TBD
 
 ## Simple Summary
 
-Allow a smart contract to be added as a signer of a Stellar account (G account). A contract
+Allow a contract to be added as a signer of a Stellar account (G account). A contract
 signer can authorize Soroban operations on behalf of the account, using the contract's own
 `__check_auth` logic, but cannot sign transactions.
 
