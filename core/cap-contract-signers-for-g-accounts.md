@@ -272,7 +272,8 @@ the signer key types in the SDKs. No new strkey version byte is needed.
 
 The discussion proposed several changes to make G accounts more programmable. This CAP covers
 only one of them: contracts as signers of G accounts for Soroban authorization. It does not make
-the account's signers manageable from Soroban or add a way to manage trustlines from Soroban.
+the account's signers manageable from Soroban or add a way to manage trustlines from Soroban
+beyond the Stellar Asset Contract's `trust` function ([CAP-0073](./cap-0073.md)).
 Those can come later. Releasing only what this CAP proposes first does not limit or restrict
 what can be added separately in future protocols.
 
@@ -285,11 +286,14 @@ transaction's validity depend on contract state that can change between validati
 application.
 
 The consequence is that a contract signer can do anything a G account can do in Soroban, but
-cannot authorize classic operations such as `SetOptionsOp`, `ChangeTrustOp`, or a classic
-`PaymentOp`. The G account must keep at least one classic signer that meets its thresholds for
-classic operations and for paying transaction fees. Transaction fees for Soroban invocations
-that a contract signer authorizes can be paid by another account, for example a relayer, a fee
-bump, or a wallet service. This is the same model that C accounts use today.
+cannot authorize classic operations such as `SetOptionsOp` or a classic `PaymentOp`. Trustlines
+can still be created from Soroban with the Stellar Asset Contract's `trust` function
+([CAP-0073](./cap-0073.md)), which a contract signer can authorize. The G account must keep at
+least one classic signer that meets its thresholds for classic operations and for paying
+transaction fees, unless the account is intended to never use those classic operations.
+Transaction fees for Soroban invocations that a contract signer authorizes can be paid by another
+account, for example a relayer, a fee bump, or a wallet service. This is the same model that C
+accounts use today.
 
 ### Reusing `__check_auth`
 
@@ -354,9 +358,9 @@ storage as any other signer on the account.
   upgradable, whoever can upgrade it can change that logic. Users and wallets should add only
   contracts they trust, and should know who can upgrade them.
 - **Limited scope.** Contract signers cannot sign transactions, so a compromised contract signer
-  cannot change the account's signers or thresholds, change trustlines, merge the account, or
-  make classic payments. It can authorize any Soroban invocation that the G account can
-  authorize, including transfers of the account's balances through the Stellar Asset Contract.
+  cannot change the account's signers or thresholds, merge the account, or make classic
+  payments. It can authorize any Soroban invocation that the G account can authorize, including
+  transfers of the account's balances and creating trustlines through the Stellar Asset Contract.
 - **Replay across accounts.** The `signature_payload` does not include the address being
   authorized. If the same contract signer (with the same internal keys) is a signer of more
   than one account, a signature it produces for one account may be valid for another account
