@@ -64,7 +64,7 @@ This CAP is aligned with the following Stellar Network Goals:
 
 ## Abstract
 
-This CAP adds a new signer key type, `SIGNER_KEY_TYPE_CONTRACT`, which identifies a contract by
+This CAP adds a new signer key type, `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`, which identifies a contract by
 its contract ID. It can be added to an account with the existing `SetOptionsOp`, with a weight,
 like any other signer.
 
@@ -96,7 +96,7 @@ diff --git a/Stellar-types.x b/Stellar-types.x
      SIGNER_KEY_TYPE_HASH_X = KEY_TYPE_HASH_X,
 -    SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD = KEY_TYPE_ED25519_SIGNED_PAYLOAD
 +    SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD = KEY_TYPE_ED25519_SIGNED_PAYLOAD,
-+    SIGNER_KEY_TYPE_CONTRACT = 4
++    SIGNER_KEY_TYPE_DELEGATE_CONTRACT = 4
  };
  
 +typedef Hash ContractID;
@@ -111,7 +111,7 @@ diff --git a/Stellar-types.x b/Stellar-types.x
          /* Payload to be raw signed by ed25519. */
          opaque payload<64>;
      } ed25519SignedPayload;
-+case SIGNER_KEY_TYPE_CONTRACT:
++case SIGNER_KEY_TYPE_DELEGATE_CONTRACT:
 +    /* Contract whose __check_auth must authorize. Usable only in Soroban
 +       authorization, never for transaction signatures. */
 +    ContractID contractID;
@@ -127,14 +127,14 @@ diff --git a/Stellar-types.x b/Stellar-types.x
 
 The existing `ContractID` typedef is moved above `SignerKey` so that it can be used there.
 
-`SIGNER_KEY_TYPE_CONTRACT` is not tied to a `CryptoKeyType` value, because it is not a
+`SIGNER_KEY_TYPE_DELEGATE_CONTRACT` is not tied to a `CryptoKeyType` value, because it is not a
 cryptographic key.
 
 ### Semantics
 
 #### Adding and removing contract signers
 
-`SetOptionsOp` accepts a `signer` whose key is of type `SIGNER_KEY_TYPE_CONTRACT`. Adding,
+`SetOptionsOp` accepts a `signer` whose key is of type `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`. Adding,
 updating the weight of, and removing a contract signer follow the same rules as for every other
 signer type:
 
@@ -149,7 +149,7 @@ signer type:
 Signers on an account are sorted by `SignerKey`, as today. Because the new type has the highest
 discriminant, contract signers sort after all other signer types.
 
-Before the protocol upgrade, `SetOptionsOp` with a `SIGNER_KEY_TYPE_CONTRACT` signer is invalid,
+Before the protocol upgrade, `SetOptionsOp` with a `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` signer is invalid,
 and the `SignerKey` value is rejected wherever XDR containing it is validated.
 
 #### Transaction and operation signatures
@@ -206,7 +206,7 @@ The host checks the signature vector as follows:
    refer to, so the same signer cannot be used twice.
 6. Each `AccountEd25519Signature` is verified exactly as today.
 7. For each `AccountContractSignature`:
-   1. The account must have a signer of type `SIGNER_KEY_TYPE_CONTRACT` whose `contractID`
+   1. The account must have a signer of type `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` whose `contractID`
       matches `contract`, with weight greater than 0. Otherwise authentication fails, as it does
       today for an ed25519 key that is not a signer of the account.
    2. The host calls `__check_auth` on `contract` with these arguments:
@@ -237,7 +237,7 @@ Recording-mode simulation adds them as it does for contract accounts.
 
 #### Strkey
 
-A `SIGNER_KEY_TYPE_CONTRACT` signer key is shown as the contract's strkey (`C...`), as defined
+A `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` signer key is shown as the contract's strkey (`C...`), as defined
 in SEP-23. No new strkey version byte is needed.
 
 ## Design Rationale
