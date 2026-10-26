@@ -248,9 +248,10 @@ When the host authenticates the contract signer, the G account's nonce is consum
 signature expiration is enforced, as today. The contract signer does not consume a nonce of its
 own.
 
-Nested authorization inside `__check_auth` (for example, the contract calling `require_auth`
-on another address) follows the rules that already apply inside a contract account's
-`__check_auth`.
+Nested authorization inside `__check_auth` (for example, the contract calling `require_auth` on
+another address, or delegating authentication to another address with the `delegate_account_auth`
+host function from [CAP-71-01](./cap-0071-01.md)) follows the rules that already apply inside a
+contract account's `__check_auth`.
 
 #### Footprint
 
