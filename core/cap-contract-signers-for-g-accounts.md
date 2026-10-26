@@ -39,6 +39,16 @@ schemes. But they are not yet supported as broadly as G accounts.
 Today a user who wants custom authorization, such as a passkey wallet, has to move their funds and
 identity to a C account. There is no way to keep a G account and add custom authorization to it.
 
+An account's address and its signers matter to different people. The address is the account's
+public interface: it is what other people, exchanges, anchors, and applications send to, store,
+and integrate with, and it is where interoperability matters. The signers mostly matter only to
+the account holder and their wallet. Today the two are tied together, so adopting contract-based
+authorization also means adopting a C address, and adoption of contract-based authorization is
+held back by how widely C addresses are supported.
+
+Separating the two lets each move at its own pace. Account holders can adopt contract signers
+now, while keeping a G address that the rest of the ecosystem already supports.
+
 This CAP lets a contract be a signer of a G account. The contract signer can authorize anything
 the G account can authorize in Soroban, such as token transfers through the Stellar Asset
 Contract and calls to other contracts. Users keep the G account and its existing ecosystem
