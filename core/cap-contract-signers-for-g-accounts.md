@@ -75,21 +75,22 @@ This CAP is aligned with the following Stellar Network Goals:
 
 ## Abstract
 
-This CAP adds a new signer key type, `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`, which identifies a contract by
-its contract ID. It can be added to an account with the existing `SetOptionsOp`, with a weight,
-like any other signer.
+This CAP adds a new signer key type, `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`, which identifies a
+contract by its contract ID. It can be added to an account with the existing `SetOptionsOp`, with a
+weight, like any other signer.
 
 Contract signers on an account are skipped when a transaction's signatures are checked against the
 account's signers, and are invalid in the `extraSigners` field. They are accepted only in Soroban
-authorization, when a G account authorizes with address credentials
-(`SOROBAN_CREDENTIALS_ADDRESS`). The signature format that the host accepts for a G account is
-extended so that it can contain contract signatures next to ed25519 signatures. For each contract
-signature, the host calls the contract's `__check_auth` function with the same arguments it would
-pass if the contract were authorizing for itself. If the call succeeds, the signer's weight is
-added to the total, and the total must meet the account's medium threshold, as today.
+authorization, when a G account authorizes with the delegated address credentials
+(`SOROBAN_CREDENTIALS_ADDRESS_WITH_DELEGATES`) introduced by [CAP-71-01](./cap-0071-01.md). Each
+contract signer's signature is provided in the credentials' `delegates` list, and the host
+authenticates it the same way `delegate_account_auth` does: it calls the contract's `__check_auth`
+with the G account's signature payload and authorization context, and the contract signer's own
+signature. If the call succeeds, the signer's weight is added to the weight of the account's
+ed25519 signatures, and the total must meet the account's medium threshold, as today.
 
-No other changes are made to G accounts, classic operations, or the Soroban authorization
-payload.
+No other changes are made to G accounts, classic operations, Soroban credentials, or the Soroban
+authorization payload.
 
 ## Specification
 
@@ -187,71 +188,43 @@ fails with `txMALFORMED`.
 
 #### Soroban authorization of G accounts
 
-When the host authenticates a G account that uses `SOROBAN_CREDENTIALS_ADDRESS`, it computes
-the `signature_payload` (the SHA-256 hash of the `ENVELOPE_TYPE_SOROBAN_AUTHORIZATION`
-`HashIDPreimage`) and checks the `signature` `SCVal` against the account. This is unchanged.
+Authorization of a G account with `SOROBAN_CREDENTIALS_ADDRESS` or
+`SOROBAN_CREDENTIALS_ADDRESS_V2` credentials is unchanged. Only ed25519 signers can authorize
+with those credentials.
 
-Today the `signature` must be an `SCV_VEC` where each element is an `AccountEd25519Signature`:
+Contract signers authorize a G account through `SOROBAN_CREDENTIALS_ADDRESS_WITH_DELEGATES`
+credentials, as defined in [CAP-71-01](./cap-0071-01.md). As for any address using those
+credentials, the signature payload `P` is the SHA-256 hash of the
+`ENVELOPE_TYPE_SOROBAN_AUTHORIZATION_WITH_ADDRESS` `HashIDPreimage`, with `address` set to the G
+account, and the authorization context `C` is derived from the authorization entry.
 
-```rust
-#[contracttype]
-struct AccountEd25519Signature {
-    public_key: BytesN<32>,
-    signature: BytesN<64>,
-}
-```
+When the host authenticates a G account with these credentials, it checks the account as follows:
 
-This CAP lets each element instead be an `AccountContractSignature`:
+1. The `signature` in `addressCredentials` is checked as today: it is an `SCV_VEC` of
+   `AccountEd25519Signature` elements in strictly increasing order of `public_key`, each verified
+   against `P` and each belonging to a signer of the account. Unlike today, the vector may be
+   empty, so that an account can authorize with contract signers alone.
+2. Each entry in the top-level `delegates` list must have an `address` that is a contract address
+   (`SC_ADDRESS_TYPE_CONTRACT`) matching the `contractID` of a `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`
+   signer of the account with weight greater than 0. Otherwise authentication fails, as it does
+   today for an ed25519 key that is not a signer of the account. The `delegates` list is already
+   required by CAP-71-01 to be sorted by `address` with no duplicates, so the same signer cannot
+   be used twice.
+3. For each entry in `delegates`, the host authenticates the contract exactly as if the G
+   account's `__check_auth` had called `delegate_account_auth` for its `address`: it calls the
+   contract's `__check_auth(P, signature, C)`, where `signature` is the entry's `signature`, and
+   the entry's `nestedDelegates` become the delegated signers available to that call. If the
+   contract is missing, has no `__check_auth`, or `__check_auth` fails, authentication fails.
+4. The weights of all verified ed25519 signers and contract signers are added up. Authentication
+   fails if no signer was provided. Otherwise, it succeeds if the total is at least the account's
+   medium threshold, as today.
 
-```rust
-#[contracttype]
-struct AccountContractSignature {
-    contract: Address,
-    signature: Val,
-}
-```
+The G account's nonce is consumed and its signature expiration is enforced, as today. A contract
+signer does not consume a nonce of its own.
 
-Both types are encoded as `SCV_MAP` with `SCV_SYMBOL` keys, as for any `#[contracttype]`
-struct. The host tells them apart by their keys: a map with exactly the keys `public_key` and
-`signature` is an `AccountEd25519Signature`, and a map with exactly the keys `contract` and
-`signature` is an `AccountContractSignature`. Any other element is an error.
-
-The host checks the signature vector as follows:
-
-1. The vector must have between 1 and 20 elements, as today.
-2. All `AccountEd25519Signature` elements must come before all `AccountContractSignature`
-   elements.
-3. `AccountEd25519Signature` elements must be in strictly increasing order of `public_key`, as
-   today.
-4. `AccountContractSignature` elements must be in strictly increasing order of `contract`. Each
-   `contract` must be a contract address (`SC_ADDRESS_TYPE_CONTRACT`).
-5. Rules 2 to 4 mean the elements are in strictly increasing order of the `SignerKey` they
-   refer to, so the same signer cannot be used twice.
-6. Each `AccountEd25519Signature` is verified exactly as today.
-7. For each `AccountContractSignature`:
-   1. The account must have a signer of type `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` whose `contractID`
-      matches `contract`, with weight greater than 0. Otherwise authentication fails, as it does
-      today for an ed25519 key that is not a signer of the account.
-   2. The host calls `__check_auth` on `contract` with these arguments:
-      - `signature_payload`: the same `signature_payload` that ed25519 signers sign.
-      - `signature`: the `signature` value from the element.
-      - `auth_contexts`: the same authorization contexts, built from the authorized invocation
-        tree, that the host passes when it authenticates a contract account.
-
-      This is the same call, with the same reentry rules, that the host makes when it
-      authenticates a contract account. If the contract is missing, has no `__check_auth`, or
-      `__check_auth` fails, authentication fails.
-8. The weights of all verified signers are added up. Authentication succeeds if the total is at
-   least the account's medium threshold, as today.
-
-When the host authenticates the contract signer, the G account's nonce is consumed and its
-signature expiration is enforced, as today. The contract signer does not consume a nonce of its
-own.
-
-Nested authorization inside `__check_auth` (for example, the contract calling `require_auth` on
-another address, or delegating authentication to another address with the `delegate_account_auth`
-host function from [CAP-71-01](./cap-0071-01.md)) follows the rules that already apply inside a
-contract account's `__check_auth`.
+Nested authorization inside a contract signer's `__check_auth` follows the rules that already
+apply inside any `__check_auth`. For example, the contract can call `require_auth` on another
+address, or call `delegate_account_auth` for one of its own `nestedDelegates`.
 
 #### Footprint
 
@@ -303,11 +276,13 @@ signers without changes. Wallet SDKs already know how to build the `signature` v
 contracts. The authorization contexts let a contract signer apply policies (for example spending
 limits) to the G account's invocations in the same way it applies them to its own.
 
-A separate function (for example one that also receives the G account address) was considered.
-It would let a contract know which account it is signing for, but it would need new contract
-interfaces and would not work with existing contract accounts. The `signature_payload` that
-ed25519 signers sign today does not include the account address either, so this CAP does not
-change that property. See [Security Concerns](#security-concerns).
+The authorization context does not identify the address being authorized, and `__check_auth`
+only receives the hash of the signature payload. A separate function that also receives the G
+account address was considered, so that a contract could know which account it is signing for.
+It would need new contract interfaces and would not work with existing contract accounts. It is
+also not needed: `delegate_account_auth` passes delegates the same arguments, and the
+`ENVELOPE_TYPE_SOROBAN_AUTHORIZATION_WITH_ADDRESS` payload binds every signature to the G
+account. See [Security Concerns](#security-concerns).
 
 ### Weight and thresholds
 
@@ -315,12 +290,20 @@ Contract signers use the same weights and the same medium threshold as other sig
 the account's existing model: an account can require a contract signer and an ed25519 key
 together, or give either one enough weight to act alone.
 
-### Signature encoding
+### Reusing CAP-71 delegation
 
-The existing signature format is kept and extended, so all existing signatures stay valid and
-SDKs only need to add support for the new element type. Requiring ed25519 elements first and
-ordering within each type keeps signers unique with a simple check, and matches the order of
-signers on the account.
+[CAP-71-01](./cap-0071-01.md) already defines how an account delegates authentication to other
+addresses: `SOROBAN_CREDENTIALS_ADDRESS_WITH_DELEGATES` carries each delegate's signature, and
+`delegate_account_auth` calls each delegate's `__check_auth` with the account's signature payload
+and context. A contract signer of a G account is a delegate whose authority comes from the
+account's signers instead of from contract code, so this CAP reuses that mechanism instead of
+defining a new signature format. The G account's `signature` format is unchanged, the
+address-bound payload is used, and wallets and SDKs can build contract signer signatures with the
+same tooling they use for CAP-71 delegates.
+
+A G account has no contract code to call `delegate_account_auth`, so the host's built-in check for
+G accounts performs the delegation itself, for every entry in `delegates`, and only for addresses
+that are contract signers of the account.
 
 ### Signer key type
 
@@ -342,7 +325,8 @@ learn that contract signers cannot. For example, a wallet that computes whether 
 threshold for a classic transaction must ignore contract signers.
 
 No existing behavior changes for accounts that do not add contract signers. Existing Soroban
-signatures for G accounts stay valid.
+signatures for G accounts stay valid, and `SOROBAN_CREDENTIALS_ADDRESS` and
+`SOROBAN_CREDENTIALS_ADDRESS_V2` credentials for G accounts are unchanged.
 
 ### Resource Utilization
 
@@ -361,12 +345,10 @@ storage as any other signer on the account.
   cannot change the account's signers or thresholds, merge the account, or make classic
   payments. It can authorize any Soroban invocation that the G account can authorize, including
   transfers of the account's balances and creating trustlines through the Stellar Asset Contract.
-- **Replay across accounts.** The `signature_payload` does not include the address being
-  authorized. If the same contract signer (with the same internal keys) is a signer of more
-  than one account, a signature it produces for one account may be valid for another account
-  with the same nonce, expiration, and invocation. This is the same property ed25519 signers
-  have today when they are shared between accounts. Contracts that need to tell accounts apart
-  can include account-specific data in their own `signature` format.
+- **Replay across accounts.** Contract signers only sign the
+  `ENVELOPE_TYPE_SOROBAN_AUTHORIZATION_WITH_ADDRESS` payload, which includes the G account's
+  address. If the same contract signer is a signer of more than one account, a signature it
+  produces for one account cannot be used for another.
 - **Shared contract accounts.** A contract that is also used as a C account receives the same
   `__check_auth` call whether it authorizes for itself or as a signer of a G account. Its
   policies apply to the authorization contexts it is given, which are the G account's
@@ -390,10 +372,15 @@ TBD. Test cases should cover at least:
 - A transaction with a contract signer in `extraSigners` fails with `txMALFORMED`.
 - Soroban authorization of a G account with only a contract signer, with ed25519 signers and a
   contract signer together, and with several contract signers.
-- Failures: unordered or duplicate elements, ed25519 elements after contract elements, a
-  contract that is not a signer of the account, a non-contract address, a missing contract, a
-  failing `__check_auth`, and total weight below the medium threshold.
-- `__check_auth` receives the expected `signature_payload`, `signature`, and `auth_contexts`.
+- Soroban authorization of a G account with only contract signers and an empty `signature`
+  vector.
+- Failures: a delegate that is not a contract signer of the account, a delegate that is a G
+  address, a missing contract, a failing `__check_auth`, no signers provided, and total weight
+  below the medium threshold.
+- Contract signers are not accepted with `SOROBAN_CREDENTIALS_ADDRESS` or
+  `SOROBAN_CREDENTIALS_ADDRESS_V2` credentials.
+- `__check_auth` receives the expected signature payload, signature, and authorization contexts,
+  and can call `delegate_account_auth` for its `nestedDelegates`.
 - Existing G account Soroban signatures are still accepted unchanged.
 
 ## Implementation
