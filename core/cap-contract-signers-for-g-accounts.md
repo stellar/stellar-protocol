@@ -160,8 +160,6 @@ signer type:
 - A contract signer is an account subentry, counts toward the limit of 20 signers, and requires
   a base reserve.
 - Setting its weight to 0 removes it.
-- It can be sponsored, and its sponsorship can be revoked with `RevokeSponsorshipOp` using
-  `REVOKE_SPONSORSHIP_SIGNER`, like any other signer.
 - `SetOptionsOp` does not check that the contract exists. As with an ed25519 signer, the
   account owner is responsible for adding a signer that can sign.
 
@@ -269,9 +267,8 @@ in SEP-23. No new strkey version byte is needed.
 
 The discussion proposed several changes to make G accounts more programmable. This CAP covers
 only one of them: contracts as signers of G accounts for Soroban authorization. It does not make
-the account's signers manageable from Soroban, add a way to manage trustlines from Soroban, or
-change how sponsorship applies to subentries. Those can be proposed separately, and this CAP
-does not prevent any of them.
+the account's signers manageable from Soroban or add a way to manage trustlines from Soroban.
+Those can be proposed separately, and this CAP does not prevent either of them.
 
 ### No transaction signing
 
@@ -318,7 +315,7 @@ signers on the account.
 ### Signer key type
 
 A new `SignerKey` type is the smallest change that lets an account record a contract and its
-weight using existing operations, subentry accounting, sponsorship, and ledger entries. No new
+weight using existing operations, subentry accounting, and ledger entries. No new
 ledger entry type or operation is needed.
 
 ## Protocol Upgrade Transition
@@ -326,8 +323,8 @@ ledger entry type or operation is needed.
 ### Backwards Incompatibilities
 
 The protocol upgrade adds a new arm to `SignerKey`. Software that decodes XDR containing a
-`SignerKey`, such as `AccountEntry`, `SetOptionsOp`, `RevokeSponsorshipOp`, and
-`LedgerKey`s for signer sponsorship, must be updated to decode the new type. This affects
+`SignerKey`, such as `AccountEntry`, `SetOptionsOp`, and `PreconditionsV2`, must be updated to
+decode the new type. This affects
 Horizon, RPC, SDKs, block explorers, wallets, and indexers.
 
 Software that lists an account's signers and assumes every signer can sign transactions should
@@ -376,8 +373,8 @@ storage as any other signer on the account.
 
 TBD. Test cases should cover at least:
 
-- Adding, updating, and removing a contract signer with `SetOptionsOp`, including sponsorship,
-  subentry limits, and reserves.
+- Adding, updating, and removing a contract signer with `SetOptionsOp`, including subentry
+  limits and reserves.
 - `SetOptionsOp` with a contract signer before the protocol upgrade is rejected.
 - Contract signers never contribute to transaction or operation signature thresholds.
 - Soroban authorization of a G account with only a contract signer, with ed25519 signers and a
