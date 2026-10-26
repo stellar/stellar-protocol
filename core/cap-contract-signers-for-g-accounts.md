@@ -261,8 +261,10 @@ Recording-mode simulation adds them as it does for contract accounts.
 
 #### Strkey
 
-A `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` signer key is shown as the contract's strkey (`C...`), as defined
-in SEP-23. No new strkey version byte is needed.
+Wherever a `SignerKey` is encoded as a strkey, a `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` signer key is
+encoded as the contract's strkey (`C...`), as defined in SEP-23. This includes the `key` field of
+an account's signers in Horizon's API, the JSON form of `SignerKey` produced by `stellar-xdr`, and
+the signer key types in the SDKs. No new strkey version byte is needed.
 
 ## Design Rationale
 
