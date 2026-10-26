@@ -81,18 +81,10 @@ This patch of XDR changes is based on the XDR files in commit
 
 ```diff mddiffcheck.base=4f524bbac80c781c06e4fb5fc93a2d0d331d6705
 diff --git a/Stellar-types.x b/Stellar-types.x
-index 4a9d5bd..a4f90f4 100644
+index 4a9d5bd..266cd3c 100644
 --- a/Stellar-types.x
 +++ b/Stellar-types.x
-@@ -6,6 +6,7 @@ namespace stellar
- {
- 
- typedef opaque Hash[32];
-+typedef Hash ContractID;
- typedef opaque uint256[32];
- 
- typedef unsigned int uint32;
-@@ -34,6 +35,7 @@ enum CryptoKeyType
+@@ -34,6 +34,7 @@ enum CryptoKeyType
      KEY_TYPE_PRE_AUTH_TX = 1,
      KEY_TYPE_HASH_X = 2,
      KEY_TYPE_ED25519_SIGNED_PAYLOAD = 3,
@@ -100,7 +92,7 @@ index 4a9d5bd..a4f90f4 100644
      // MUXED enum values for supported type are derived from the enum values
      // above by ORing them with 0x100
      KEY_TYPE_MUXED_ED25519 = 0x100
-@@ -49,7 +51,8 @@ enum SignerKeyType
+@@ -49,7 +50,8 @@ enum SignerKeyType
      SIGNER_KEY_TYPE_ED25519 = KEY_TYPE_ED25519,
      SIGNER_KEY_TYPE_PRE_AUTH_TX = KEY_TYPE_PRE_AUTH_TX,
      SIGNER_KEY_TYPE_HASH_X = KEY_TYPE_HASH_X,
@@ -110,7 +102,19 @@ index 4a9d5bd..a4f90f4 100644
  };
  
  union PublicKey switch (PublicKeyType type)
-@@ -76,6 +79,10 @@ case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
+@@ -58,6 +60,11 @@ case PUBLIC_KEY_TYPE_ED25519:
+     uint256 ed25519;
+ };
+ 
++typedef PublicKey NodeID;
++typedef PublicKey AccountID;
++
++typedef Hash ContractID;
++
+ union SignerKey switch (SignerKeyType type)
+ {
+ case SIGNER_KEY_TYPE_ED25519:
+@@ -76,6 +83,10 @@ case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
          /* Payload to be raw signed by ed25519. */
          opaque payload<64>;
      } ed25519SignedPayload;
@@ -121,10 +125,13 @@ index 4a9d5bd..a4f90f4 100644
  };
  
  // variable size as the size depends on the signature scheme used
-@@ -86,8 +93,6 @@ typedef opaque SignatureHint[4];
- typedef PublicKey NodeID;
- typedef PublicKey AccountID;
+@@ -83,11 +94,6 @@ typedef opaque Signature<64>;
  
+ typedef opaque SignatureHint[4];
+ 
+-typedef PublicKey NodeID;
+-typedef PublicKey AccountID;
+-
 -typedef Hash ContractID;
 -
  struct Curve25519Secret
@@ -132,8 +139,8 @@ index 4a9d5bd..a4f90f4 100644
      opaque key[32];
 ```
 
-The existing `ContractID` typedef is moved next to `Hash`, so that it is declared before `SignerKey`
-uses it.
+The existing `NodeID`, `AccountID`, and `ContractID` typedefs are moved above `SignerKey`, so that
+`ContractID` is declared before `SignerKey` uses it.
 
 ### Semantics
 
