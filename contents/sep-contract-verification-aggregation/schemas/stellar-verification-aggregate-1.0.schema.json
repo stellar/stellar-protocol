@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Contract Verification Aggregation SEP (draft) — the aggregated view across verifiers. Closed for a producer; a consumer validates with additionalProperties relaxed. An entry here is a RELAY: it keeps every field the verifier published, including ones this schema does not name, which is why `verification` is the one object in the SEP that is deliberately open.",
+  "title": "Contract Verification Aggregate (Aggregation SEP 1.0)",
+  "description": "The body of GET /v1/wasms/{wasm_hash} on an aggregator. Assembled per request — no static file corresponds to it, and `unavailable_verifiers` describes this fetch. An aggregator relays and does not judge: entries are never merged into one verdict, and `agreement` is a description of how they relate, not a conclusion.",
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "wasm_hash",
+    "updated_at",
+    "source_code_verifications",
+    "unavailable_verifiers",
+    "agreement"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "description": "The document type. Every Results SEP document names its type here beside its version.",
+      "const": "stellar-verification-aggregate"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "MAJOR.MINOR of this envelope, and of the envelope only. A relayed entry carries the version of the document it was read from in its own `schema_version`; an aggregator that re-versioned entries would be a silent translator.",
+      "const": "1.0"
+    },
+    "wasm_hash": {
+      "type": "string",
+      "description": "The Wasm hash this view is about. Lowercase hex SHA-256.",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "When the AGGREGATOR assembled this view — never a verifier's own publication time. A consumer wanting the latter reads the entry's `processed_at`.",
+      "format": "date-time"
+    },
+    "source_code_verifications": {
+      "type": "array",
+      "description": "One headline entry per verifier that answered. Empty is meaningful and distinct from `unavailable_verifiers` being non-empty: nobody has a result, versus we could not reach some.",
+      "items": {
+        "$ref": "#/$defs/relayed_verification"
+      }
+    },
+    "unavailable_verifiers": {
+      "type": "array",
+      "description": "Always present, empty when nothing failed. Omitting it would conflate 'no verifier has a result' with 'we could not reach some', which is the one distinction an aggregator must not blur.",
+      "items": {
+        "$ref": "#/$defs/unavailable_verifier"
+      }
+    },
+    "agreement": {
+      "type": "string",
+      "description": "Descriptive, never a verdict. `single` rather than `unanimous_verified` for one entry, because unanimity among one overstates. Disagreement is reported and not adjudicated.",
+      "enum": [
+        "no_data",
+        "single",
+        "unanimous_verified",
+        "unanimous_mismatched",
+        "disputed",
+        "unverified_only"
+      ]
+    }
+  },
+  "$defs": {
+    "verifier": {
+      "type": "object",
+      "description": "A verifier's identity. Exactly one field identifies: `url`, the result root. `name` is what the verifier calls itself — self-claimed, preferred, never authoritative, and present to be displayed rather than keyed on. A reader that wants a name it can hold someone to derives one from `url` (its certificate, the reader's own list); that is a UI concern and not this document's.",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The verifier's result root, and its identity. Two entries in one Trusted Verifiers List cannot share it, because the same result root IS the same verifier. Compared after normalising: scheme and host lowercased, one trailing `/` dropped, path kept and case-sensitive — without a stated rule two implementations disagree on whether `https://v.example/` and `https://v.example` are one verifier or two."
+        },
+        "name": {
+          "type": "string",
+          "description": "Self-claimed. Display it, do not key on it, and do not read it as an endorsement by whoever relayed it."
+        },
+        "logo_url": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uri"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "light": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "dark": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "relayed_verification": {
+      "type": "object",
+      "description": "One verifier's entry, relayed. DELIBERATELY OPEN (`additionalProperties` unconstrained): a verifier may publish fields this version does not name, and an aggregator that dropped them would be editing the claim it is passing on. `verifier` is the peer's own block, unchanged — an aggregator does not substitute its own label for the verifier's, and needs no second identity block and no aggregator-local id, because the result root identifies without anyone asserting anything.",
+      "required": [
+        "verifier",
+        "status"
+      ],
+      "properties": {
+        "verifier": {
+          "$ref": "#/$defs/verifier",
+          "description": "The peer's own identity block, relayed unchanged. `url` identifies; `name` is self-claimed."
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "The version of the document this entry was read from. Absent when the aggregator retained the entry before it recorded versions.",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "status": {
+          "type": "string",
+          "description": "The verifier's verdict. An aggregator that does not recognise a value serves it as `unverified` rather than dropping the entry or rejecting the document."
+        },
+        "processed_at": {
+          "type": "string",
+          "description": "When the VERIFIER reached this verdict. The answer to 'when was this verified?' — `updated_at` above is not.",
+          "format": "date-time"
+        },
+        "retrieved_at": {
+          "type": "string",
+          "description": "When the aggregator last successfully read this entry. Present only on a retained copy: a stale result is served honestly, labelled with its age, rather than withheld.",
+          "format": "date-time"
+        },
+        "results_urls": {
+          "type": "array",
+          "description": "Relayed unchanged, sha256 included — this is what lets a consumer bypass the aggregator and verify any single entry at its source.",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "unavailable_verifier": {
+      "type": "object",
+      "description": "A verifier that could not contribute to THIS view, identified by its result root exactly as a contributing one is — so a consumer lines the two lists up on one field rather than two vocabularies. `name` is whatever the aggregator's own list calls it: there is no peer document to relay, so it is a label and claims no more.",
+      "required": [
+        "url",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The verifier's result root."
+        },
+        "name": {
+          "type": "string",
+          "description": "The aggregator's own label. Not identity."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Every value is something that happened to a request the aggregator made: `refused` means its own policy rejected the destination before any request went out. There is deliberately no value for \"not asked yet\" — an aggregator that has not read its list cannot answer at all, and says so with a 5xx (see the SEP's Errors section) rather than serving a 200 that looks like an answer.",
+          "enum": [
+            "fetch_failed",
+            "invalid_response",
+            "timeout",
+            "refused"
+          ]
+        },
+        "error": {
+          "type": "string",
+          "description": "Operator-facing detail. Not part of any contract."
+        }
+      }
+    }
+  }
+}
