@@ -79,14 +79,14 @@ This CAP adds a new signer key type, `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`, which 
 its contract ID. It can be added to an account with the existing `SetOptionsOp`, with a weight,
 like any other signer.
 
-Contract signers are invalid when used in a transaction envelope's `signatures` field and in the
-`extraSigners` field. They are accepted only in Soroban authorization, when a G account authorizes
-with address credentials (`SOROBAN_CREDENTIALS_ADDRESS`). The signature format that the host
-accepts for a G account is extended so that it can contain contract signatures next to ed25519
-signatures. For each contract signature, the host calls the contract's `__check_auth` function
-with the same arguments it would pass if the contract were authorizing for itself. If the call
-succeeds, the signer's weight is added to the total, and the total must meet the account's medium
-threshold, as today.
+Contract signers on an account are skipped when a transaction's signatures are checked against the
+account's signers, and are invalid in the `extraSigners` field. They are accepted only in Soroban
+authorization, when a G account authorizes with address credentials
+(`SOROBAN_CREDENTIALS_ADDRESS`). The signature format that the host accepts for a G account is
+extended so that it can contain contract signatures next to ed25519 signatures. For each contract
+signature, the host calls the contract's `__check_auth` function with the same arguments it would
+pass if the contract were authorizing for itself. If the call succeeds, the signer's weight is
+added to the total, and the total must meet the account's medium threshold, as today.
 
 No other changes are made to G accounts, classic operations, or the Soroban authorization
 payload.
@@ -171,9 +171,11 @@ Before the protocol upgrade, a transaction containing a `SetOptionsOp` with a
 
 #### Transaction and operation signatures
 
-Contract signers are never considered when checking the signatures of a transaction or of an
-operation's source account. A contract signer contributes no weight toward the low, medium, or
-high thresholds in those checks, and no `DecoratedSignature` can match it.
+When the signatures of a transaction are checked against the signers already on an account (the
+transaction's source account or an operation's source account), signers of type
+`SIGNER_KEY_TYPE_DELEGATE_CONTRACT` on that account are skipped. They contribute no weight toward
+the low, medium, or high thresholds in those checks, and no `DecoratedSignature` is matched to
+them. The account's other signers are checked as today.
 
 This also means a contract signer cannot authorize a Soroban invocation that uses
 `SOROBAN_CREDENTIALS_SOURCE_ACCOUNT`, because those credentials are checked through the
