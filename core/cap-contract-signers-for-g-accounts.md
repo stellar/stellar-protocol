@@ -166,8 +166,8 @@ signer type:
 Signers on an account are sorted by `SignerKey`, as today. Because the new type has the highest
 discriminant, contract signers sort after all other signer types.
 
-Before the protocol upgrade, `SetOptionsOp` with a `SIGNER_KEY_TYPE_DELEGATE_CONTRACT` signer is invalid,
-and the `SignerKey` value is rejected wherever XDR containing it is validated.
+Before the protocol upgrade, a transaction containing a `SetOptionsOp` with a
+`SIGNER_KEY_TYPE_DELEGATE_CONTRACT` signer is invalid and fails with `txMALFORMED`.
 
 #### Transaction and operation signatures
 
@@ -375,8 +375,9 @@ TBD. Test cases should cover at least:
 
 - Adding, updating, and removing a contract signer with `SetOptionsOp`, including subentry
   limits and reserves.
-- `SetOptionsOp` with a contract signer before the protocol upgrade is rejected.
+- `SetOptionsOp` with a contract signer before the protocol upgrade fails with `txMALFORMED`.
 - Contract signers never contribute to transaction or operation signature thresholds.
+- A transaction with a contract signer in `extraSigners` fails with `txMALFORMED`.
 - Soroban authorization of a G account with only a contract signer, with ed25519 signers and a
   contract signer together, and with several contract signers.
 - Failures: unordered or duplicate elements, ed25519 elements after contract elements, a
