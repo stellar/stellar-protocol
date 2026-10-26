@@ -57,9 +57,9 @@ support, and gain the programmable authorization of a contract.
 
 For example:
 
-- A wallet keeps an ed25519 device key as the G account's master key for everyday transactions,
-  and adds a passkey-verifying contract as a signer, so the user can authorize Soroban payments
-  with a passkey from a new device.
+- A G account adds a contract signer that verifies passkey (secp256r1/WebAuthn) signatures, so
+  the user can authorize Soroban invocations, such as Stellar Asset Contract transfers, with a
+  passkey.
 - A G account adds a contract signer that enforces a spending limit or an allow-list of
   contracts, and gives it enough weight to meet the medium threshold alone.
 
