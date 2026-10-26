@@ -6,7 +6,7 @@ Title: Contract Signers for Stellar Accounts in Soroban Authorization
 Working Group:
     Owner: Leigh McCulloch <@leighmcculloch>
     Authors: Leigh McCulloch <@leighmcculloch>
-    Consulted: TBD
+    Consulted: Dmytro Kozhevin <@dmkozh>, Nicolas Barry <@MonsieurNicolas>, Anup Pani <@anupsdf>, Tyler van der Hoeven <@kalepail>
 Status: Draft
 Created: 2026-10-26
 Discussion: https://github.com/orgs/stellar/discussions/1763
