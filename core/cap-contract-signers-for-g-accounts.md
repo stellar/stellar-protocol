@@ -46,8 +46,9 @@ the account holder and their wallet. Today the two are tied together, so adoptin
 authorization also means adopting a C address, and adoption of contract-based authorization is
 held back by how widely C addresses are supported.
 
-Separating the two lets each move at its own pace. Account holders can adopt contract signers
-now, while keeping a G address that the rest of the ecosystem already supports.
+Separating the two allows the ecosystem to utilize custom authorization without needing interop
+buy-in. Account holders can adopt contract signers now, while keeping a G address that the rest
+of the ecosystem already supports.
 
 This CAP lets a contract be a signer of a G account. The contract signer can authorize anything
 the G account can authorize in Soroban, such as token transfers through the Stellar Asset
