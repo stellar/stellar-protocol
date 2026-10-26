@@ -79,14 +79,14 @@ This CAP adds a new signer key type, `SIGNER_KEY_TYPE_DELEGATE_CONTRACT`, which 
 its contract ID. It can be added to an account with the existing `SetOptionsOp`, with a weight,
 like any other signer.
 
-Contract signers are invalid when used in transaction signers and in the `extraSigners` field.
-They have effect only in Soroban authorization, when a G account authorizes with address
-credentials (`SOROBAN_CREDENTIALS_ADDRESS`). The signature format that the host accepts for a G
-account is extended so that it can contain contract signatures next to ed25519 signatures. For
-each contract signature, the host calls the contract's `__check_auth` function with the same
-arguments it would pass if the contract were authorizing for itself. If the call succeeds, the
-signer's weight is added to the total, and the total must meet the account's medium threshold, as
-today.
+Contract signers are invalid when used in a transaction envelope's `signatures` field and in the
+`extraSigners` field. They are accepted only in Soroban authorization, when a G account authorizes
+with address credentials (`SOROBAN_CREDENTIALS_ADDRESS`). The signature format that the host
+accepts for a G account is extended so that it can contain contract signatures next to ed25519
+signatures. For each contract signature, the host calls the contract's `__check_auth` function
+with the same arguments it would pass if the contract were authorizing for itself. If the call
+succeeds, the signer's weight is added to the total, and the total must meet the account's medium
+threshold, as today.
 
 No other changes are made to G accounts, classic operations, or the Soroban authorization
 payload.
@@ -95,13 +95,15 @@ payload.
 
 ### XDR changes
 
-```diff
+This patch of XDR changes is based on the XDR files in commit
+`4f524bbac80c781c06e4fb5fc93a2d0d331d6705` of `stellar-xdr`.
+
+```diff mddiffcheck.base=4f524bbac80c781c06e4fb5fc93a2d0d331d6705
 diff --git a/Stellar-types.x b/Stellar-types.x
+index 4a9d5bd..bce8e5b 100644
 --- a/Stellar-types.x
 +++ b/Stellar-types.x
-@@ enum SignerKeyType
- enum SignerKeyType
- {
+@@ -49,9 +49,12 @@ enum SignerKeyType
      SIGNER_KEY_TYPE_ED25519 = KEY_TYPE_ED25519,
      SIGNER_KEY_TYPE_PRE_AUTH_TX = KEY_TYPE_PRE_AUTH_TX,
      SIGNER_KEY_TYPE_HASH_X = KEY_TYPE_HASH_X,
@@ -113,12 +115,9 @@ diff --git a/Stellar-types.x b/Stellar-types.x
 +typedef Hash ContractID;
 +
  union PublicKey switch (PublicKeyType type)
-@@ union SignerKey switch (SignerKeyType type)
- case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
-     struct
-     {
-         /* Public key that must sign the payload. */
-         uint256 ed25519;
+ {
+ case PUBLIC_KEY_TYPE_ED25519:
+@@ -76,6 +79,10 @@ case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
          /* Payload to be raw signed by ed25519. */
          opaque payload<64>;
      } ed25519SignedPayload;
@@ -127,13 +126,17 @@ diff --git a/Stellar-types.x b/Stellar-types.x
 +       authorization, never for transaction signatures. */
 +    ContractID contractID;
  };
-@@ typedef PublicKey AccountID;
+ 
+ // variable size as the size depends on the signature scheme used
+@@ -86,8 +93,6 @@ typedef opaque SignatureHint[4];
  typedef PublicKey NodeID;
  typedef PublicKey AccountID;
  
 -typedef Hash ContractID;
 -
  struct Curve25519Secret
+ {
+     opaque key[32];
 ```
 
 The existing `ContractID` typedef is moved above `SignerKey` so that it can be used there.
