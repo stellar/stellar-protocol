@@ -81,7 +81,7 @@ This patch of XDR changes is based on the XDR files in commit
 
 ```diff mddiffcheck.base=4f524bbac80c781c06e4fb5fc93a2d0d331d6705
 diff --git a/Stellar-types.x b/Stellar-types.x
-index 4a9d5bd..266cd3c 100644
+index 4a9d5bd..a8c70a9 100644
 --- a/Stellar-types.x
 +++ b/Stellar-types.x
 @@ -34,6 +34,7 @@ enum CryptoKeyType
@@ -102,45 +102,18 @@ index 4a9d5bd..266cd3c 100644
  };
  
  union PublicKey switch (PublicKeyType type)
-@@ -58,6 +60,11 @@ case PUBLIC_KEY_TYPE_ED25519:
-     uint256 ed25519;
- };
- 
-+typedef PublicKey NodeID;
-+typedef PublicKey AccountID;
-+
-+typedef Hash ContractID;
-+
- union SignerKey switch (SignerKeyType type)
- {
- case SIGNER_KEY_TYPE_ED25519:
-@@ -76,6 +83,10 @@ case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
+@@ -76,6 +78,10 @@ case SIGNER_KEY_TYPE_ED25519_SIGNED_PAYLOAD:
          /* Payload to be raw signed by ed25519. */
          opaque payload<64>;
      } ed25519SignedPayload;
 +case SIGNER_KEY_TYPE_DELEGATE_CONTRACT:
-+    /* Contract whose __check_auth must authorize. Usable only in Soroban
-+       authorization, never for transaction signatures. */
-+    ContractID contractID;
++    /* Contract ID of the contract whose __check_auth must authorize. Usable
++       only in Soroban authorization, never for transaction signatures. */
++    Hash contractID;
  };
  
  // variable size as the size depends on the signature scheme used
-@@ -83,11 +94,6 @@ typedef opaque Signature<64>;
- 
- typedef opaque SignatureHint[4];
- 
--typedef PublicKey NodeID;
--typedef PublicKey AccountID;
--
--typedef Hash ContractID;
--
- struct Curve25519Secret
- {
-     opaque key[32];
 ```
-
-The existing `NodeID`, `AccountID`, and `ContractID` typedefs are moved above `SignerKey`, so that
-`ContractID` is declared before `SignerKey` uses it.
 
 ### Semantics
 
