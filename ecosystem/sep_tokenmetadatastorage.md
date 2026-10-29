@@ -326,6 +326,16 @@ so the metadata shares the lifetime of the contract instance, does not require
 a separate TTL to be maintained, and is available to a reader that is tracking
 the contract instance entry without tracking any other entries.
 
+### A separate SEP instead of a change to SEP-41
+
+This SEP is not part of [SEP-41] because SEP-41 explicitly does not prescribe
+the implementation details of a token contract. That is an intentional
+attribute of SEP-41: it defines only the interface, so that any contract
+implementing the interface is a token, regardless of how it is implemented.
+Adding storage requirements to SEP-41 would change that attribute, and would be
+inappropriate. A separate SEP leaves SEP-41 unchanged, and lets token contracts
+opt in to making their metadata discoverable in storage.
+
 ### Storage is not a replacement for the interface
 
 This SEP does not change [SEP-41]. Contracts calling a token MUST continue to
