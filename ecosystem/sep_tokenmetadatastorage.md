@@ -8,7 +8,7 @@ Status: Draft
 Created: 2026-10-29
 Updated: 2026-10-29
 Version: 0.0.1
-Discussion: TBD
+Discussion: https://github.com/orgs/stellar/discussions/2054
 ```
 
 ## Simple Summary
