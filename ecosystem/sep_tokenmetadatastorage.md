@@ -132,9 +132,7 @@ env.storage().instance().set(&METADATA_KEY, &TokenMetadata {
 
 ### Capturing existing practice
 
-This SEP standardizes formats already on-chain in most token contracts rather
-than introducing a new one, which would take years to reach similar coverage
-and would never be adopted by contracts that are not upgradeable.
+This SEP standardizes formats already on-chain in most token contracts.
 
 ### Two keys and two field names
 
