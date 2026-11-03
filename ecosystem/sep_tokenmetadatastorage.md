@@ -157,6 +157,14 @@ account for amounts differently to how the token behaves on-chain. Readers that
 need certainty for a specific token can compare the stored values with a
 simulation of the functions.
 
+### Metadata can change
+
+Any function in a contract can write the metadata entry again, and a Wasm
+update can install code that does. A reader that caches the first value it
+reads will keep a stale name and symbol, which makes renaming a token after it
+is listed an easy spoofing path. Readers should pick up changes to the contract
+instance entry rather than cache the metadata.
+
 ### Values out of range
 
 A contract can store a `decimal`/`decimals` value that is well-formed but
