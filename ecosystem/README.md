@@ -82,8 +82,8 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0019](sep-0019.md) | Bootstrapping Multisig Transaction Submission                  | Paul Selden, Nikhil Saraf                                                   | Draft                |
 | [SEP-0021](sep-0021.md) | On-chain signature & transaction sharing                       | Mister.Ticot                                                                | Draft                |
 | [SEP-0022](sep-0022.md) | IPFS Support                                                   | Samuel B. Sendelbach                                                        | Draft                |
-| [SEP-0025](sep-0025.md) | New account deposit                                            | Michael Feldstein (@msfeldstein)                                            | Draft                |
-| [SEP-0027](sep-0027.md) | Asset Information                                              | Fritz Ekwoge (@efritze), Ernest Mbenkum (@cameroon)                         | Draft                |
+| [SEP-0025](sep-0025.md) | New account deposit                                            | Michael Feldstein                                                           | Draft                |
+| [SEP-0027](sep-0027.md) | Asset Information                                              | Fritz Ekwoge, Ernest Mbenkum                                                | Draft                |
 | [SEP-0030](sep-0030.md) | Recoverysigner: multi-party key management of Stellar accounts | Leigh McCulloch, Lindsay Lin                                                | Draft                |
 | [SEP-0032](sep-0032.md) | Asset Address                                                  | Leigh McCulloch                                                             | Draft                |
 | [SEP-0034](sep-0034.md) | Wallet Attribution for Anchors                                 | Jake Urban and Leigh McCulloch                                              | Final Comment Period |
