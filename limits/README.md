@@ -13,8 +13,8 @@ This document list the considerations that go into smart contract resource limit
 | [SLP-0003](slp-0003.md) | Increase Ledger Wide Limits for Soroban | Tomer Weller | Final |
 | [SLP-0004](slp-0004.md) | Increase Ledger Wide Limits for Soroban | Dmytro Kozhevin | Final |
 | [SLP-0005](slp-0005.md) | Increase Per-Transaction Footprint Limit for Soroban | Dmytro Kozhevin | Final |
-| [SLP-0006](slp-0006.md) | Freeze YieldBlox Exploit Stellar Accounts | Alex Mootz | Draft |
-| [SLP-0007](slp-0007.md) | Increase Soroban Ledger-Wide Limits and Reduce Resource Fees | Daniel Rebelsky | Draft |
+| [SLP-0006](slp-0006.md) | Freeze YieldBlox Exploit Stellar Accounts | Alex Mootz | Final |
+| [SLP-0007](slp-0007.md) | Increase Soroban Ledger-Wide Limits and Reduce Resource Fees | Daniel Rebelsky | Final |
 
 ## Limits Overview
 
