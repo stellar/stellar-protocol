@@ -91,11 +91,6 @@ The map should contain exactly one of `decimal` or `decimals`. Historically the
 Stellar Asset Contract and the `soroban-token-sdk` have used `decimal`, and the
 OpenZeppelin Stellar Contracts library has used `decimals`.
 
-If a contract stores the metadata under more than one key, or a map contains
-both `decimal` and `decimals`, readers should prefer them in the order they are
-listed in this SEP: the `Symbol("METADATA")` key over the
-`Vec([Symbol("Meta")])` key, and `decimal` over `decimals`.
-
 As a contract type:
 
 ```rust
@@ -132,6 +127,13 @@ env.storage().instance().set(&METADATA_KEY, &TokenMetadata {
     symbol: String::from_str(&env, "EXT"),
 });
 ```
+
+### Precedence
+
+If a contract stores the metadata under more than one key, or a map contains
+both `decimal` and `decimals`, readers should prefer them in the order they are
+listed in this SEP: the `Symbol("METADATA")` key over the
+`Vec([Symbol("Meta")])` key, and `decimal` over `decimals`.
 
 ## Design Rationale
 
