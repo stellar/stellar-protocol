@@ -169,8 +169,7 @@ simulation of the functions.
 Any function in a contract can write the metadata entry again, and a Wasm
 update can install code that does. A reader that caches the first value it
 reads will keep a stale name and symbol, which makes renaming a token after it
-is listed an easy spoofing path. Readers should pick up changes to the contract
-instance entry rather than cache the metadata.
+is listed an easy spoofing path.
 
 ### Values out of range
 
