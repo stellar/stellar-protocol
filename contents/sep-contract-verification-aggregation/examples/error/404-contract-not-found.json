@@ -1,0 +1,7 @@
+{
+  "schema": "stellar-verification-error",
+  "schema_version": "1.0",
+  "error": "contract_not_found",
+  "message": "No Wasm-executable contract at CA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ on mainnet",
+  "status_code": 404
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "stellar-verification-error",
+  "schema_version": "1.0",
+  "error": "invalid_cursor",
+  "message": "cursor must be {timestamp}-{wasm_hash}",
+  "status_code": 400
+}

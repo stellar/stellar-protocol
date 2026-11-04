@@ -1,0 +1,7 @@
+{
+  "schema": "stellar-verification-error",
+  "schema_version": "1.0",
+  "error": "invalid_network",
+  "message": "network must be 'mainnet' or 'testnet'",
+  "status_code": 400
+}
