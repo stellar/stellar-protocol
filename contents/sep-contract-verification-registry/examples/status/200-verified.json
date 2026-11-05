@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "wasm_hash": "cb2fc3a1b4d5e6f7081928374655647382910abcdef0123456789abcdef01234",
+  "updated_at": "2026-06-04T12:05:00Z",
+  "source_code_verifications": [
+    {
+      "verifier": {
+        "name": "Example Verification Service",
+        "url": "https://verify.example.com",
+        "logo_url": {
+          "light": "https://verify.example.com/logo.png",
+          "dark": "https://verify.example.com/logo-dark.png"
+        }
+      },
+      "status": "verified",
+      "bldimg": "docker.io/stellar/stellar-cli@sha256:1f2e3d4c5b6a79887766554433221100ffeeddccbbaa99887766554433221100",
+      "bldopt": ["--manifest-path=contracts/foo/Cargo.toml", "--optimize"],
+      "source_repo": "https://github.com/user/my-contract",
+      "source_rev": "abc1234567890abcdef1234567890abcdef12345",
+      "processed_at": "2026-06-04T12:00:00Z",
+      "results_urls": [
+        "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+        "ar://AbCdEf0123456789AbCdEf0123456789AbCdEf0123456789ABC"
+      ]
+    }
+  ]
+}
