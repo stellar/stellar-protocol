@@ -99,7 +99,7 @@ All SEPs have individuals fulfilling the following roles:
 | [SEP-0051](sep-0051.md) | XDR-JSON                                                       | Leigh McCulloch                                            | Draft                |
 | [SEP-0052](sep-0052.md) | Key Sharing Method for Stellar Keys                            | Pamphile Roy, Jun Luo                                      | Draft                |
 | [SEP-0055](sep-0055.md) | Contract Build Info                                            | Nando Vieira                                               | Draft                |
-| [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Draft                |
+| [SEP-0056](sep-0056.md) | Tokenized Vault Standard                                       | OpenZeppelin, Boyan Barakov, Özgün Özerk, Sentinel         | Final Comment Period |
 | [SEP-0057](sep-0057.md) | T-REX (Token for Regulated EXchanges)                          | OpenZeppelin, Boyan Barakov, Özgün Özerk, Dennis O'Connell | Draft                |
 | [SEP-0058](sep-0058.md) | Contract Build Reproducibility for Verification                | Leigh McCulloch                                            | Draft                |
 | [SEP-0059](sep-0059.md) | External Account API                                           | Anthony Barker                                             | Draft                |
