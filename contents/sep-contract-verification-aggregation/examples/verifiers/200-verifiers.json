@@ -1,0 +1,41 @@
+{
+  "schema": "stellar-trusted-verifiers-list",
+  "schema_version": "1.0",
+  "verifiers": [
+    {
+      "id": "example-verify",
+      "display_name": "Example Verify",
+      "url": "https://verify.example.org",
+      "manifest_url": "https://verify.example.org/verifier-manifest.json",
+      "status": "active",
+      "bulk_load_url": "https://api.example.org/v1/wasms",
+      "added_at": "2026-07-01T00:00:00.000Z"
+    },
+    {
+      "id": "other-verify",
+      "display_name": "Other Verify",
+      "url": "https://other.example.org",
+      "trust_tier": "community",
+      "status": "active",
+      "bulk_load_url": "https://api.other.example.org/v1/wasms",
+      "added_at": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "id": "legacy-verify",
+      "display_name": "Legacy Verify",
+      "url": "https://legacy.example.net/results",
+      "status": "active",
+      "bulk_load_url": "https://legacy.example.net/api/v1/wasms",
+      "added_at": "2026-05-19T00:00:00.000Z"
+    },
+    {
+      "id": "paused-verify",
+      "display_name": "Paused Verify",
+      "url": "https://paused.example.com",
+      "status": "paused",
+      "bulk_load_url": "https://api.paused.example.com/v1/wasms",
+      "added_at": "2026-06-02T00:00:00.000Z"
+    }
+  ],
+  "updated_at": "2026-09-08T00:00:00.000Z"
+}

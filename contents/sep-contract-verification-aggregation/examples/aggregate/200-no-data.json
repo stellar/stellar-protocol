@@ -1,0 +1,9 @@
+{
+  "schema": "stellar-verification-aggregate",
+  "schema_version": "1.0",
+  "wasm_hash": "0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+  "updated_at": "2026-09-08T14:12:31.006Z",
+  "source_code_verifications": [],
+  "unavailable_verifiers": [],
+  "agreement": "no_data"
+}
