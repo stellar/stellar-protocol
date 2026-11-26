@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Contract Verification Results SEP (draft) — the error envelope. THE ONE DOCUMENT HERE THAT IS NOT CLOSED FOR A PRODUCER, deliberately: the others carry claims a consumer parses, and closing them is what makes a version mean something. An error body carries one parsed field (`error`) and one human one (`message`); everything else is diagnostic, and forbidding it would delete operator-facing detail to buy a consistency no consumer asked for.",
+  "title": "Contract Verification Error (Results SEP 1.0)",
+  "description": "The body of every non-2xx response on a verifier's or an aggregator's API. One shape across every route, so a client that has learned to read one failure has learned them all.",
+  "type": "object",
+  "required": ["schema", "schema_version", "error", "message"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "description": "The document type. Every Results SEP document names its type here beside its version.",
+      "const": "stellar-verification-error"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "MAJOR.MINOR of this envelope, versioned independently of the API.",
+      "const": "1.0"
+    },
+    "error": {
+      "type": "string",
+      "description": "A stable, machine-readable code. Clients branch on THIS rather than on `message`, and MUST tolerate codes they do not recognise — a verifier adding a code is not a breaking change, and a client that treats it as one fails on every deployment ahead of it. One vocabulary is closed, and it is closed per STATUS rather than per route: the per-hash read route's `400` is exactly `400_invalid_wasm_hash` | `400_other`. That route's other statuses, and every other route, draw from the verifier's failure taxonomy plus `not_found`, `storage_unavailable`, `invalid_request` and `rate_limited`.",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable. Wording is not stable and is intended for display and debugging — never for a client to branch on.",
+      "minLength": 1
+    },
+    "status_code": {
+      "type": "integer",
+      "description": "Implementation detail, not part of this contract: it repeats the HTTP status line. Named here because our deployment sends it and a reader of this schema should not have to wonder whether it means something. The per-hash read routes deliberately omit it."
+    },
+    "detail": {
+      "type": "string",
+      "description": "Implementation detail: a longer human-readable form, where a route has one. Not a second machine-readable field."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Implementation detail: a sub-code on the one arm that has one (preflight). A client that needs to branch uses `error`."
+    }
+  }
+}

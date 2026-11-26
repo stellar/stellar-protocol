@@ -1,0 +1,6 @@
+{
+  "schema": "stellar-verification-error",
+  "schema_version": "1.0",
+  "error": "not_found",
+  "message": "No verification result for that Wasm hash."
+}
