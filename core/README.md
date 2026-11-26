@@ -124,6 +124,7 @@
 | [CAP-0060](cap-0060.md) | Update to Wasmi register machine| Graydon Hoare | Accepted |
 | [CAP-0072](cap-0072.md) | Contract signers for Stellar accounts | Dmytro Kozhevin | Draft |
 | [CAP-0089](cap-0089.md) | Host functions for invoker-less authorization | Dmytro Kozhevin | Draft |
+| [CAP-0090](cap-0090.md) | Custom payload for account contract signatures | Dmytro Kozhevin | Draft |
 
 ### Rejected Proposals
 | Number | Title | Author | Status |
